@@ -5,3 +5,6 @@
 
 /* Audit corrections: stable icons and narrow mobile layout. */
 .icon{width:20px;height:20px;flex-shrink:0;display:inline-block;vertical-align:middle}.card-symbol .icon{width:44px;height:44px}.sun{width:53px;height:53px;flex-shrink:0}input:disabled{background:#f0f3f3;color:#6a777d}.password-wrap button:disabled{cursor:default}@media(max-width:400px){.header{height:auto;min-height:88px;flex-wrap:wrap;padding-block:14px}.header .login-btn{margin-left:auto}.hero h1{font-size:clamp(40px,14vw,56px)}.hero .eyebrow{flex-wrap:wrap}.brand small{letter-spacing:.6px}}
+
+/* Local sunset illustration, preserving the existing hero. */
+.place{padding:12px 0 48px}.place h2{margin-bottom:26px}.place-figure{margin:0}.place-figure img{display:block;width:100%;height:auto;border-radius:12px}.place-figure figcaption{margin-top:10px;font-size:12px;color:var(--muted)}@media(max-width:700px){.place{padding-bottom:32px}.place h2{font-size:32px;margin-bottom:20px}.place-figure img{border-radius:9px}}
