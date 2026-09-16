@@ -61,10 +61,13 @@ class RecordedAdmin(SimpleHistoryAdmin):
 
 @admin.register(Account)
 class AccountAdmin(RecordedAdmin):
-    list_display = ('id', 'number', 'plot', 'contact_name', 'phone', 'groups_today', 'archived')
+    list_display = (
+        'id', 'number', 'plot', 'contact_name', 'phone',
+        'groups_today', 'latest_group_consumption', 'archived',
+    )
     search_fields = ('=id', 'number', 'plot', 'contact_name', 'phone')
     list_filter = ('archived',)
-    readonly_fields = ('id', 'groups_today')
+    readonly_fields = ('id', 'groups_today', 'latest_group_consumption')
     actions = ['export_accounts']
 
     @admin.display(description='В группе сейчас')
@@ -74,6 +77,23 @@ class AccountAdmin(RecordedAdmin):
         return ', '.join(Membership.objects.filter(account=obj, starts__lte=today).filter(
             Q(ends__isnull=True) | Q(ends__gt=today)
         ).values_list('group__name', flat=True)) or '—'
+
+    @admin.display(description='Последние кубы текущей группы')
+    def latest_group_consumption(self, obj):
+        from django.db.models import Q
+        today = timezone.localdate()
+        membership = Membership.objects.filter(account=obj, starts__lte=today).filter(
+            Q(ends__isnull=True) | Q(ends__gt=today)
+        ).select_related('group').first()
+        if membership is None:
+            return '—'
+        latest = GroupConsumption.objects.filter(group=membership.group).order_by('-ends', '-starts').first()
+        if latest is None:
+            return f'{membership.group.name}: данных ещё нет'
+        return (
+            f'{membership.group.name}: {latest.volume} м³ '
+            f'за {latest.starts:%d.%m.%Y}–{latest.ends:%d.%m.%Y}'
+        )
 
     @admin.action(description='Выгрузить выбранные карточки в CSV', permissions=['view'])
     def export_accounts(self, request, queryset):

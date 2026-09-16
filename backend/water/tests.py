@@ -112,6 +112,25 @@ class AccessTests(TestCase):
         self.assertEqual(self.account.plot, 'Новый адрес')
         self.assertEqual(self.account.history.first().history_user, self.admin)
 
+    def test_account_shows_latest_group_total_without_individual_reading(self):
+        node = SupplyNode.objects.create(name='Узел группового теста')
+        group = WaterGroup.objects.create(name='Группа Матвеева', node=node, source='reported')
+        Membership.objects.create(account=self.account, group=group, starts=date(2020, 1, 1))
+        GroupConsumption.objects.create(
+            group=group,
+            starts=date(2026, 9, 1),
+            ends=date(2026, 10, 1),
+            volume=Decimal('111'),
+            reported_by='Матвеев',
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(f'/admin/water/account/{self.account.pk}/change/')
+
+        self.assertContains(response, 'Последние кубы текущей группы')
+        self.assertContains(response, 'Группа Матвеева: 111.000 м³ за 01.09.2026–01.10.2026')
+        self.assertEqual(Reading.objects.filter(meter__account=self.account).count(), 0)
+
     def test_csrf_required(self):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.admin)
