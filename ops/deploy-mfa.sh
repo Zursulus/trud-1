@@ -29,9 +29,9 @@ pg_restore --list "$BACKUP/trud_site.dump" >/dev/null
 echo "Копия перед обновлением: $BACKUP"
 
 REQUIREMENTS=$(mktemp /tmp/trud-mfa-requirements.XXXXXXXX)
-chown trudsite:trudsite "$REQUIREMENTS"
 trap 'rm -f "$REQUIREMENTS"' EXIT
 gitapp show "$TARGET:backend/requirements.txt" > "$REQUIREMENTS"
+chown trudsite:trudsite "$REQUIREMENTS"
 runuser -u trudsite -- "$APP/.venv/bin/pip" install --disable-pip-version-check -r "$REQUIREMENTS"
 runuser -u trudsite -- "$APP/.venv/bin/pip" check
 
