@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .water-summary { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
+    .water-summary div { background:var(--darkened-bg); padding:10px 14px; border-radius:4px; }
+    .water-filters { display:flex; gap:12px; align-items:end; flex-wrap:wrap; padding:14px; background:var(--darkened-bg); }
+    .water-filters p { margin:0; }
+    .water-table { width:100%; }
+    .water-table th, .water-table td { vertical-align:top; white-space:nowrap; }
+    .water-table input[type=number] { width:130px; }
+    .water-table input[type=text] { width:180px; }
+    .water-error { color:var(--error-fg); font-weight:bold; white-space:normal; max-width:280px; }
+    .water-muted { color:var(--body-quiet-color); }
+    .water-actions { position:sticky; bottom:0; padding:12px; background:var(--body-bg); border-top:1px solid var(--hairline-color); }
+    @media (max-width: 767px) {
+      .water-scroll { overflow-x:auto; }
+      .water-filters { display:block; }
+      .water-filters p { margin-bottom:10px; }
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:water_reading_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Рабочее место
+</div>
+{% endblock %}
+
+{% block content %}
+  <p>Выберите дату и при необходимости сузьте список. Пустые строки не сохраняются. Если хотя бы одно новое значение ошибочно, весь ввод отменяется.</p>
+
+  <form method="get" class="water-filters">
+    {{ filter_form.as_p }}
+    <p><button type="submit">Показать</button></p>
+    {% if can_export and entered_count %}
+      <p><button type="submit" name="export" value="csv">Скачать внесённые CSV</button></p>
+    {% endif %}
+  </form>
+
+  <div class="water-summary">
+    <div><strong>{{ total_count }}</strong><br>активных счётчиков</div>
+    <div><strong>{{ entered_count }}</strong><br>внесено за {{ selected_date|date:"d.m.Y" }}</div>
+    <div><strong>{{ missing_count }}</strong><br>не внесено</div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+    {% if filter_form.node.value %}<input type="hidden" name="node" value="{{ filter_form.node.value }}">{% endif %}
+    {% if filter_form.group.value %}<input type="hidden" name="group" value="{{ filter_form.group.value }}">{% endif %}
+    {% if filter_form.kind.value %}<input type="hidden" name="kind" value="{{ filter_form.kind.value }}">{% endif %}
+    {% if filter_form.status.value %}<input type="hidden" name="status" value="{{ filter_form.status.value }}">{% endif %}
+    {% if filter_form.q.value %}<input type="hidden" name="q" value="{{ filter_form.q.value }}">{% endif %}
+
+    <div class="water-scroll">
+      <table class="water-table">
+        <thead><tr>
+          <th>Счётчик</th><th>Участок / счёт</th><th>Группа</th>
+          <th>Предыдущее</th><th>Новое, м³</th><th>Примечание</th><th>Контроль</th>
+        </tr></thead>
+        <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><a href="{% url 'admin:water_meter_change' row.meter.pk %}">{{ row.meter.serial }}</a><br><span class="water-muted">{{ row.meter.get_kind_display }}</span></td>
+            <td>{% if row.account %}{{ row.account.number|default:"Без номера" }}<br>{{ row.account.plot|default:"Участок не заполнен" }}{% else %}—{% endif %}</td>
+            <td>{{ row.meter.group|default:"—" }}</td>
+            <td>{% if row.previous %}{{ row.previous.value }}<br><span class="water-muted">{{ row.previous.date|date:"d.m.Y" }}</span>{% else %}Нет{% endif %}</td>
+            <td>
+              {% if row.current %}
+                <a href="{% url 'admin:water_reading_change' row.current.pk %}">{{ row.current.value }}</a><br><span class="water-muted">Уже сохранено</span>
+              {% else %}
+                <input type="number" inputmode="decimal" step="0.001" min="0" name="value_{{ row.meter.pk }}" value="{{ row.posted_value }}">
+              {% endif %}
+            </td>
+            <td>{% if not row.current %}<input type="text" name="notes_{{ row.meter.pk }}" maxlength="500" value="{{ row.posted_notes }}">{% else %}{{ row.current.notes|default:"—" }}{% endif %}</td>
+            <td>
+              {% if row.error %}<div class="water-error">{{ row.error }}</div>{% endif %}
+              {% if row.following %}<span class="water-muted">Следующее: {{ row.following.value }} от {{ row.following.date|date:"d.m.Y" }}</span>{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7">По выбранным условиям счётчиков нет.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if rows %}<div class="water-actions"><button type="submit" class="default">Проверить и сохранить заполненные строки</button></div>{% endif %}
+  </form>
+{% endblock %}

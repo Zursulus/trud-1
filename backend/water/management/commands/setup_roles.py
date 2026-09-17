@@ -29,7 +29,7 @@ class Command(BaseCommand):
         registry |= {f'view_historical{name}' for name in REGISTRY}
         operator = water_view | {'add_reading', 'add_groupconsumption'}
         administrator = water_view | registry | {f'{action}_{name}' for name in WATER for action in ('add', 'change')}
-        administrator.add('export_account')
+        administrator.update({'export_account', 'export_reading'})
         for name, codes in ((ADMIN, administrator), (OPERATOR, operator)):
             permissions = list(Permission.objects.filter(content_type__app_label='water', codename__in=codes))
             if len(permissions) != len(codes):

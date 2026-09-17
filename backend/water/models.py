@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q
+from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 
@@ -126,7 +127,10 @@ class Meter(RecordedModel):
     node = models.ForeignKey(SupplyNode, verbose_name='Общий узел', on_delete=models.PROTECT)
     account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, blank=True, null=True)
     group = models.ForeignKey(WaterGroup, verbose_name='Линия / группа', on_delete=models.PROTECT, blank=True, null=True)
+    commissioned_on = models.DateField('Установлен / принят на учёт', blank=True, null=True)
+    seal_number = models.CharField('Номер пломбы', max_length=100, blank=True)
     retired_on = models.DateField('Снят с учёта', blank=True, null=True)
+    notes = models.TextField('Примечание', blank=True)
 
     class Meta:
         verbose_name = 'Счётчик'
@@ -134,12 +138,16 @@ class Meter(RecordedModel):
         constraints = [models.UniqueConstraint(fields=['node', 'serial'], name='meter_node_serial')]
 
     def clean(self):
+        if self.commissioned_on and self.retired_on and self.retired_on < self.commissioned_on:
+            raise ValidationError('Дата снятия не может быть раньше даты установки.')
         if self.pk and self.reading_set.exists():
             original = Meter.objects.get(pk=self.pk)
             if any(getattr(original, key) != getattr(self, key) for key in ('node_id', 'group_id', 'account_id', 'kind')):
                 raise ValidationError('Счётчик с показаниями нельзя переносить. Создайте отдельный счётчик.')
             if self.retired_on and self.reading_set.filter(date__gt=self.retired_on).exists():
                 raise ValidationError('Есть показания позже даты снятия с учёта.')
+            if self.commissioned_on and self.reading_set.filter(date__lt=self.commissioned_on).exists():
+                raise ValidationError('Есть показания раньше даты установки счётчика.')
         if (self.kind == 'individual') != bool(self.account_id):
             raise ValidationError('Лицевой счёт указывается только для индивидуального счётчика и обязателен для него.')
         if self.kind == 'line' and not self.group_id:
@@ -163,6 +171,7 @@ class Reading(RecordedModel):
         verbose_name = 'Показание счётчика'
         verbose_name_plural = '06 · Показания счётчиков'
         ordering = ['-date', '-id']
+        permissions = [('export_reading', 'Может выгружать показания в CSV')]
         constraints = [
             models.UniqueConstraint(fields=['meter', 'date'], name='reading_meter_date'),
             models.CheckConstraint(condition=Q(value__gte=0), name='reading_nonnegative'),
@@ -177,6 +186,10 @@ class Reading(RecordedModel):
                 raise ValidationError('У сохранённого показания нельзя менять счётчик. Исправление привязки требует отдельного разбора.')
         if self.meter.retired_on and self.date > self.meter.retired_on:
             raise ValidationError('Дата позже снятия счётчика с учёта.')
+        if self.meter.commissioned_on and self.date < self.meter.commissioned_on:
+            raise ValidationError('Дата раньше установки счётчика.')
+        if self.date > timezone.localdate():
+            raise ValidationError('Нельзя записать показание будущей датой.')
         previous = Reading.objects.filter(meter_id=self.meter_id, date__lt=self.date).exclude(pk=self.pk).order_by('-date').first()
         following = Reading.objects.filter(meter_id=self.meter_id, date__gt=self.date).exclude(pk=self.pk).order_by('date').first()
         if previous and self.value < previous.value or following and self.value > following.value:

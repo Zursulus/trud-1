@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, Client
+from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -88,6 +89,20 @@ class WaterTests(TestCase):
         self.meter.account = Account.objects.create()
         with self.assertRaises(ValidationError):
             self.meter.save()
+
+    def test_meter_lifecycle_and_future_reading_are_validated(self):
+        today = timezone.localdate()
+        self.meter.commissioned_on = today - timedelta(days=10)
+        self.meter.seal_number = 'PL-77'
+        self.meter.retired_on = today - timedelta(days=11)
+        with self.assertRaises(ValidationError):
+            self.meter.save()
+        self.meter.retired_on = None
+        self.meter.save()
+        with self.assertRaises(ValidationError):
+            Reading.objects.create(meter=self.meter, date=today - timedelta(days=11), value=1)
+        with self.assertRaises(ValidationError):
+            Reading.objects.create(meter=self.meter, date=today + timedelta(days=1), value=1)
 
 
 class MFAAccessMixin:
@@ -288,6 +303,67 @@ class RoleAuditTests(MFAAccessMixin, TestCase):
         self.assertIn('text/csv', response['Content-Type'])
         self.assertTrue(LogEntry.objects.filter(user=self.manager, change_message='Экспорт CSV: 1 записей').exists())
         self.assertEqual(self.client.post(f'/admin/water/account/{self.account.pk}/delete/', {}).status_code, 403)
+
+    def test_operator_workspace_batch_is_atomic_and_attributed(self):
+        from django.contrib.admin.models import LogEntry
+        other = Meter.objects.create(
+            serial='TEST-2', kind='individual', node=self.node,
+            account=Account.objects.create(plot='Второй участок'),
+        )
+        selected = timezone.localdate() - timedelta(days=1)
+        previous = selected - timedelta(days=10)
+        Reading.objects.create(meter=self.meter, date=previous, value=100)
+        csrf_client = Client(enforce_csrf_checks=True)
+        self.login_as(self.operator, csrf_client)
+        self.assertEqual(csrf_client.post('/admin/water/reading/workspace/', {
+            'date': selected.isoformat(), f'value_{self.meter.pk}': '110',
+        }).status_code, 403)
+        self.login_as(self.operator)
+
+        url = '/admin/water/reading/workspace/'
+        response = self.client.get(url, {'date': selected.isoformat(), 'status': 'missing'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Рабочее место оператора воды')
+        self.assertContains(response, 'TEST-1')
+        self.assertContains(response, 'TEST-2')
+
+        response = self.client.post(url, {
+            'date': selected.isoformat(), f'value_{self.meter.pk}': '110.250',
+            f'notes_{self.meter.pk}': 'Обход', f'value_{other.pk}': '50',
+        })
+        self.assertEqual(response.status_code, 302)
+        saved = Reading.objects.get(meter=self.meter, date=selected)
+        self.assertEqual(saved.value, Decimal('110.250'))
+        self.assertEqual(saved.history.first().history_user, self.operator)
+        self.assertEqual(saved.history.first().history_change_reason, 'Пакетный ввод показаний')
+        self.assertEqual(LogEntry.objects.filter(user=self.operator, content_type__model='reading', object_id=str(saved.pk)).count(), 1)
+
+        next_date = timezone.localdate()
+        response = self.client.post(url, {
+            'date': next_date.isoformat(), f'value_{self.meter.pk}': '109',
+            f'value_{other.pk}': '60',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Показание нарушает последовательность')
+        self.assertFalse(Reading.objects.filter(date=next_date).exists())
+
+    def test_workspace_export_is_manager_only_and_logged(self):
+        from django.contrib.admin.models import LogEntry
+        selected = timezone.localdate() - timedelta(days=1)
+        Reading.objects.create(meter=self.meter, date=selected, value=Decimal('25'))
+        url = '/admin/water/reading/workspace/'
+
+        self.login_as(self.operator)
+        self.assertEqual(self.client.get(url, {'date': selected.isoformat(), 'export': 'csv'}).status_code, 403)
+
+        self.login_as(self.manager)
+        response = self.client.get(url, {'date': selected.isoformat(), 'export': 'csv'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/csv', response['Content-Type'])
+        report = response.content.decode('utf-8-sig')
+        self.assertIn('TEST-1', report)
+        self.assertNotIn('Телефон', report)
+        self.assertTrue(LogEntry.objects.filter(user=self.manager, object_repr='Отчёт рабочего места').exists())
 
     def test_history_post_cannot_revert_even_for_superuser(self):
         from django.urls import reverse
