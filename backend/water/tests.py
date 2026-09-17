@@ -162,3 +162,98 @@ class AccessTests(TestCase):
         result = self.client.post('/admin/login/', {'username': 'test-admin', 'password': 'test-only-long-password'})
         self.assertEqual(result.status_code, 429)
         self.assertNotIn('_auth_user_id', self.client.session)
+
+
+
+class RoleAuditTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        self.operator = User.objects.create_user(username='operator-test', is_staff=True)
+        self.operator.groups.add(Group.objects.get(name='Оператор воды'))
+        self.manager = User.objects.create_user(username='manager-test', is_staff=True)
+        self.manager.groups.add(Group.objects.get(name='Администратор СНТ'))
+        self.account = Account.objects.create(plot='Тест')
+        self.node = SupplyNode.objects.create(name='Тестовый узел')
+        self.meter = Meter.objects.create(serial='TEST-1', kind='individual', node=self.node, account=self.account)
+
+    def test_operator_can_add_but_not_correct_or_escalate_or_export(self):
+        from django.contrib.admin.models import LogEntry
+        self.client.force_login(self.operator)
+        response = self.client.post('/admin/water/reading/add/', {
+            'meter': self.meter.pk, 'date': '2026-09-01', 'value': '100', 'version': 0,
+        })
+        self.assertEqual(response.status_code, 302)
+        reading = Reading.objects.get()
+        self.assertEqual(reading.history.first().history_user, self.operator)
+        self.assertTrue(LogEntry.objects.filter(user=self.operator, object_id=str(reading.pk), content_type__model='reading').exists())
+        response = self.client.post(f'/admin/water/reading/{reading.pk}/change/', {
+            'meter': self.meter.pk, 'date': '2026-09-01', 'value': '101', 'version': reading.version, 'change_reason': 'Обход',
+        })
+        self.assertEqual(response.status_code, 403)
+        reading.refresh_from_db()
+        self.assertEqual(reading.value, 100)
+        for path in ['/admin/water/account/add/', '/admin/water/user/', '/admin/auth/group/', '/admin/admin/logentry/']:
+            self.assertEqual(self.client.get(path).status_code, 403, path)
+        response = self.client.post('/admin/water/account/', {'action': 'export_accounts', '_selected_action': [self.account.pk]})
+        self.assertNotIn('text/csv', response.get('Content-Type', ''))
+        self.assertFalse(self.operator.has_perm('water.delete_reading'))
+
+    def test_manager_correction_reason_history_and_readonly_journal(self):
+        from django.contrib.admin.models import LogEntry
+        self.client.force_login(self.manager)
+        url = f'/admin/water/account/{self.account.pk}/change/'
+        response = self.client.post(url, {'plot': 'Исправлено', 'version': self.account.version, 'change_reason': 'Сверка с документом'})
+        self.assertEqual(response.status_code, 302)
+        self.account.refresh_from_db()
+        record = self.account.history.first()
+        self.assertEqual(record.history_user, self.manager)
+        self.assertEqual(record.history_change_reason, 'Сверка с документом')
+        self.assertEqual(record.prev_record.plot, 'Тест')
+        entry = LogEntry.objects.filter(user=self.manager).latest('action_time')
+        self.assertIn('Сверка с документом', entry.get_change_message())
+        self.assertEqual(self.client.get('/admin/admin/logentry/').status_code, 200)
+        self.assertEqual(self.client.post(f'/admin/admin/logentry/{entry.pk}/change/', {}).status_code, 403)
+        self.assertEqual(self.client.post(f'/admin/admin/logentry/{entry.pk}/delete/', {}).status_code, 403)
+        for path in ['/admin/water/user/', '/admin/auth/group/']:
+            self.assertEqual(self.client.get(path).status_code, 403)
+        response = self.client.get(url)
+        self.assertContains(response, 'manager-test')
+        self.assertContains(response, 'Автор не указан')
+        self.assertEqual(self.client.get(f'/admin/water/account/{self.account.pk}/history/').status_code, 200)
+
+    def test_role_sync_preserves_users_and_revokes_extra_group_grants(self):
+        from django.contrib.auth.models import Permission
+        group = self.operator.groups.get()
+        group.permissions.add(Permission.objects.get(codename='change_user', content_type__app_label='water'))
+        call_command('setup_roles', stdout=StringIO())
+        fresh = User.objects.get(pk=self.operator.pk)
+        self.assertFalse(fresh.has_perm('water.change_user'))
+        self.assertTrue(fresh.has_perm('water.add_reading'))
+        self.assertEqual(fresh.groups.count(), 1)
+
+    def test_disabled_operator_loses_existing_session(self):
+        self.client.force_login(self.operator)
+        self.operator.is_active = False
+        self.operator.save()
+        self.assertEqual(self.client.get('/admin/water/account/').status_code, 302)
+
+    def test_manager_export_logged_and_delete_forbidden(self):
+        from django.contrib.admin.models import LogEntry
+        self.client.force_login(self.manager)
+        response = self.client.post('/admin/water/account/', {'action': 'export_accounts', '_selected_action': [self.account.pk]})
+        self.assertIn('text/csv', response['Content-Type'])
+        self.assertTrue(LogEntry.objects.filter(user=self.manager, change_message='Экспорт CSV: 1 записей').exists())
+        self.assertEqual(self.client.post(f'/admin/water/account/{self.account.pk}/delete/', {}).status_code, 403)
+
+    def test_history_post_cannot_revert_even_for_superuser(self):
+        from django.urls import reverse
+        superuser = User.objects.create_superuser(username='technical', password='test-only-password')
+        for user in (self.operator, self.manager, superuser):
+            self.client.force_login(user)
+            history = self.account.history.first()
+            url = reverse('admin:water_account_simple_history', args=[self.account.pk, history.history_id])
+            self.assertEqual(self.client.get(url).status_code, 200)
+            self.assertEqual(self.client.post(url, {'version': self.account.version, 'plot': 'Обход', 'change_reason': 'Обход'}).status_code, 403)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.plot, 'Тест')

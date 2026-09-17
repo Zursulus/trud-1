@@ -50,6 +50,7 @@ class Account(RecordedModel):
         verbose_name = 'Лицевой счёт'
         verbose_name_plural = '01 · Лицевые счета'
         ordering = ['id']
+        permissions = [('export_account', 'Может выгружать карточки в CSV')]
 
     def clean(self):
         self.number = (self.number or '').strip() or None
@@ -225,3 +226,4 @@ class GroupConsumption(RecordedModel):
 
     def __str__(self):
         return f'{self.group} · {self.starts} — {self.ends} · {self.volume} м³'
+

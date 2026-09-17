@@ -3,6 +3,8 @@ import csv
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.admin.models import LogEntry
+from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect
@@ -15,7 +17,47 @@ from .models import Account, GroupConsumption, Membership, Meter, Reading, Suppl
 admin.site.site_header = 'СНТ «Труд-1» · рабочая база'
 admin.site.site_title = 'Труд-1'
 admin.site.index_title = 'Реестр и учёт воды'
-admin.site.register(User, UserAdmin)
+@admin.register(User)
+class StaffAdmin(UserAdmin):
+    """Only the technical superuser can grant or revoke access."""
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    has_add_permission = has_view_permission
+    has_change_permission = has_view_permission
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('username',) if obj else ()
+
+
+@admin.register(LogEntry)
+class ActivityAdmin(admin.ModelAdmin):
+    list_display = ('action_time', 'user', 'content_type', 'object_id', 'object_repr', 'action_flag', 'details')
+    list_filter = ('user', 'content_type', 'action_flag')
+    search_fields = ('user__username', 'object_repr', 'object_id', 'change_message')
+    date_hierarchy = 'action_time'
+    list_select_related = ('user', 'content_type')
+    actions = None
+
+    @admin.display(description='Действие и причина')
+    def details(self, obj):
+        return obj.get_change_message()
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 
 class RecordedForm(forms.ModelForm):
@@ -41,6 +83,46 @@ class RecordedAdmin(SimpleHistoryAdmin):
     list_per_page = 30
     actions = None
 
+    def history_form_view(self, request, object_id, version_id, extra_context=None):
+        # The library's hidden revert button is not a server-side POST guard.
+        if request.method != 'GET' and request.method != 'HEAD':
+            raise PermissionDenied
+        return super().history_form_view(request, object_id, version_id, extra_context)
+
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(super().get_readonly_fields(request, obj)) + ('created_by_info', 'changed_by_info')
+
+    @staticmethod
+    def stamp(record):
+        if record is None:
+            return 'Нет истории'
+        actor = record.history_user
+        name = (actor.get_full_name() or actor.username) if actor else 'Автор не указан (старые данные / системная операция)'
+        return f'{name} · {timezone.localtime(record.history_date):%d.%m.%Y %H:%M:%S}'
+
+    @admin.display(description='Кто и когда создал')
+    def created_by_info(self, obj):
+        if not obj.pk:
+            return 'Будет записано при сохранении'
+        return self.stamp(obj.history.order_by('history_date', 'history_id').select_related('history_user').first())
+
+    @admin.display(description='Кто и когда изменил последним')
+    def changed_by_info(self, obj):
+        if not obj.pk:
+            return 'Будет записано при сохранении'
+        return self.stamp(obj.history.order_by('-history_date', '-history_id').select_related('history_user').first())
+
+    def get_list_display(self, request):
+        return tuple(super().get_list_display(request)) + ('changed_by_info',)
+
+    def log_change(self, request, obj, message):
+        reason = getattr(obj, '_change_reason', '')
+        if isinstance(message, list):
+            message = [*message, {'changed': {'fields': [f'Причина: {reason}']}}]
+        else:
+            message = f'{message}; Причина: {reason}'
+        return super().log_change(request, obj, message)
+
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         try:
             return super().changeform_view(request, object_id, form_url, extra_context)
@@ -54,6 +136,10 @@ class RecordedAdmin(SimpleHistoryAdmin):
         return False
 
     def save_model(self, request, obj, form, change):
+        if change and not self.has_change_permission(request, obj):
+            raise PermissionDenied
+        if not change and not self.has_add_permission(request):
+            raise PermissionDenied
         obj._history_user = request.user
         obj._change_reason = form.cleaned_data.get('change_reason') or 'Создание записи'
         super().save_model(request, obj, form, change)
@@ -95,8 +181,18 @@ class AccountAdmin(RecordedAdmin):
             f'за {latest.starts:%d.%m.%Y}–{latest.ends:%d.%m.%Y}'
         )
 
-    @admin.action(description='Выгрузить выбранные карточки в CSV', permissions=['view'])
+    def has_export_permission(self, request):
+        return request.user.has_perm('water.export_account')
+
+    @admin.action(description='Выгрузить выбранные карточки в CSV', permissions=['export'])
     def export_accounts(self, request, queryset):
+        if not self.has_export_permission(request):
+            raise PermissionDenied
+        from django.contrib.contenttypes.models import ContentType
+        LogEntry.objects.create(user=request.user,
+            content_type=ContentType.objects.get_for_model(Account),
+            object_id='', object_repr='Выгрузка карточек', action_flag=2,
+            change_message=f'Экспорт CSV: {queryset.count()} записей')
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="trud-accounts.csv"'
         response['Cache-Control'] = 'no-store'
@@ -162,3 +258,4 @@ class GroupConsumptionAdmin(RecordedAdmin):
     list_filter = ('group__node', 'group')
     search_fields = ('group__name', 'reported_by')
     autocomplete_fields = ('group',)
+
