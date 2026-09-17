@@ -4,7 +4,8 @@ from django.db import transaction
 
 WATER = ('account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption')
 REGISTRY = ('person', 'landplot', 'plotrelation')
-ADMIN = 'Администратор СНТ'
+ADMIN = 'Администратор ТСН'
+LEGACY_ADMIN = 'Администратор СНТ'
 OPERATOR = 'Оператор воды'
 
 
@@ -13,6 +14,15 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        legacy = Group.objects.filter(name=LEGACY_ADMIN).first()
+        current = Group.objects.filter(name=ADMIN).first()
+        if legacy is not None and current is None:
+            legacy.name = ADMIN
+            legacy.save(update_fields=['name'])
+        elif legacy is not None:
+            current.user_set.add(*legacy.user_set.all())
+            legacy.delete()
+
         water_view = {f'view_{name}' for name in WATER}
         water_view |= {f'view_historical{name}' for name in WATER}
         registry = {f'{action}_{name}' for name in REGISTRY for action in ('view', 'add', 'change')}

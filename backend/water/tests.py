@@ -202,7 +202,7 @@ class RoleAuditTests(MFAAccessMixin, TestCase):
         self.operator = User.objects.create_user(username='operator-test', is_staff=True)
         self.operator.groups.add(Group.objects.get(name='Оператор воды'))
         self.manager = User.objects.create_user(username='manager-test', is_staff=True)
-        self.manager.groups.add(Group.objects.get(name='Администратор СНТ'))
+        self.manager.groups.add(Group.objects.get(name='Администратор ТСН'))
         self.account = Account.objects.create(plot='Тест')
         self.node = SupplyNode.objects.create(name='Тестовый узел')
         self.meter = Meter.objects.create(serial='TEST-1', kind='individual', node=self.node, account=self.account)
@@ -262,6 +262,19 @@ class RoleAuditTests(MFAAccessMixin, TestCase):
         self.assertTrue(fresh.has_perm('water.add_reading'))
         self.assertEqual(fresh.groups.count(), 1)
 
+    def test_legacy_admin_role_is_renamed_without_losing_members(self):
+        from django.contrib.auth.models import Group
+        legacy = Group.objects.create(name='Администратор СНТ')
+        legacy_user = User.objects.create_user(username='legacy-manager', is_staff=True)
+        legacy_user.groups.add(legacy)
+
+        call_command('setup_roles', stdout=StringIO())
+
+        legacy_user.refresh_from_db()
+        self.assertFalse(Group.objects.filter(name='Администратор СНТ').exists())
+        self.assertTrue(legacy_user.groups.filter(name='Администратор ТСН').exists())
+        self.assertTrue(legacy_user.has_perm('water.change_person'))
+
     def test_disabled_operator_loses_existing_session(self):
         self.login_as(self.operator)
         self.operator.is_active = False
@@ -294,7 +307,7 @@ class RegistryTests(MFAAccessMixin, TestCase):
         from django.contrib.auth.models import Group
         call_command('setup_roles', stdout=StringIO())
         self.manager = User.objects.create_user(username='registry-manager', is_staff=True)
-        self.manager.groups.add(Group.objects.get(name='Администратор СНТ'))
+        self.manager.groups.add(Group.objects.get(name='Администратор ТСН'))
         self.operator = User.objects.create_user(username='water-operator', is_staff=True)
         self.operator.groups.add(Group.objects.get(name='Оператор воды'))
         self.account = Account.objects.create(number='001')

@@ -20,7 +20,7 @@ from .models import (
     PlotRelation, Reading, SupplyNode, User, WaterGroup,
 )
 
-admin.site.site_header = 'СНТ «Труд-1» · рабочая база'
+admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
 admin.site.site_title = 'Труд-1'
 admin.site.index_title = 'Реестр и учёт воды'
 
