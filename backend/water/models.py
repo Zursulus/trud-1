@@ -344,6 +344,7 @@ class PlotRelation(RecordedModel):
 class BillingPolicy(RecordedModel):
     """Reusable billing behaviour; accounts may inherit or override it by date."""
     name = models.CharField('Название набора правил', max_length=200, unique=True)
+    is_default = models.BooleanField('Правила по умолчанию', default=False)
     missing_reading = models.CharField('Если нет показаний', max_length=20, choices=[
         ('draft', 'Оставить черновик без суммы'),
         ('zero', 'Начислить нулевой расход'),
@@ -379,6 +380,12 @@ class BillingPolicy(RecordedModel):
     class Meta:
         verbose_name = 'Набор правил начисления'
         verbose_name_plural = '08 · Правила начислений'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['is_default'], condition=Q(is_default=True),
+                name='single_default_billing_policy',
+            ),
+        ]
 
     def clean(self):
         if self.missing_reading == 'norm' and self.monthly_norm_m3 is None:
@@ -495,12 +502,23 @@ class Charge(RecordedModel):
         ('norm', 'По нормативу'), ('adjustment', 'Корректировка'),
         ('service', 'Услуга / иной платёж'), ('opening', 'Начальный долг / переплата'),
     ])
-    volume = models.DecimalField('Объём, м³', max_digits=14, decimal_places=3, blank=True, null=True)
-    rate = models.DecimalField('Тариф', max_digits=12, decimal_places=4, blank=True, null=True)
+    volume = models.DecimalField(
+        'Объём, м³', max_digits=14, decimal_places=3, blank=True, null=True,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    rate = models.DecimalField(
+        'Тариф', max_digits=12, decimal_places=4, blank=True, null=True,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     amount = models.DecimalField('Сумма, ₽', max_digits=14, decimal_places=2)
     status = models.CharField('Состояние', max_length=20, choices=[
         ('draft', 'Черновик'), ('approved', 'Утверждено'), ('cancelled', 'Отменено'),
     ], default='draft')
+    origin = models.CharField('Источник', max_length=20, choices=[
+        ('manual', 'Ручной ввод'), ('calculation', 'Автоматический расчёт'),
+        ('import', 'Импорт'),
+    ], default='manual')
+    source_key = models.CharField('Ключ автоматического расчёта', max_length=200, blank=True, null=True, unique=True, editable=False)
     calculation = models.TextField('Расшифровка расчёта', blank=True)
     notes = models.TextField('Основание / примечание', blank=True)
 
@@ -512,15 +530,13 @@ class Charge(RecordedModel):
     def clean(self):
         if self.pk:
             original = Charge.objects.get(pk=self.pk)
-            protected = ('account_id', 'period_id', 'kind', 'volume', 'rate', 'amount')
+            protected = ('account_id', 'period_id', 'kind', 'volume', 'rate', 'amount', 'origin', 'source_key')
             if original.status == 'approved' and any(getattr(original, field) != getattr(self, field) for field in protected):
                 raise ValidationError('Утверждённое начисление нельзя переписывать. Создайте корректировку.')
         if (self.volume is None) != (self.rate is None):
             raise ValidationError('Объём и тариф указываются вместе либо оба не указываются.')
-        if self.volume is not None and self.kind not in ('adjustment', 'opening'):
-            expected = (self.volume * self.rate).quantize(Decimal('0.01'))
-            if self.amount != expected:
-                raise ValidationError({'amount': f'Для указанного объёма и тарифа сумма должна быть {expected} ₽.'})
+        if self.kind not in ('adjustment', 'opening') and self.amount < 0:
+            raise ValidationError({'amount': 'Обычное начисление не может быть отрицательным.'})
 
     def __str__(self):
         return f'{self.account} · {self.get_kind_display()} · {self.amount} ₽'

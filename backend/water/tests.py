@@ -11,6 +11,7 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
+from .billing import calculate_period
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
@@ -512,7 +513,7 @@ class FlexibleBillingTests(TestCase):
         with self.assertRaises(ValidationError):
             Charge.objects.create(
                 account=self.account, period=self.period, kind='water', volume=Decimal('3.000'),
-                rate=Decimal('40.0000'), amount=Decimal('119.00'),
+                rate=Decimal('40.0000'), amount=Decimal('-1.00'),
             )
 
     def test_payment_allocation_cannot_cross_accounts_or_exceed_payment(self):
@@ -544,3 +545,93 @@ class FlexibleBillingTests(TestCase):
         self.assertTrue(manager.has_perm('water.add_tariff'))
         self.assertTrue(manager.has_perm('water.change_payment'))
         self.assertFalse(operator.has_perm('water.view_payment'))
+
+
+class BillingCalculationTests(TestCase):
+    def setUp(self):
+        self.account = Account.objects.create(number='CALC-1', plot='Расчётный')
+        self.node = SupplyNode.objects.create(name='Расчётный узел')
+        self.group = WaterGroup.objects.create(name='Расчётная группа', node=self.node)
+        Membership.objects.create(account=self.account, group=self.group, starts=date(2026, 1, 1))
+        self.meter = Meter.objects.create(
+            serial='CALC-METER', kind='individual', node=self.node, account=self.account,
+            commissioned_on=date(2026, 1, 1),
+        )
+        self.period = BillingPeriod.objects.create(starts=date(2026, 7, 1), ends=date(2026, 8, 1))
+        self.default_policy = BillingPolicy.objects.create(
+            name='Общие безопасные правила', is_default=True, missing_reading='draft', rounding='kopeck',
+        )
+        Tariff.objects.create(name='Общий тариф', rate=Decimal('40'), starts=date(2026, 1, 1))
+
+    def test_actual_consumption_creates_idempotent_draft_with_explanation(self):
+        Reading.objects.create(meter=self.meter, date=self.period.starts, value=Decimal('100'))
+        Reading.objects.create(meter=self.meter, date=self.period.ends, value=Decimal('112.500'))
+
+        result = calculate_period(self.period)
+
+        self.assertEqual(result[0].outcome, 'created')
+        charge = Charge.objects.get()
+        self.assertEqual(charge.volume, Decimal('12.500'))
+        self.assertEqual(charge.amount, Decimal('500.00'))
+        self.assertEqual(charge.origin, 'calculation')
+        self.assertIn('Общий тариф', charge.calculation)
+        result = calculate_period(self.period)
+        self.assertEqual(result[0].outcome, 'updated')
+        self.assertEqual(Charge.objects.count(), 1)
+
+    def test_account_tariff_and_group_policy_override_defaults(self):
+        group_policy = BillingPolicy.objects.create(
+            name='Групповой норматив', missing_reading='norm', monthly_norm_m3=Decimal('7.000'),
+            rounding='up_ruble',
+        )
+        BillingAssignment.objects.create(
+            policy=group_policy, group=self.group, starts=date(2026, 1, 1),
+        )
+        Tariff.objects.create(
+            name='Индивидуальный тариф', rate=Decimal('30.0100'), starts=date(2026, 1, 1), account=self.account,
+        )
+
+        result = calculate_period(self.period)
+
+        charge = result[0].charge
+        self.assertEqual(charge.kind, 'norm')
+        self.assertEqual(charge.volume, Decimal('7.000'))
+        self.assertEqual(charge.amount, Decimal('211.00'))
+        self.assertIn('Индивидуальный тариф', charge.calculation)
+        self.assertIn('Групповой норматив', charge.calculation)
+
+    def test_missing_safe_rule_leaves_account_for_review_without_charge(self):
+        results = calculate_period(self.period)
+        self.assertEqual(results[0].outcome, 'review')
+        self.assertFalse(Charge.objects.exists())
+        self.assertEqual(BillingPeriod.objects.get(pk=self.period.pk).status, 'calculated')
+
+    def test_historical_average_uses_only_readings_before_period(self):
+        self.default_policy.missing_reading = 'average'
+        self.default_policy.average_periods = 2
+        self.default_policy.save()
+        Reading.objects.create(meter=self.meter, date=date(2026, 4, 1), value=Decimal('10'))
+        Reading.objects.create(meter=self.meter, date=date(2026, 5, 1), value=Decimal('20'))
+        Reading.objects.create(meter=self.meter, date=date(2026, 6, 1), value=Decimal('40'))
+        Reading.objects.create(meter=self.meter, date=date(2026, 9, 1), value=Decimal('1000'))
+
+        charge = calculate_period(self.period)[0].charge
+
+        self.assertEqual(charge.volume, Decimal('15.000'))
+        self.assertEqual(charge.amount, Decimal('600.00'))
+
+    def test_approved_period_and_approved_auto_charge_are_not_overwritten(self):
+        Reading.objects.create(meter=self.meter, date=self.period.starts, value=Decimal('100'))
+        Reading.objects.create(meter=self.meter, date=self.period.ends, value=Decimal('110'))
+        charge = calculate_period(self.period)[0].charge
+        charge.status = 'approved'
+        charge.save()
+        self.period.refresh_from_db()
+        self.period.status = 'approved'
+        self.period.save()
+        with self.assertRaises(ValidationError):
+            calculate_period(self.period)
+
+    def test_only_one_default_policy_is_allowed(self):
+        with self.assertRaises(ValidationError):
+            BillingPolicy.objects.create(name='Другие общие правила', is_default=True)

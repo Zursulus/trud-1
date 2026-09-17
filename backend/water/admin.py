@@ -540,7 +540,7 @@ class GroupConsumptionAdmin(RecordedAdmin):
 
 @admin.register(BillingPolicy)
 class BillingPolicyAdmin(RecordedAdmin):
-    list_display = ('name', 'missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
+    list_display = ('name', 'is_default', 'missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
     list_filter = ('missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
     search_fields = ('name', 'notes')
 
@@ -566,14 +566,40 @@ class BillingPeriodAdmin(RecordedAdmin):
     list_display = ('starts', 'ends', 'status')
     list_filter = ('status',)
     search_fields = ('starts', 'ends')
+    actions = ('calculate_drafts',)
+
+    @admin.action(description='Рассчитать или обновить безопасные черновики')
+    def calculate_drafts(self, request, queryset):
+        from .billing import calculate_period
+        created = updated = review = skipped = 0
+        for period in queryset.order_by('starts'):
+            try:
+                results = calculate_period(period, actor=request.user)
+            except ValidationError as error:
+                messages.error(request, f'{period}: {validation_text(error)}')
+                continue
+            for result in results:
+                if result.outcome == 'created':
+                    created += 1
+                elif result.outcome == 'updated':
+                    updated += 1
+                elif result.outcome == 'review':
+                    review += 1
+                else:
+                    skipped += 1
+        messages.success(
+            request,
+            f'Черновики: создано {created}, обновлено {updated}; требуют проверки {review}, пропущено без правил/тарифа {skipped}.',
+        )
 
 
 @admin.register(Charge)
 class ChargeAdmin(RecordedAdmin):
-    list_display = ('account', 'period', 'kind', 'volume', 'rate', 'amount', 'status')
-    list_filter = ('status', 'kind', 'period')
+    list_display = ('account', 'period', 'kind', 'volume', 'rate', 'amount', 'status', 'origin')
+    list_filter = ('status', 'origin', 'kind', 'period')
     search_fields = ('account__number', 'account__plot', 'notes', 'calculation')
     autocomplete_fields = ('account', 'period')
+    readonly_fields = ('source_key',)
 
 
 @admin.register(Payment)
