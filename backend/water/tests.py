@@ -180,14 +180,14 @@ class AccessTests(MFAAccessMixin, TestCase):
 
         result = self.client.get('/admin/login/')
         self.assertEqual(result.status_code, 302)
-        self.assertIn('/account/login/', result['Location'])
+        self.assertIn('/admin/account/login/', result['Location'])
 
     def test_password_guessing_locks_login(self):
         for _ in range(5):
-            self.client.post('/account/login/', {
+            self.client.post('/admin/account/login/', {
                 'login_view-current_step': 'auth', 'auth-username': 'test-admin', 'auth-password': 'wrong',
             })
-        result = self.client.post('/account/login/', {
+        result = self.client.post('/admin/account/login/', {
             'login_view-current_step': 'auth', 'auth-username': 'test-admin', 'auth-password': 'test-only-long-password',
         })
         self.assertEqual(result.status_code, 429)

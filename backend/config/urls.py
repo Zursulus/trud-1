@@ -8,6 +8,8 @@ from two_factor.urls import urlpatterns as two_factor_urls
 admin.site.__class__ = AdminSiteOTPRequired
 
 urlpatterns = [
-    path('', include(two_factor_urls)),
+    # Keep every staff authentication page below /admin/: production Nginx
+    # proxies that prefix to Django while the public root stays static.
+    path('admin/', include(two_factor_urls)),
     path('admin/', admin.site.urls),
 ]
