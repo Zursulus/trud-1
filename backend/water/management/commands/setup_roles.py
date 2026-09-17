@@ -2,7 +2,8 @@ from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-BUSINESS = ('account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption')
+WATER = ('account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption')
+REGISTRY = ('person', 'landplot', 'plotrelation')
 ADMIN = 'Администратор СНТ'
 OPERATOR = 'Оператор воды'
 
@@ -12,10 +13,12 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        common = {f'view_{name}' for name in BUSINESS}
-        common |= {f'view_historical{name}' for name in BUSINESS}
-        operator = common | {'add_reading', 'add_groupconsumption'}
-        administrator = common | {f'{action}_{name}' for name in BUSINESS for action in ('add', 'change')}
+        water_view = {f'view_{name}' for name in WATER}
+        water_view |= {f'view_historical{name}' for name in WATER}
+        registry = {f'{action}_{name}' for name in REGISTRY for action in ('view', 'add', 'change')}
+        registry |= {f'view_historical{name}' for name in REGISTRY}
+        operator = water_view | {'add_reading', 'add_groupconsumption'}
+        administrator = water_view | registry | {f'{action}_{name}' for name in WATER for action in ('add', 'change')}
         administrator.add('export_account')
         for name, codes in ((ADMIN, administrator), (OPERATOR, operator)):
             permissions = list(Permission.objects.filter(content_type__app_label='water', codename__in=codes))

@@ -227,3 +227,97 @@ class GroupConsumption(RecordedModel):
     def __str__(self):
         return f'{self.group} · {self.starts} — {self.ends} · {self.volume} м³'
 
+
+class Person(RecordedModel):
+    """A real person, deliberately separate from a plot and billing account."""
+    full_name = models.CharField('ФИО', max_length=200)
+    phone = models.CharField('Телефон', max_length=40, blank=True)
+    email = models.EmailField('Электронная почта', blank=True)
+    notes = models.TextField('Примечание', blank=True)
+    archived = models.BooleanField('Архивная карточка человека', default=False)
+
+    class Meta:
+        verbose_name = 'Человек'
+        verbose_name_plural = '02 · Люди'
+        ordering = ['full_name', 'id']
+
+    def clean(self):
+        self.full_name = ' '.join(self.full_name.split())
+        if not self.full_name:
+            raise ValidationError({'full_name': 'Укажите ФИО.'})
+
+    def __str__(self):
+        return self.full_name
+
+
+class LandPlot(RecordedModel):
+    """Land plot. A billing account may be attached, but is not the plot itself."""
+    label = models.CharField('Обозначение участка', max_length=100)
+    address = models.CharField('Адрес / ориентир', max_length=200, blank=True)
+    cadastral_number = models.CharField('Кадастровый номер', max_length=50, blank=True, null=True, unique=True)
+    account = models.ForeignKey(
+        Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT,
+        related_name='land_plots', blank=True, null=True,
+    )
+    notes = models.TextField('Примечание', blank=True)
+    archived = models.BooleanField('Архивный участок', default=False)
+
+    class Meta:
+        verbose_name = 'Участок'
+        verbose_name_plural = '03 · Участки'
+        ordering = ['label', 'id']
+
+    def clean(self):
+        self.label = ' '.join(self.label.split())
+        if not self.label:
+            raise ValidationError({'label': 'Укажите обозначение участка.'})
+        self.cadastral_number = (self.cadastral_number or '').strip() or None
+
+    def __str__(self):
+        return self.label
+
+
+class PlotRelation(RecordedModel):
+    """Time-bounded owner or representative relation; records are never overwritten."""
+    OWNER = 'owner'
+    REPRESENTATIVE = 'representative'
+    ROLE_CHOICES = [(OWNER, 'Собственник'), (REPRESENTATIVE, 'Представитель')]
+
+    person = models.ForeignKey(Person, verbose_name='Человек', on_delete=models.PROTECT, related_name='plot_relations')
+    plot = models.ForeignKey(LandPlot, verbose_name='Участок', on_delete=models.PROTECT, related_name='relations')
+    role = models.CharField('Статус', max_length=20, choices=ROLE_CHOICES)
+    starts = models.DateField('Действует с')
+    ends = models.DateField('Действует до (не включая)', blank=True, null=True)
+    document = models.CharField('Основание / документ', max_length=300, blank=True)
+    notes = models.TextField('Примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Связь человека с участком'
+        verbose_name_plural = '04 · Владение и представительство'
+        ordering = ['plot', '-starts', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends__isnull=True) | Q(ends__gt=models.F('starts')),
+                name='plot_relation_dates',
+            ),
+        ]
+
+    def clean(self):
+        if not self.person_id or not self.plot_id or not self.starts:
+            return
+        overlaps = PlotRelation.objects.filter(
+            person_id=self.person_id, plot_id=self.plot_id, role=self.role,
+        ).filter(Q(ends__isnull=True) | Q(ends__gt=self.starts)).exclude(pk=self.pk)
+        if self.ends:
+            overlaps = overlaps.filter(starts__lt=self.ends)
+        if overlaps.exists():
+            raise ValidationError('У этого человека уже есть такая связь с участком на пересекающиеся даты.')
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            Person.objects.select_for_update().get(pk=self.person_id)
+            LandPlot.objects.select_for_update().get(pk=self.plot_id)
+            return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.person} — {self.get_role_display()} участка {self.plot}'

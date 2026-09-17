@@ -7,12 +7,16 @@ from django.contrib.admin.models import LogEntry
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.utils import timezone
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Account, GroupConsumption, Membership, Meter, Reading, SupplyNode, User, WaterGroup
+from .models import (
+    Account, GroupConsumption, LandPlot, Membership, Meter, Person,
+    PlotRelation, Reading, SupplyNode, User, WaterGroup,
+)
 
 admin.site.site_header = 'СНТ «Труд-1» · рабочая база'
 admin.site.site_title = 'Труд-1'
@@ -153,8 +157,12 @@ class AccountAdmin(RecordedAdmin):
     )
     search_fields = ('=id', 'number', 'plot', 'contact_name', 'phone')
     list_filter = ('archived',)
-    readonly_fields = ('id', 'groups_today', 'latest_group_consumption')
+    readonly_fields = ('id', 'groups_today', 'latest_group_consumption', 'linked_plots')
     actions = ['export_accounts']
+
+    @admin.display(description='Привязанные участки')
+    def linked_plots(self, obj):
+        return ', '.join(obj.land_plots.values_list('label', flat=True)) or '—'
 
     @admin.display(description='В группе сейчас')
     def groups_today(self, obj):
@@ -205,6 +213,48 @@ class AccountAdmin(RecordedAdmin):
         for row in queryset.order_by('id').values_list('id', 'number', 'plot', 'contact_name', 'phone'):
             writer.writerow([safe(value) for value in row])
         return response
+
+
+@admin.register(Person)
+class PersonAdmin(RecordedAdmin):
+    list_display = ('id', 'full_name', 'phone', 'email', 'active_relations', 'archived')
+    list_filter = ('archived',)
+    search_fields = ('full_name', 'phone', 'email')
+
+    @admin.display(description='Связи сейчас')
+    def active_relations(self, obj):
+        today = timezone.localdate()
+        return ', '.join(
+            PlotRelation.objects.filter(person=obj, starts__lte=today).filter(
+                Q(ends__isnull=True) | Q(ends__gt=today)
+            ).select_related('plot').values_list('plot__label', flat=True)
+        ) or '—'
+
+
+@admin.register(LandPlot)
+class LandPlotAdmin(RecordedAdmin):
+    list_display = ('id', 'label', 'address', 'cadastral_number', 'account', 'current_people', 'archived')
+    list_filter = ('archived',)
+    search_fields = ('label', 'address', 'cadastral_number', 'account__number')
+    autocomplete_fields = ('account',)
+
+    @admin.display(description='Люди сейчас')
+    def current_people(self, obj):
+        today = timezone.localdate()
+        return ', '.join(
+            PlotRelation.objects.filter(plot=obj, starts__lte=today).filter(
+                Q(ends__isnull=True) | Q(ends__gt=today)
+            ).select_related('person').values_list('person__full_name', flat=True)
+        ) or '—'
+
+
+@admin.register(PlotRelation)
+class PlotRelationAdmin(RecordedAdmin):
+    list_display = ('person', 'plot', 'role', 'starts', 'ends', 'document')
+    list_filter = ('role', 'plot')
+    search_fields = ('person__full_name', 'plot__label', 'document')
+    autocomplete_fields = ('person', 'plot')
+
 
 
 @admin.register(SupplyNode)

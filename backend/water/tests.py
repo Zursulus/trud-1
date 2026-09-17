@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.test import TestCase, Client
 from axes.utils import reset
 
-from .models import Account, GroupConsumption, Membership, Meter, Reading, SupplyNode, User, WaterGroup
+from .models import Account, GroupConsumption, LandPlot, Membership, Meter, Person, PlotRelation, Reading, SupplyNode, User, WaterGroup
 
 
 class WaterTests(TestCase):
@@ -257,3 +257,63 @@ class RoleAuditTests(TestCase):
             self.assertEqual(self.client.post(url, {'version': self.account.version, 'plot': 'Обход', 'change_reason': 'Обход'}).status_code, 403)
         self.account.refresh_from_db()
         self.assertEqual(self.account.plot, 'Тест')
+
+
+class RegistryTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        self.manager = User.objects.create_user(username='registry-manager', is_staff=True)
+        self.manager.groups.add(Group.objects.get(name='Администратор СНТ'))
+        self.operator = User.objects.create_user(username='water-operator', is_staff=True)
+        self.operator.groups.add(Group.objects.get(name='Оператор воды'))
+        self.account = Account.objects.create(number='001')
+        self.plot = LandPlot.objects.create(label='Участок 12', account=self.account)
+        self.person = Person.objects.create(full_name='Иванов Иван Иванович')
+
+    def test_person_plot_account_are_separate_and_history_is_preserved(self):
+        other = LandPlot.objects.create(label='Участок 13', account=self.account)
+        owner = PlotRelation.objects.create(person=self.person, plot=self.plot, role='owner', starts=date(2020, 1, 1))
+        PlotRelation.objects.create(person=self.person, plot=other, role='owner', starts=date(2020, 1, 1))
+        with self.assertRaises(ValidationError):
+            PlotRelation.objects.create(person=self.person, plot=self.plot, role='owner', starts=date(2021, 1, 1))
+        PlotRelation.objects.create(person=self.person, plot=self.plot, role='representative', starts=date(2021, 1, 1))
+        owner.ends = date(2022, 1, 1)
+        owner.save()
+        new_owner = Person.objects.create(full_name='Петров Пётр Петрович')
+        PlotRelation.objects.create(person=new_owner, plot=self.plot, role='owner', starts=date(2022, 1, 1))
+        self.assertEqual(self.account.land_plots.count(), 2)
+        self.assertEqual(self.plot.relations.count(), 3)
+        self.assertEqual(owner.history.count(), 2)
+
+    def test_invalid_relation_dates_and_deletion_are_rejected(self):
+        with self.assertRaises(ValidationError):
+            PlotRelation.objects.create(person=self.person, plot=self.plot, role='owner', starts=date(2025, 1, 2), ends=date(2025, 1, 2))
+        owner = PlotRelation.objects.create(person=self.person, plot=self.plot, role='owner', starts=date(2025, 1, 1))
+        with self.assertRaises(Exception):
+            self.person.delete()
+        with self.assertRaises(Exception):
+            self.plot.delete()
+        self.assertEqual(PlotRelation.objects.get(pk=owner.pk), owner)
+
+    def test_manager_can_register_relations_with_actor_and_operator_cannot_view(self):
+        self.client.force_login(self.manager)
+        response = self.client.post('/admin/water/plotrelation/add/', {
+            'person': self.person.pk, 'plot': self.plot.pk, 'role': 'owner',
+            'starts': '2025-01-01', 'version': 0,
+        })
+        self.assertEqual(response.status_code, 302)
+        relation = PlotRelation.objects.get()
+        self.assertEqual(relation.history.first().history_user, self.manager)
+        self.assertEqual(self.client.get('/admin/water/person/').status_code, 200)
+        self.assertEqual(self.client.get('/admin/water/landplot/').status_code, 200)
+        self.assertEqual(self.client.get('/admin/water/plotrelation/').status_code, 200)
+        self.client.force_login(self.operator)
+        for url in ['/admin/water/person/', '/admin/water/landplot/', '/admin/water/plotrelation/']:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+
+    def test_setup_roles_does_not_grant_registry_to_operator(self):
+        self.assertTrue(self.manager.has_perm('water.change_person'))
+        self.assertTrue(self.manager.has_perm('water.view_historicalplotrelation'))
+        self.assertFalse(self.operator.has_perm('water.view_person'))
+        self.assertFalse(self.operator.has_perm('water.add_landplot'))
