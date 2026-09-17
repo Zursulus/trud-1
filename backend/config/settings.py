@@ -16,12 +16,15 @@ CSRF_TRUSTED_ORIGINS = list(filter(None, os.environ.get('DJANGO_CSRF_ORIGINS', '
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
-    'axes', 'simple_history', 'water',
+    'axes', 'simple_history',
+    'django_otp', 'django_otp.plugins.otp_static', 'django_otp.plugins.otp_totp',
+    'two_factor', 'water',
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware', 'django_otp.middleware.OTPMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware', 'axes.middleware.AxesMiddleware',
 ]
@@ -62,6 +65,15 @@ AXES_RESET_ON_SUCCESS = True
 AXES_ENABLE_ACCESS_FAILURE_LOG = False
 SIMPLE_HISTORY_REVERT_DISABLED = True
 SIMPLE_HISTORY_ENFORCE_HISTORY_MODEL_PERMISSIONS = True
+# The admin is patched by django-two-factor-auth and denies any staff member
+# who has not completed the second factor. A browser is never remembered.
+LOGIN_URL = 'two_factor:login'
+LOGIN_REDIRECT_URL = '/admin/'
+LOGOUT_REDIRECT_URL = 'two_factor:login'
+TWO_FACTOR_LOGIN_TIMEOUT = 600
+TWO_FACTOR_REMEMBER_COOKIE_AGE = None
+OTP_TOTP_ISSUER = 'СНТ Труд-1'
+OTP_ADMIN_HIDE_SENSITIVE_DATA = True
 LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True

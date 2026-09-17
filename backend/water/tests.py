@@ -5,6 +5,9 @@ from io import StringIO
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, Client
+from django_otp import DEVICE_ID_SESSION_KEY
+from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
+from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
 from .models import Account, GroupConsumption, LandPlot, Membership, Meter, Person, PlotRelation, Reading, SupplyNode, User, WaterGroup
@@ -87,7 +90,20 @@ class WaterTests(TestCase):
             self.meter.save()
 
 
-class AccessTests(TestCase):
+class MFAAccessMixin:
+    """Give a test client the same verified session created after real OTP login."""
+
+    def login_as(self, user, client=None):
+        client = client or self.client
+        device, _ = TOTPDevice.objects.get_or_create(user=user, defaults={'name': 'test device'})
+        client.force_login(user)
+        session = client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
+        return client
+
+
+class AccessTests(MFAAccessMixin, TestCase):
     def setUp(self):
         reset()
         self.admin = User.objects.create_superuser(username='test-admin', password='test-only-long-password')
@@ -96,12 +112,12 @@ class AccessTests(TestCase):
     def test_anonymous_and_unprivileged_cannot_read_registry(self):
         self.assertEqual(self.client.get('/admin/water/account/').status_code, 302)
         user = User.objects.create_user(username='test-user', is_staff=True)
-        self.client.force_login(user)
+        self.login_as(user)
         self.assertEqual(self.client.get('/admin/water/account/').status_code, 403)
         self.assertEqual(self.client.get(f'/admin/water/account/{self.account.pk}/change/').status_code, 403)
 
     def test_admin_forms_render_and_save_with_attribution(self):
-        self.client.force_login(self.admin)
+        self.login_as(self.admin)
         for model in ['account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption']:
             self.assertEqual(self.client.get(f'/admin/water/{model}/').status_code, 200)
             self.assertEqual(self.client.get(f'/admin/water/{model}/add/').status_code, 200)
@@ -123,7 +139,7 @@ class AccessTests(TestCase):
             volume=Decimal('111'),
             reported_by='Матвеев',
         )
-        self.client.force_login(self.admin)
+        self.login_as(self.admin)
 
         response = self.client.get(f'/admin/water/account/{self.account.pk}/change/')
 
@@ -133,13 +149,13 @@ class AccessTests(TestCase):
 
     def test_csrf_required(self):
         client = Client(enforce_csrf_checks=True)
-        client.force_login(self.admin)
+        self.login_as(self.admin, client)
         self.assertEqual(client.post('/admin/water/account/add/', {'plot': 'Тест'}).status_code, 403)
 
     def test_export_neutralizes_spreadsheet_formulas(self):
         self.account.plot = '=1+1'
         self.account.save()
-        self.client.force_login(self.admin)
+        self.login_as(self.admin)
         response = self.client.post('/admin/water/account/', {
             'action': 'export_accounts', '_selected_action': [self.account.pk],
         })
@@ -147,7 +163,7 @@ class AccessTests(TestCase):
         self.assertIn("'=1+1", response.content.decode('utf-8-sig'))
 
     def test_edit_requires_reason_and_delete_is_forbidden(self):
-        self.client.force_login(self.admin)
+        self.login_as(self.admin)
         response = self.client.post(f'/admin/water/account/{self.account.pk}/change/', {
             'version': self.account.version, 'plot': 'Без причины',
         })
@@ -156,16 +172,30 @@ class AccessTests(TestCase):
         self.assertEqual(self.account.plot, 'Тестовый участок')
         self.assertEqual(self.client.post(f'/admin/water/account/{self.account.pk}/delete/', {'post': 'yes'}).status_code, 403)
 
+    def test_password_only_cannot_open_admin_and_first_login_starts_setup(self):
+        self.client.force_login(self.admin)
+        result = self.client.get('/admin/water/account/')
+        self.assertEqual(result.status_code, 302)
+        self.assertIn('/admin/login/', result['Location'])
+
+        result = self.client.get('/admin/login/')
+        self.assertEqual(result.status_code, 302)
+        self.assertIn('/account/login/', result['Location'])
+
     def test_password_guessing_locks_login(self):
         for _ in range(5):
-            self.client.post('/admin/login/', {'username': 'test-admin', 'password': 'wrong'})
-        result = self.client.post('/admin/login/', {'username': 'test-admin', 'password': 'test-only-long-password'})
+            self.client.post('/account/login/', {
+                'login_view-current_step': 'auth', 'auth-username': 'test-admin', 'auth-password': 'wrong',
+            })
+        result = self.client.post('/account/login/', {
+            'login_view-current_step': 'auth', 'auth-username': 'test-admin', 'auth-password': 'test-only-long-password',
+        })
         self.assertEqual(result.status_code, 429)
         self.assertNotIn('_auth_user_id', self.client.session)
 
 
 
-class RoleAuditTests(TestCase):
+class RoleAuditTests(MFAAccessMixin, TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group
         call_command('setup_roles', stdout=StringIO())
@@ -179,7 +209,7 @@ class RoleAuditTests(TestCase):
 
     def test_operator_can_add_but_not_correct_or_escalate_or_export(self):
         from django.contrib.admin.models import LogEntry
-        self.client.force_login(self.operator)
+        self.login_as(self.operator)
         response = self.client.post('/admin/water/reading/add/', {
             'meter': self.meter.pk, 'date': '2026-09-01', 'value': '100', 'version': 0,
         })
@@ -201,7 +231,7 @@ class RoleAuditTests(TestCase):
 
     def test_manager_correction_reason_history_and_readonly_journal(self):
         from django.contrib.admin.models import LogEntry
-        self.client.force_login(self.manager)
+        self.login_as(self.manager)
         url = f'/admin/water/account/{self.account.pk}/change/'
         response = self.client.post(url, {'plot': 'Исправлено', 'version': self.account.version, 'change_reason': 'Сверка с документом'})
         self.assertEqual(response.status_code, 302)
@@ -233,14 +263,14 @@ class RoleAuditTests(TestCase):
         self.assertEqual(fresh.groups.count(), 1)
 
     def test_disabled_operator_loses_existing_session(self):
-        self.client.force_login(self.operator)
+        self.login_as(self.operator)
         self.operator.is_active = False
         self.operator.save()
         self.assertEqual(self.client.get('/admin/water/account/').status_code, 302)
 
     def test_manager_export_logged_and_delete_forbidden(self):
         from django.contrib.admin.models import LogEntry
-        self.client.force_login(self.manager)
+        self.login_as(self.manager)
         response = self.client.post('/admin/water/account/', {'action': 'export_accounts', '_selected_action': [self.account.pk]})
         self.assertIn('text/csv', response['Content-Type'])
         self.assertTrue(LogEntry.objects.filter(user=self.manager, change_message='Экспорт CSV: 1 записей').exists())
@@ -250,7 +280,7 @@ class RoleAuditTests(TestCase):
         from django.urls import reverse
         superuser = User.objects.create_superuser(username='technical', password='test-only-password')
         for user in (self.operator, self.manager, superuser):
-            self.client.force_login(user)
+            self.login_as(user)
             history = self.account.history.first()
             url = reverse('admin:water_account_simple_history', args=[self.account.pk, history.history_id])
             self.assertEqual(self.client.get(url).status_code, 200)
@@ -259,7 +289,7 @@ class RoleAuditTests(TestCase):
         self.assertEqual(self.account.plot, 'Тест')
 
 
-class RegistryTests(TestCase):
+class RegistryTests(MFAAccessMixin, TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group
         call_command('setup_roles', stdout=StringIO())
@@ -297,7 +327,7 @@ class RegistryTests(TestCase):
         self.assertEqual(PlotRelation.objects.get(pk=owner.pk), owner)
 
     def test_manager_can_register_relations_with_actor_and_operator_cannot_view(self):
-        self.client.force_login(self.manager)
+        self.login_as(self.manager)
         response = self.client.post('/admin/water/plotrelation/add/', {
             'person': self.person.pk, 'plot': self.plot.pk, 'role': 'owner',
             'starts': '2025-01-01', 'version': 0,
@@ -308,7 +338,7 @@ class RegistryTests(TestCase):
         self.assertEqual(self.client.get('/admin/water/person/').status_code, 200)
         self.assertEqual(self.client.get('/admin/water/landplot/').status_code, 200)
         self.assertEqual(self.client.get('/admin/water/plotrelation/').status_code, 200)
-        self.client.force_login(self.operator)
+        self.login_as(self.operator)
         for url in ['/admin/water/person/', '/admin/water/landplot/', '/admin/water/plotrelation/']:
             self.assertEqual(self.client.get(url).status_code, 403, url)
 
@@ -317,3 +347,23 @@ class RegistryTests(TestCase):
         self.assertTrue(self.manager.has_perm('water.view_historicalplotrelation'))
         self.assertFalse(self.operator.has_perm('water.view_person'))
         self.assertFalse(self.operator.has_perm('water.add_landplot'))
+
+
+class MFARecoveryTests(MFAAccessMixin, TestCase):
+    def test_reset_mfa_removes_devices_and_revokes_sessions(self):
+        user = User.objects.create_user(username='lost-phone', password='test-only-long-password', is_staff=True)
+        self.login_as(user)
+        recovery = StaticDevice.objects.create(user=user, name='backup')
+        StaticToken.objects.create(device=recovery, token='safe-token')
+        self.assertTrue(self.client.session.session_key)
+
+        call_command('reset_mfa', user.username, '--yes', stdout=StringIO())
+
+        self.assertFalse(TOTPDevice.objects.filter(user=user).exists())
+        self.assertFalse(StaticDevice.objects.filter(user=user).exists())
+        self.assertFalse(self.client.session.exists(self.client.session.session_key))
+
+    def test_reset_mfa_requires_explicit_confirmation(self):
+        user = User.objects.create_user(username='confirmation', is_staff=True)
+        with self.assertRaises(Exception):
+            call_command('reset_mfa', user.username, stdout=StringIO())

@@ -11,6 +11,8 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.utils import timezone
+from django_otp.plugins.otp_static.models import StaticDevice
+from django_otp.plugins.otp_totp.models import TOTPDevice
 from simple_history.admin import SimpleHistoryAdmin
 
 from .models import (
@@ -21,6 +23,15 @@ from .models import (
 admin.site.site_header = 'СНТ «Труд-1» · рабочая база'
 admin.site.site_title = 'Труд-1'
 admin.site.index_title = 'Реестр и учёт воды'
+
+# OTP secrets and one-time recovery codes are deliberately not administered
+# through the web interface. Recovery is an audited server-side operation.
+for otp_model in (TOTPDevice, StaticDevice):
+    try:
+        admin.site.unregister(otp_model)
+    except admin.sites.NotRegistered:
+        pass
+
 @admin.register(User)
 class StaffAdmin(UserAdmin):
     """Only the technical superuser can grant or revoke access."""
@@ -308,4 +319,3 @@ class GroupConsumptionAdmin(RecordedAdmin):
     list_filter = ('group__node', 'group')
     search_fields = ('group__name', 'reported_by')
     autocomplete_fields = ('group',)
-
