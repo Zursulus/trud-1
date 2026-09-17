@@ -11,7 +11,7 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
-from .billing import calculate_period
+from .billing import allocate_payment, calculate_period
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
@@ -518,16 +518,16 @@ class FlexibleBillingTests(TestCase):
 
     def test_payment_allocation_cannot_cross_accounts_or_exceed_payment(self):
         charge = Charge.objects.create(
-            account=self.account, period=self.period, kind='service', amount=Decimal('100.00'),
+            account=self.account, period=self.period, kind='service', amount=Decimal('100.00'), status='approved',
         )
         other_charge = Charge.objects.create(
-            account=self.other, period=self.period, kind='service', amount=Decimal('100.00'),
+            account=self.other, period=self.period, kind='service', amount=Decimal('100.00'), status='approved',
         )
         second_charge = Charge.objects.create(
-            account=self.account, period=self.period, kind='adjustment', amount=Decimal('50.00'),
+            account=self.account, period=self.period, kind='adjustment', amount=Decimal('50.00'), status='approved',
         )
         payment = Payment.objects.create(
-            account=self.account, paid_on=date(2026, 9, 15), amount=Decimal('80.00'), method='bank',
+            account=self.account, paid_on=date(2026, 9, 15), amount=Decimal('80.00'), method='bank', status='confirmed',
         )
         PaymentAllocation.objects.create(payment=payment, charge=charge, amount=Decimal('60.00'))
         with self.assertRaises(ValidationError):
@@ -635,3 +635,144 @@ class BillingCalculationTests(TestCase):
     def test_only_one_default_policy_is_allowed(self):
         with self.assertRaises(ValidationError):
             BillingPolicy.objects.create(name='Другие общие правила', is_default=True)
+
+
+class LossDistributionTests(TestCase):
+    def setUp(self):
+        self.node = SupplyNode.objects.create(name='Узел потерь')
+        self.group = WaterGroup.objects.create(name='Группа потерь', node=self.node, source='reported')
+        self.accounts = [
+            Account.objects.create(number='LOSS-1'),
+            Account.objects.create(number='LOSS-2'),
+        ]
+        self.period = BillingPeriod.objects.create(starts=date(2026, 7, 1), ends=date(2026, 8, 1))
+        self.policy = BillingPolicy.objects.create(
+            name='Потери поровну', is_default=True, missing_reading='draft',
+            loss_distribution='equal_account',
+        )
+        Tariff.objects.create(name='Тариф потерь', rate=Decimal('10'), starts=date(2026, 1, 1))
+        for index, account in enumerate(self.accounts, 1):
+            Membership.objects.create(account=account, group=self.group, starts=date(2026, 1, 1))
+            meter = Meter.objects.create(
+                serial=f'LOSS-{index}', kind='individual', node=self.node, account=account,
+                commissioned_on=date(2026, 1, 1),
+            )
+            Reading.objects.create(meter=meter, date=self.period.starts, value=Decimal('100'))
+            Reading.objects.create(meter=meter, date=self.period.ends, value=Decimal('110'))
+
+    def test_reported_loss_is_distributed_equally_without_duplicates(self):
+        GroupConsumption.objects.create(
+            group=self.group, starts=self.period.starts, ends=self.period.ends,
+            volume=Decimal('30'), reported_by='Старший',
+        )
+        results = calculate_period(self.period)
+        losses = Charge.objects.filter(kind='loss').order_by('account_id')
+        self.assertEqual(losses.count(), 2)
+        self.assertEqual([item.volume for item in losses], [Decimal('5.000'), Decimal('5.000')])
+        self.assertEqual([item.amount for item in losses], [Decimal('50.00'), Decimal('50.00')])
+        self.assertTrue(any('потери 10.000' in result.message for result in results))
+        calculate_period(self.period)
+        self.assertEqual(Charge.objects.filter(kind='loss').count(), 2)
+
+    def test_area_distribution_requires_area_and_uses_plot_area(self):
+        self.policy.loss_distribution = 'area'
+        self.policy.save()
+        LandPlot.objects.create(label='Малый', account=self.accounts[0], area_m2=Decimal('100'))
+        LandPlot.objects.create(label='Большой', account=self.accounts[1], area_m2=Decimal('300'))
+        GroupConsumption.objects.create(
+            group=self.group, starts=self.period.starts, ends=self.period.ends,
+            volume=Decimal('24'), reported_by='Старший',
+        )
+        calculate_period(self.period)
+        losses = Charge.objects.filter(kind='loss').order_by('account_id')
+        self.assertEqual([item.volume for item in losses], [Decimal('1.000'), Decimal('3.000')])
+
+    def test_negative_or_unverifiable_loss_is_left_for_review(self):
+        GroupConsumption.objects.create(
+            group=self.group, starts=self.period.starts, ends=self.period.ends,
+            volume=Decimal('15'), reported_by='Старший',
+        )
+        results = calculate_period(self.period)
+        self.assertFalse(Charge.objects.filter(kind='loss').exists())
+        self.assertTrue(any(result.outcome == 'review' and 'меньше индивидуального' in result.message for result in results))
+
+
+class AutomaticPaymentAllocationTests(TestCase):
+    def setUp(self):
+        self.account = Account.objects.create(number='PAY-1')
+        self.old = BillingPeriod.objects.create(starts=date(2026, 6, 1), ends=date(2026, 7, 1))
+        self.current = BillingPeriod.objects.create(starts=date(2026, 7, 1), ends=date(2026, 8, 1))
+        self.old_charge = Charge.objects.create(
+            account=self.account, period=self.old, kind='service', amount=Decimal('100'), status='approved',
+        )
+        self.current_charge = Charge.objects.create(
+            account=self.account, period=self.current, kind='service', amount=Decimal('50'), status='approved',
+        )
+
+    def policy(self, method):
+        return BillingPolicy.objects.create(
+            name=f'Оплата {method}', is_default=True, payment_allocation=method,
+        )
+
+    def payment(self, amount='120', reference=''):
+        return Payment.objects.create(
+            account=self.account, paid_on=date(2026, 7, 15), amount=Decimal(amount),
+            method='bank', status='confirmed', reference=reference,
+        )
+
+    def test_oldest_debt_is_paid_first_and_repeat_is_idempotent(self):
+        self.policy('oldest')
+        payment = self.payment()
+        allocations, message = allocate_payment(payment)
+        self.assertEqual([(item.charge, item.amount) for item in allocations], [
+            (self.old_charge, Decimal('100')), (self.current_charge, Decimal('20')),
+        ])
+        self.assertIn('осталось нераспределено 0', message)
+        again, _ = allocate_payment(payment)
+        self.assertEqual(again, [])
+        self.assertEqual(PaymentAllocation.objects.count(), 2)
+
+    def test_current_period_is_paid_before_old_debt(self):
+        self.policy('current')
+        allocations, _ = allocate_payment(self.payment())
+        self.assertEqual([(item.charge, item.amount) for item in allocations], [
+            (self.current_charge, Decimal('50')), (self.old_charge, Decimal('70')),
+        ])
+
+    def test_reference_and_manual_modes_do_not_guess(self):
+        policy = self.policy('reference')
+        payment = self.payment(amount='40', reference='Оплата за 07.2026')
+        allocations, _ = allocate_payment(payment)
+        self.assertEqual(len(allocations), 1)
+        self.assertEqual(allocations[0].charge, self.current_charge)
+        policy.payment_allocation = 'manual'
+        policy.save()
+        manual = self.payment(amount='10')
+        allocations, message = allocate_payment(manual)
+        self.assertEqual(allocations, [])
+        self.assertIn('только вручную', message)
+
+    def test_pending_payment_and_overallocation_are_rejected(self):
+        self.policy('oldest')
+        pending = self.payment(amount='10')
+        pending.status = 'pending'
+        pending.save()
+        with self.assertRaises(ValidationError):
+            allocate_payment(pending)
+        confirmed = self.payment(amount='200')
+        allocate_payment(confirmed)
+        extra = self.payment(amount='10')
+        with self.assertRaises(ValidationError):
+            PaymentAllocation.objects.create(payment=extra, charge=self.old_charge, amount=Decimal('1'))
+
+    def test_reversed_payment_no_longer_covers_the_charge(self):
+        self.policy('oldest')
+        original = self.payment(amount='100')
+        allocate_payment(original)
+        original.status = 'reversed'
+        original.save()
+        replacement = self.payment(amount='100')
+        allocations, _ = allocate_payment(replacement)
+        self.assertEqual(len(allocations), 1)
+        self.assertEqual(allocations[0].charge, self.old_charge)
+        self.assertEqual(allocations[0].amount, Decimal('100'))

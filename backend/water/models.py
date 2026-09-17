@@ -585,12 +585,24 @@ class PaymentAllocation(RecordedModel):
     def clean(self):
         if self.payment_id and self.charge_id and self.payment.account_id != self.charge.account_id:
             raise ValidationError('Оплату можно зачесть только на начисления того же лицевого счёта.')
+        if self.payment_id and self.payment.status != 'confirmed':
+            raise ValidationError('Распределять можно только подтверждённую оплату.')
+        if self.charge_id and self.charge.status != 'approved':
+            raise ValidationError('Оплату можно зачесть только на утверждённое начисление.')
         if self.payment_id and self.amount:
             allocated = PaymentAllocation.objects.filter(payment_id=self.payment_id).exclude(pk=self.pk).aggregate(
                 total=models.Sum('amount'),
             )['total'] or Decimal('0')
             if allocated + self.amount > self.payment.amount:
                 raise ValidationError('Распределённая сумма превышает размер оплаты.')
+        if self.charge_id and self.amount:
+            charged = PaymentAllocation.objects.filter(
+                charge_id=self.charge_id, payment__status='confirmed',
+            ).exclude(pk=self.pk).aggregate(
+                total=models.Sum('amount'),
+            )['total'] or Decimal('0')
+            if self.charge.amount <= 0 or charged + self.amount > self.charge.amount:
+                raise ValidationError('Зачтённая сумма превышает начисление или начисление не является долгом.')
 
     def __str__(self):
         return f'{self.payment} → {self.charge}: {self.amount} ₽'

@@ -608,6 +608,25 @@ class PaymentAdmin(RecordedAdmin):
     list_filter = ('status', 'method', 'paid_on')
     search_fields = ('account__number', 'account__plot', 'reference', 'notes')
     autocomplete_fields = ('account',)
+    actions = ('allocate_confirmed',)
+
+    @admin.action(description='Распределить подтверждённые оплаты по правилам')
+    def allocate_confirmed(self, request, queryset):
+        from .billing import allocate_payment
+        total = 0
+        for payment in queryset.order_by('paid_on', 'id'):
+            try:
+                allocations, message = allocate_payment(payment, actor=request.user)
+            except ValidationError as error:
+                messages.error(request, f'{payment}: {validation_text(error)}')
+                continue
+            total += len(allocations)
+            if allocations:
+                messages.success(request, f'{payment}: {message}')
+            else:
+                messages.warning(request, f'{payment}: {message}')
+        if total:
+            messages.success(request, f'Создано распределений: {total}.')
 
 
 @admin.register(PaymentAllocation)
