@@ -19,8 +19,9 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from simple_history.admin import SimpleHistoryAdmin
 
 from .models import (
-    Account, GroupConsumption, LandPlot, Membership, Meter, Person,
-    PlotRelation, Reading, SupplyNode, User, WaterGroup,
+    Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
+    Person, PlotRelation, Reading, SupplyNode, Tariff, User, WaterGroup,
 )
 
 admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
@@ -276,7 +277,7 @@ class PersonAdmin(RecordedAdmin):
 
 @admin.register(LandPlot)
 class LandPlotAdmin(RecordedAdmin):
-    list_display = ('id', 'label', 'address', 'cadastral_number', 'account', 'current_people', 'archived')
+    list_display = ('id', 'label', 'address', 'cadastral_number', 'area_m2', 'account', 'current_people', 'archived')
     list_filter = ('archived',)
     search_fields = ('label', 'address', 'cadastral_number', 'account__number')
     autocomplete_fields = ('account',)
@@ -535,3 +536,56 @@ class GroupConsumptionAdmin(RecordedAdmin):
     list_filter = ('group__node', 'group')
     search_fields = ('group__name', 'reported_by')
     autocomplete_fields = ('group',)
+
+
+@admin.register(BillingPolicy)
+class BillingPolicyAdmin(RecordedAdmin):
+    list_display = ('name', 'missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
+    list_filter = ('missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
+    search_fields = ('name', 'notes')
+
+
+@admin.register(BillingAssignment)
+class BillingAssignmentAdmin(RecordedAdmin):
+    list_display = ('policy', 'account', 'group', 'starts', 'ends', 'priority')
+    list_filter = ('policy', 'group')
+    search_fields = ('account__number', 'account__plot', 'group__name', 'policy__name')
+    autocomplete_fields = ('policy', 'account', 'group')
+
+
+@admin.register(Tariff)
+class TariffAdmin(RecordedAdmin):
+    list_display = ('name', 'rate', 'starts', 'ends', 'account', 'group')
+    list_filter = ('starts', 'ends', 'group')
+    search_fields = ('name', 'account__number', 'account__plot', 'group__name', 'notes')
+    autocomplete_fields = ('account', 'group')
+
+
+@admin.register(BillingPeriod)
+class BillingPeriodAdmin(RecordedAdmin):
+    list_display = ('starts', 'ends', 'status')
+    list_filter = ('status',)
+    search_fields = ('starts', 'ends')
+
+
+@admin.register(Charge)
+class ChargeAdmin(RecordedAdmin):
+    list_display = ('account', 'period', 'kind', 'volume', 'rate', 'amount', 'status')
+    list_filter = ('status', 'kind', 'period')
+    search_fields = ('account__number', 'account__plot', 'notes', 'calculation')
+    autocomplete_fields = ('account', 'period')
+
+
+@admin.register(Payment)
+class PaymentAdmin(RecordedAdmin):
+    list_display = ('account', 'paid_on', 'amount', 'method', 'status', 'reference')
+    list_filter = ('status', 'method', 'paid_on')
+    search_fields = ('account__number', 'account__plot', 'reference', 'notes')
+    autocomplete_fields = ('account',)
+
+
+@admin.register(PaymentAllocation)
+class PaymentAllocationAdmin(RecordedAdmin):
+    list_display = ('payment', 'charge', 'amount')
+    search_fields = ('payment__account__number', 'charge__account__number')
+    autocomplete_fields = ('payment', 'charge')

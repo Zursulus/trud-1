@@ -11,7 +11,11 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
-from .models import Account, GroupConsumption, LandPlot, Membership, Meter, Person, PlotRelation, Reading, SupplyNode, User, WaterGroup
+from .models import (
+    Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
+    Person, PlotRelation, Reading, SupplyNode, Tariff, User, WaterGroup,
+)
 
 
 class WaterTests(TestCase):
@@ -456,3 +460,87 @@ class MFARecoveryTests(MFAAccessMixin, TestCase):
         user = User.objects.create_user(username='confirmation', is_staff=True)
         with self.assertRaises(Exception):
             call_command('reset_mfa', user.username, stdout=StringIO())
+
+
+class FlexibleBillingTests(TestCase):
+    def setUp(self):
+        self.account = Account.objects.create(number='B-1', plot='Первый')
+        self.other = Account.objects.create(number='B-2', plot='Второй')
+        self.node = SupplyNode.objects.create(name='Финансовый узел')
+        self.group = WaterGroup.objects.create(name='Финансовая группа', node=self.node)
+        self.period = BillingPeriod.objects.create(starts=date(2026, 9, 1), ends=date(2026, 10, 1))
+
+    def test_policies_cover_supported_variants_and_assign_by_scope(self):
+        policy = BillingPolicy.objects.create(
+            name='Индивидуальное правило', missing_reading='norm', monthly_norm_m3=Decimal('7.500'),
+            loss_distribution='volume', rounding='up_ruble', payment_allocation='reference',
+        )
+        account_rule = BillingAssignment.objects.create(
+            policy=policy, account=self.account, starts=date(2026, 1, 1), priority=200,
+        )
+        group_rule = BillingAssignment.objects.create(
+            policy=policy, group=self.group, starts=date(2026, 1, 1), priority=100,
+        )
+        self.assertEqual(account_rule.account, self.account)
+        self.assertEqual(group_rule.group, self.group)
+        with self.assertRaises(ValidationError):
+            BillingAssignment.objects.create(
+                policy=policy, account=self.account, group=self.group, starts=date(2026, 1, 1),
+            )
+
+    def test_tariffs_can_be_global_group_or_account_but_not_overlap(self):
+        Tariff.objects.create(name='Общий', rate=Decimal('40'), starts=date(2026, 1, 1), ends=date(2026, 7, 1))
+        Tariff.objects.create(name='Общий новый', rate=Decimal('45'), starts=date(2026, 7, 1))
+        Tariff.objects.create(name='Для группы', rate=Decimal('42'), starts=date(2026, 1, 1), group=self.group)
+        Tariff.objects.create(name='Льготный', rate=Decimal('30'), starts=date(2026, 1, 1), account=self.account)
+        with self.assertRaises(ValidationError):
+            Tariff.objects.create(name='Пересечение', rate=Decimal('41'), starts=date(2026, 6, 1))
+        with self.assertRaises(ValidationError):
+            Tariff.objects.create(
+                name='Двойная область', rate=Decimal('1'), starts=date(2026, 1, 1),
+                account=self.account, group=self.group,
+            )
+
+    def test_charge_math_and_approved_records_are_immutable(self):
+        charge = Charge.objects.create(
+            account=self.account, period=self.period, kind='water', volume=Decimal('3.000'),
+            rate=Decimal('40.0000'), amount=Decimal('120.00'), status='approved',
+        )
+        charge.amount = Decimal('121.00')
+        with self.assertRaises(ValidationError):
+            charge.save()
+        with self.assertRaises(ValidationError):
+            Charge.objects.create(
+                account=self.account, period=self.period, kind='water', volume=Decimal('3.000'),
+                rate=Decimal('40.0000'), amount=Decimal('119.00'),
+            )
+
+    def test_payment_allocation_cannot_cross_accounts_or_exceed_payment(self):
+        charge = Charge.objects.create(
+            account=self.account, period=self.period, kind='service', amount=Decimal('100.00'),
+        )
+        other_charge = Charge.objects.create(
+            account=self.other, period=self.period, kind='service', amount=Decimal('100.00'),
+        )
+        second_charge = Charge.objects.create(
+            account=self.account, period=self.period, kind='adjustment', amount=Decimal('50.00'),
+        )
+        payment = Payment.objects.create(
+            account=self.account, paid_on=date(2026, 9, 15), amount=Decimal('80.00'), method='bank',
+        )
+        PaymentAllocation.objects.create(payment=payment, charge=charge, amount=Decimal('60.00'))
+        with self.assertRaises(ValidationError):
+            PaymentAllocation.objects.create(payment=payment, charge=other_charge, amount=Decimal('10.00'))
+        with self.assertRaises(ValidationError):
+            PaymentAllocation.objects.create(payment=payment, charge=second_charge, amount=Decimal('30.00'))
+
+    def test_finance_permissions_belong_to_manager_not_operator(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='finance-manager')
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        operator = User.objects.create_user(username='finance-operator')
+        operator.groups.add(Group.objects.get(name='Оператор воды'))
+        self.assertTrue(manager.has_perm('water.add_tariff'))
+        self.assertTrue(manager.has_perm('water.change_payment'))
+        self.assertFalse(operator.has_perm('water.view_payment'))
