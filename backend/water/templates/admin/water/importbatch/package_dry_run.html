@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Главная</a> › Проверка пакета воды</div>
+{% endblock %}
+{% block content %}
+<h1>Проверка пакета воды без импорта</h1>
+<p><strong>Безопасный режим:</strong> файл читается только для проверки и не сохраняется. Рабочая база не изменяется.</p>
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  <fieldset class="module aligned">{{ form.as_p }}</fieldset>
+  <div class="submit-row"><input type="submit" value="Проверить пакет" class="default"></div>
+</form>
+{% if report %}
+  <h2>Результат</h2>
+  <p><strong>{{ report.summary }}</strong></p>
+  {% if report.ready %}
+    <p class="success">Пакет прошёл структурную проверку. Запись в базу не выполнялась.</p>
+  {% else %}
+    <p class="errornote">Пакет пока нельзя импортировать: найдено замечаний — {{ report.issues|length }}.</p>
+    <ul>
+      {% for issue in report.issues %}<li>{{ issue }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  <h3>Строки по листам</h3>
+  <table>
+    <thead><tr><th>Лист</th><th>Строк</th></tr></thead>
+    <tbody>{% for sheet, count in report.counts.items %}<tr><td>{{ sheet }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
+  </table>
+{% endif %}
+{% endblock %}
