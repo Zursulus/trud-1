@@ -485,6 +485,8 @@ class BillingPeriod(RecordedModel):
                 getattr(original, field) != getattr(self, field) for field in ('starts', 'ends', 'status')
             ):
                 raise ValidationError('Закрытый период нельзя изменять. Исправление оформляется следующим периодом.')
+        if self.pk and self.status in ('approved', 'closed') and Charge.objects.filter(period=self, status='draft').exists():
+            raise ValidationError('Сначала утвердите или отмените все черновики начислений этого периода.')
         if self.starts and self.ends and BillingPeriod.objects.filter(
             starts__lt=self.ends, ends__gt=self.starts,
         ).exclude(pk=self.pk).exists():
@@ -528,11 +530,17 @@ class Charge(RecordedModel):
         ordering = ['-period__starts', 'account', 'id']
 
     def clean(self):
+        if self.period_id and self.period.status in ('approved', 'closed') and not self.pk:
+            raise ValidationError('В утверждённый или закрытый период нельзя добавлять начисления.')
         if self.pk:
             original = Charge.objects.get(pk=self.pk)
             protected = ('account_id', 'period_id', 'kind', 'volume', 'rate', 'amount', 'origin', 'source_key')
             if original.status == 'approved' and any(getattr(original, field) != getattr(self, field) for field in protected):
                 raise ValidationError('Утверждённое начисление нельзя переписывать. Создайте корректировку.')
+            if original.status == 'approved' and self.status not in ('approved', 'cancelled'):
+                raise ValidationError('Утверждённое начисление можно только отменить, но нельзя вернуть в черновики.')
+            if original.status == 'cancelled' and self.status != 'cancelled':
+                raise ValidationError('Отменённое начисление нельзя восстановить. Создайте новую запись.')
         if (self.volume is None) != (self.rate is None):
             raise ValidationError('Объём и тариф указываются вместе либо оба не указываются.')
         if self.kind not in ('adjustment', 'opening') and self.amount < 0:
@@ -567,6 +575,10 @@ class Payment(RecordedModel):
             protected = ('account_id', 'paid_on', 'amount', 'method', 'reference')
             if original.status == 'confirmed' and any(getattr(original, field) != getattr(self, field) for field in protected):
                 raise ValidationError('Подтверждённую оплату нельзя переписывать. Отмените её и создайте новую запись.')
+            if original.status == 'confirmed' and self.status not in ('confirmed', 'reversed'):
+                raise ValidationError('Подтверждённую оплату можно только отменить, но нельзя вернуть в ожидание.')
+            if original.status == 'reversed' and self.status != 'reversed':
+                raise ValidationError('Отменённую оплату нельзя восстановить. Создайте новую запись.')
 
     def __str__(self):
         return f'{self.account} · {self.paid_on:%d.%m.%Y} · {self.amount} ₽'

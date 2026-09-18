@@ -11,7 +11,7 @@ from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
-from .billing import allocate_payment, calculate_period
+from .billing import account_totals, allocate_payment, calculate_period
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
@@ -754,9 +754,10 @@ class AutomaticPaymentAllocationTests(TestCase):
 
     def test_pending_payment_and_overallocation_are_rejected(self):
         self.policy('oldest')
-        pending = self.payment(amount='10')
-        pending.status = 'pending'
-        pending.save()
+        pending = Payment.objects.create(
+            account=self.account, paid_on=date(2026, 7, 15), amount=Decimal('10'),
+            method='bank', status='pending',
+        )
         with self.assertRaises(ValidationError):
             allocate_payment(pending)
         confirmed = self.payment(amount='200')
@@ -776,3 +777,84 @@ class AutomaticPaymentAllocationTests(TestCase):
         self.assertEqual(len(allocations), 1)
         self.assertEqual(allocations[0].charge, self.old_charge)
         self.assertEqual(allocations[0].amount, Decimal('100'))
+
+
+class FinancialStatementTests(MFAAccessMixin, TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        self.manager = User.objects.create_user(username='statement-manager', is_staff=True)
+        self.manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        self.operator = User.objects.create_user(username='statement-operator', is_staff=True)
+        self.operator.groups.add(Group.objects.get(name='Оператор воды'))
+        self.account = Account.objects.create(number='ST-1', plot='Участок сверки')
+        self.period = BillingPeriod.objects.create(starts=date(2026, 7, 1), ends=date(2026, 8, 1))
+        self.approved = Charge.objects.create(
+            account=self.account, period=self.period, kind='service', amount=Decimal('150'), status='approved',
+            notes='Целевой взнос',
+        )
+        self.draft = Charge.objects.create(
+            account=self.account, period=self.period, kind='adjustment', amount=Decimal('20'), status='draft',
+        )
+        self.payment = Payment.objects.create(
+            account=self.account, paid_on=date(2026, 7, 15), amount=Decimal('70'), method='bank',
+            status='confirmed', reference='=опасная формула',
+        )
+
+    def test_balance_uses_only_approved_charges_and_confirmed_payments(self):
+        totals = account_totals(self.account)
+        self.assertEqual(totals['charges'], Decimal('150.00'))
+        self.assertEqual(totals['payments'], Decimal('70.00'))
+        self.assertEqual(totals['balance'], Decimal('80.00'))
+
+    def test_manager_can_open_printable_statement_and_operator_cannot(self):
+        url = f'/admin/water/account/{self.account.pk}/statement/'
+        self.login_as(self.manager)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Финансовая карточка')
+        self.assertContains(response, '80,00')
+        self.assertContains(response, 'Печать / сохранить в PDF')
+        self.login_as(self.operator)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_statement_csv_is_audited_and_neutralizes_formulas(self):
+        from django.contrib.admin.models import LogEntry
+        self.login_as(self.manager)
+        response = self.client.get(f'/admin/water/account/{self.account.pk}/statement/?export=csv')
+        self.assertEqual(response.status_code, 200)
+        report = response.content.decode('utf-8-sig')
+        self.assertIn("'=опасная формула", report)
+        self.assertTrue(LogEntry.objects.filter(
+            user=self.manager, object_id=str(self.account.pk), change_message='Экспорт финансовой сверки CSV',
+        ).exists())
+
+    def test_admin_actions_approve_and_cancel_only_drafts_with_history(self):
+        self.login_as(self.manager)
+        response = self.client.post('/admin/water/charge/', {
+            'action': 'approve_drafts', '_selected_action': [self.draft.pk, self.approved.pk],
+        })
+        self.assertEqual(response.status_code, 302)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.status, 'approved')
+        self.assertEqual(self.draft.history.first().history_user, self.manager)
+        other = Charge.objects.create(
+            account=self.account, period=self.period, kind='adjustment', amount=Decimal('5'), status='draft',
+        )
+        response = self.client.post('/admin/water/charge/', {
+            'action': 'cancel_drafts', '_selected_action': [other.pk],
+        })
+        self.assertEqual(response.status_code, 302)
+        other.refresh_from_db()
+        self.assertEqual(other.status, 'cancelled')
+
+    def test_period_and_financial_state_transitions_are_guarded(self):
+        self.period.status = 'approved'
+        with self.assertRaises(ValidationError):
+            self.period.save()
+        self.approved.status = 'draft'
+        with self.assertRaises(ValidationError):
+            self.approved.save()
+        self.payment.status = 'pending'
+        with self.assertRaises(ValidationError):
+            self.payment.save()

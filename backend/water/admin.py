@@ -13,6 +13,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils.html import format_html
 from django.utils import timezone
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -193,16 +194,101 @@ def validation_text(error):
     return '; '.join(error.messages)
 
 
+def spreadsheet_safe(value):
+    text = str(value or '')
+    return "'" + text if text.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else text
+
+
 @admin.register(Account)
 class AccountAdmin(RecordedAdmin):
     list_display = (
         'id', 'number', 'plot', 'contact_name', 'phone',
-        'groups_today', 'latest_group_consumption', 'archived',
+        'groups_today', 'latest_group_consumption', 'balance_display', 'archived',
     )
     search_fields = ('=id', 'number', 'plot', 'contact_name', 'phone')
     list_filter = ('archived',)
-    readonly_fields = ('id', 'groups_today', 'latest_group_consumption', 'linked_plots')
+    readonly_fields = ('id', 'groups_today', 'latest_group_consumption', 'linked_plots', 'statement_link')
     actions = ['export_accounts']
+
+    @staticmethod
+    def can_view_finance(request):
+        return request.user.has_perm('water.view_charge') and request.user.has_perm('water.view_payment')
+
+    def get_list_display(self, request):
+        fields = tuple(super().get_list_display(request))
+        return fields if self.can_view_finance(request) else tuple(field for field in fields if field != 'balance_display')
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = tuple(super().get_readonly_fields(request, obj))
+        return fields if self.can_view_finance(request) else tuple(field for field in fields if field != 'statement_link')
+
+    def get_urls(self):
+        return [
+            path(
+                '<path:object_id>/statement/', self.admin_site.admin_view(self.statement_view),
+                name='water_account_statement',
+            ),
+        ] + super().get_urls()
+
+    @admin.display(description='Баланс')
+    def balance_display(self, obj):
+        if not obj.pk:
+            return '—'
+        from .billing import account_totals
+        balance = account_totals(obj)['balance']
+        label = 'долг' if balance > 0 else 'переплата' if balance < 0 else 'расчёт закрыт'
+        return f'{balance} ₽ · {label}'
+
+    @admin.display(description='Финансовая карточка')
+    def statement_link(self, obj):
+        if not obj.pk:
+            return 'Появится после сохранения'
+        return format_html(
+            '<a class="button" href="{}">Открыть сверку и печатную квитанцию</a>',
+            reverse('admin:water_account_statement', args=[obj.pk]),
+        )
+
+    def statement_view(self, request, object_id):
+        if not self.has_view_permission(request) or not self.can_view_finance(request):
+            raise PermissionDenied
+        account = self.get_object(request, object_id)
+        if account is None:
+            raise PermissionDenied
+        from .billing import account_totals
+        charges = Charge.objects.filter(account=account).select_related('period').order_by('-period__starts', '-id')
+        payments = Payment.objects.filter(account=account).order_by('-paid_on', '-id')
+        totals = account_totals(account)
+        if request.GET.get('export') == 'csv':
+            from django.contrib.contenttypes.models import ContentType
+            LogEntry.objects.create(
+                user=request.user, content_type=ContentType.objects.get_for_model(Account),
+                object_id=str(account.pk), object_repr=str(account), action_flag=2,
+                change_message='Экспорт финансовой сверки CSV',
+            )
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="statement-{account.pk}.csv"'
+            response['Cache-Control'] = 'no-store'
+            response.write('\ufeff')
+            writer = csv.writer(response, delimiter=';')
+            writer.writerow(['Тип', 'Дата / период', 'Описание', 'Начислено', 'Оплачено', 'Статус'])
+            for charge in charges:
+                writer.writerow(map(spreadsheet_safe, [
+                    'Начисление', f'{charge.period.starts:%d.%m.%Y}–{charge.period.ends:%d.%m.%Y}',
+                    charge.get_kind_display(), charge.amount, '', charge.get_status_display(),
+                ]))
+            for payment in payments:
+                writer.writerow(map(spreadsheet_safe, [
+                    'Оплата', f'{payment.paid_on:%d.%m.%Y}', payment.reference,
+                    '', payment.amount, payment.get_status_display(),
+                ]))
+            writer.writerow(['ИТОГО', '', '', totals['charges'], totals['payments'], totals['balance']])
+            return response
+        context = {
+            **self.admin_site.each_context(request), 'title': f'Финансовая карточка: {account}',
+            'opts': self.model._meta, 'account': account, 'charges': charges,
+            'payments': payments, 'totals': totals,
+        }
+        return TemplateResponse(request, 'admin/water/account/statement.html', context)
 
     @admin.display(description='Привязанные участки')
     def linked_plots(self, obj):
@@ -251,11 +337,8 @@ class AccountAdmin(RecordedAdmin):
         response.write('\ufeff')
         writer = csv.writer(response, delimiter=';')
         writer.writerow(['ID', 'Лицевой счёт', 'Участок', 'ФИО контакта', 'Телефон'])
-        def safe(value):
-            text = str(value or '')
-            return "'" + text if text.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else text
         for row in queryset.order_by('id').values_list('id', 'number', 'plot', 'contact_name', 'phone'):
-            writer.writerow([safe(value) for value in row])
+            writer.writerow([spreadsheet_safe(value) for value in row])
         return response
 
 
@@ -397,13 +480,9 @@ class ReadingAdmin(RecordedAdmin):
             'Дата', 'Показание, м³', 'Расход, м³', 'Примечание',
         ])
 
-        def safe(value):
-            text = str(value or '')
-            return "'" + text if text.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else text
-
         for reading in queryset.order_by('date', 'meter__serial', 'id'):
             account = reading.meter.account
-            writer.writerow(map(safe, [
+            writer.writerow(map(spreadsheet_safe, [
                 reading.meter.serial, reading.meter.get_kind_display(),
                 account.number if account else '', account.plot if account else '',
                 reading.meter.group.name if reading.meter.group else '',
@@ -600,6 +679,35 @@ class ChargeAdmin(RecordedAdmin):
     search_fields = ('account__number', 'account__plot', 'notes', 'calculation')
     autocomplete_fields = ('account', 'period')
     readonly_fields = ('source_key',)
+    actions = ('approve_drafts', 'cancel_drafts')
+
+    @admin.action(description='Утвердить выбранные черновики')
+    def approve_drafts(self, request, queryset):
+        changed = 0
+        for charge in queryset.select_related('period').order_by('id'):
+            if charge.status != 'draft':
+                continue
+            charge.status = 'approved'
+            charge._history_user = request.user
+            charge._change_reason = 'Утверждение начисления администратором'
+            charge.save()
+            self.log_change(request, charge, 'Начисление утверждено')
+            changed += 1
+        messages.success(request, f'Утверждено начислений: {changed}.')
+
+    @admin.action(description='Отменить выбранные черновики')
+    def cancel_drafts(self, request, queryset):
+        changed = 0
+        for charge in queryset.order_by('id'):
+            if charge.status != 'draft':
+                continue
+            charge.status = 'cancelled'
+            charge._history_user = request.user
+            charge._change_reason = 'Отмена черновика администратором'
+            charge.save()
+            self.log_change(request, charge, 'Черновик отменён')
+            changed += 1
+        messages.success(request, f'Отменено черновиков: {changed}.')
 
 
 @admin.register(Payment)

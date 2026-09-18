@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=eb7eff2ca1526acb1c0cef7a28b0534575318a89
+EXPECTED=04a391cba908f67da2c0f165eb84ce943e831f48
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
@@ -75,6 +75,6 @@ test "$code" = 302
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)
 test "$code" = 200
 trap - ERR
-echo 'ГОТОВО: распределение потерь и оплат установлено. Главная HTTP 200, админка HTTP 302.'
-echo 'Пути: расчёт потерь входит в черновики периода; Оплаты → Распределить подтверждённые оплаты по правилам.'
+echo 'ГОТОВО: финансовая карточка и печатная сверка установлены. Главная HTTP 200, админка HTTP 302.'
+echo 'Путь: Лицевые счета → открыть счёт → Открыть сверку и печатную квитанцию.'
 echo "Предыдущий коммит: $PREVIOUS; копия базы: $BACKUP/trud_site.dump"

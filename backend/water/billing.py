@@ -111,6 +111,16 @@ def rounded_amount(value, mode):
     return value.quantize(quantum, rounding=rounding).quantize(Decimal('0.01'))
 
 
+def account_totals(account):
+    charges = Charge.objects.filter(account=account, status='approved').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    payments = Payment.objects.filter(account=account, status='confirmed').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    return {
+        'charges': charges.quantize(Decimal('0.01')),
+        'payments': payments.quantize(Decimal('0.01')),
+        'balance': (charges - payments).quantize(Decimal('0.01')),
+    }
+
+
 def group_volume(group, period, individual_total):
     if group.source == 'individual':
         return individual_total, 'объём группы равен сумме индивидуального расхода'
