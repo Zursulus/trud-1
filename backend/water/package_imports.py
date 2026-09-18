@@ -6,6 +6,7 @@ first gate for the staged import package prepared from the legacy water file.
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 import io
+import re
 import zipfile
 
 from django.core.exceptions import ValidationError
@@ -24,6 +25,12 @@ SHEETS = {
     'Общие и контрольные': ('meter_id', 'kind', 'node_name', 'group_name', 'serial', 'source_text', 'source_sheet', 'source_row', 'status'),
     'Показания': ('meter_id', 'date', 'value_m3', 'notes', 'source_sheet', 'source_row'),
 }
+
+
+def _looks_like_phone_number(value):
+    """Reject contact numbers accidentally mapped into the reading column."""
+    compact = re.sub(r'[\s()+\-.]', '', _text(value))
+    return compact.isdigit() and 10 <= len(compact) <= 12
 
 
 def _text(value):
@@ -156,6 +163,13 @@ def inspect_water_package(upload):
                     raise InvalidOperation
             except (InvalidOperation, ValueError):
                 blocking_issues.append(f'Показания строка {number}: некорректное значение {raw_value}.')
+            else:
+                if _looks_like_phone_number(raw_value):
+                    blocking_issues.append(
+                        f'Показания строка {number}: значение похоже на телефон, '
+                        'а не на показание счётчика.'
+                    )
+                    value = None
         else:
             empty_readings += 1
             review_notes.append(

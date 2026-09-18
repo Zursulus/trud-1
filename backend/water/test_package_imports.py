@@ -98,6 +98,17 @@ class WaterPackageImportTests(SimpleTestCase):
         self.assertEqual(report['counts']['Общие и контрольные'], 1)
         self.assertEqual(report['blocking_issues'], [])
 
+    def test_phone_number_in_reading_value_is_blocking(self):
+        def mutate(book):
+            book['Показания']['B2'] = ''
+            book['Показания']['C2'] = '79991234567'
+
+        report = inspect_water_package(self.workbook(mutate))
+
+        self.assertFalse(report['ready'])
+        self.assertTrue(any('похоже на телефон' in issue for issue in report['blocking_issues']))
+        self.assertEqual(report['reading_plan']['undated_to_meter_notes'], 0)
+
 
 class WaterPackageWriterTests(TestCase):
     def test_writer_creates_verified_structure_and_defers_dated_reading(self):
