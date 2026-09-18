@@ -1248,6 +1248,45 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
         self.node = SupplyNode.objects.create(name='Узел контролёра')
         self.meter = Meter.objects.create(serial='CTRL-1', kind='individual', node=self.node, account=self.account)
 
+    def test_admin_home_add_link_opens_editable_capture_without_otp(self):
+        self.client.force_login(self.controller)
+        url = '/admin/water/controllerreadingsubmission/add/'
+        self.assertContains(self.client.get('/admin/'), f'href="{url}"')
+        response = self.client.get(url)
+        self.assertTemplateUsed(response, 'admin/water/controllerreadingsubmission/capture.html')
+        for field in ('meter', 'value', 'photo', 'date', 'notes'):
+            self.assertContains(response, f'name="{field}"')
+        self.assertContains(response, 'multipart/form-data')
+        self.assertContains(response, 'Отправить на проверку')
+        self.assertEqual(response.context['form'].fields['meter'].queryset.count(), 1)
+
+    def test_standard_add_submits_for_review_and_preserves_validation(self):
+        self.client.force_login(self.controller)
+        url = '/admin/water/controllerreadingsubmission/add/'
+        response = self.client.post(url, {'meter': self.meter.pk, 'value': '12.5'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].errors)
+        self.assertEqual(ControllerReadingSubmission.objects.count(), 0)
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.post(url, {
+                'meter': self.meter.pk, 'date': timezone.localdate().isoformat(),
+                'value': '12.5',
+                'photo': SimpleUploadedFile('meter.jpg', b'\xff\xd8\xff\xe0test', content_type='image/jpeg'),
+            })
+            self.assertRedirects(response, '/admin/water/controllerreadingsubmission/capture/')
+            submission = ControllerReadingSubmission.objects.get()
+            self.assertEqual(submission.submitted_by, self.controller)
+            self.assertEqual(submission.status, 'pending')
+            self.assertEqual(Reading.objects.count(), 0)
+            self.assertEqual(self.client.post(f'/admin/water/controllerreadingsubmission/{submission.pk}/approve/').status_code, 403)
+
+    def test_standard_add_does_not_bypass_permissions(self):
+        self.assertEqual(self.client.get('/admin/water/controllerreadingsubmission/add/').status_code, 302)
+        staff = User.objects.create_user(username='no-controller-role', is_staff=True)
+        self.client.force_login(staff)
+        for method in (self.client.get, self.client.post):
+            self.assertEqual(method('/admin/water/controllerreadingsubmission/add/').status_code, 403)
+
     def test_controller_submits_photo_and_manager_approves(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             self.login_as(self.controller)

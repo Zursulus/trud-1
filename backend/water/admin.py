@@ -718,6 +718,11 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
     )
     fields = readonly_fields
 
+    def add_view(self, request, form_url='', extra_context=None):
+        # Every standard admin Add link must use the editable capture form.
+        # Dispatch POST too, so validation errors and uploaded photos are preserved.
+        return self.capture_view(request)
+
     def get_urls(self):
         return [
             path('capture/', self.admin_site.admin_view(self.capture_view), name='water_controllerreading_capture'),
