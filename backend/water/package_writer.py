@@ -91,16 +91,18 @@ def import_verified_water_package(uploaded_file):
         )
 
     meters = {}
+    valid_kinds = {value for value, _label in Meter._meta.get_field('kind').choices}
     meter_rows = list(_rows(book, 'Индивидуальные счетчики')) + list(_rows(book, 'Общие и контрольные'))
     for row in meter_rows:
         key = _text(row.get('meter_id'))
         plot_key = _text(row.get('plot_id'))
         group_name = _text(row.get('group_name'))
         node_name = _text(row.get('node_name'))
-        kind = _text(row.get('kind')) or Meter.INDIVIDUAL
-        if kind not in dict(Meter.KIND_CHOICES):
-            kind = Meter.OTHER
+        kind = _text(row.get('kind')) or 'individual'
+        if kind not in valid_kinds:
+            raise ValidationError(f'Неизвестное назначение счётчика {key}: {kind}')
         notes = _text(row.get('notes'))
+        notes = _append_note(notes, f'ID импорта: {key}')
         source_text = _text(row.get('source_text'))
         source_sheet = _text(row.get('source_sheet'))
         source_row = _text(row.get('source_row'))
@@ -110,12 +112,11 @@ def import_verified_water_package(uploaded_file):
         if source_sheet or source_row or status:
             notes = _append_note(notes, f'Источник: {source_sheet}; строка: {source_row}; статус: {status}')
         meter = Meter.objects.create(
-            name=key,
             kind=kind,
-            serial=_text(row.get('serial')),
+            serial=_text(row.get('serial')) or key,
             account=accounts.get(plot_key),
             group=groups.get(group_name),
-            node=nodes.get(node_name),
+            node=nodes[node_name],
             notes=notes,
         )
         meters[key] = meter
