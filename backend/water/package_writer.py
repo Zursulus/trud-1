@@ -1,11 +1,8 @@
-from datetime import date
-from decimal import Decimal
-
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from openpyxl import load_workbook
 
-from .package_imports import SHEETS, inspect_water_package
+from .package_imports import inspect_water_package
 from .models import Account, LandPlot, Meter, Person, SupplyNode, WaterGroup
 
 
@@ -31,12 +28,7 @@ def _append_note(current, line):
 
 @transaction.atomic
 def import_verified_water_package(uploaded_file):
-    """Write only facts that the package can represent without invented dates.
-
-    Time-bounded PlotRelation/Membership records are deliberately not created here
-    unless their required dates are actually present in the package. Undated meter
-    values are preserved verbatim in Meter.notes and never turned into Reading rows.
-    """
+    """Import only facts represented by the verified workbook without inventing dates."""
     uploaded_file.seek(0)
     report = inspect_water_package(uploaded_file)
     if not report.get('structure_ready') or report.get('blocking_issues'):
@@ -44,8 +36,6 @@ def import_verified_water_package(uploaded_file):
     uploaded_file.seek(0)
     book = load_workbook(uploaded_file, read_only=True, data_only=True)
 
-    # First production import is intentionally empty-database only. This prevents
-    # silent merges/overwrites and makes retry semantics explicit.
     guarded = (Account, LandPlot, Person, SupplyNode, WaterGroup, Meter)
     occupied = {m.__name__: m.objects.count() for m in guarded if m.objects.exists()}
     if occupied:
@@ -54,15 +44,23 @@ def import_verified_water_package(uploaded_file):
     accounts = {}
     plots = {}
     for row in _rows(book, 'Участки'):
-        plot_key = _text(row.get('plot_key'))
-        label = _text(row.get('plot_label')) or _text(row.get('address')) or plot_key
+        plot_key = _text(row.get('plot_id'))
+        label = _text(row.get('label')) or _text(row.get('address')) or plot_key
         address = _text(row.get('address'))
+        source = _text(row.get('source_sheet'))
+        source_row = _text(row.get('source_row'))
+        status = _text(row.get('status'))
+        source_note = f'Источник: {source}'
+        if source_row:
+            source_note += f'; строка: {source_row}'
+        if status:
+            source_note += f'; статус: {status}'
         account = Account.objects.create(
             number=plot_key,
             plot=label,
-            contact_name=_text(row.get('person_name')),
+            contact_name=_text(row.get('contact_name')),
             phone=_text(row.get('phone')),
-            notes=_append_note('', f"Источник: {_text(row.get('source'))}"),
+            notes=source_note,
         )
         plot = LandPlot.objects.create(label=label, address=address, account=account)
         accounts[plot_key] = account
@@ -70,7 +68,7 @@ def import_verified_water_package(uploaded_file):
 
     people = {}
     for row in _rows(book, 'Люди'):
-        key = _text(row.get('person_key'))
+        key = _text(row.get('person_id'))
         people[key] = Person.objects.create(
             full_name=_text(row.get('full_name')),
             phone=_text(row.get('phone')),
@@ -79,29 +77,38 @@ def import_verified_water_package(uploaded_file):
 
     nodes = {}
     for row in _rows(book, 'Узлы'):
-        name = _text(row.get('name'))
+        name = _text(row.get('node_name'))
         nodes[name] = SupplyNode.objects.create(name=name, notes=_text(row.get('notes')))
 
     groups = {}
     for row in _rows(book, 'Группы'):
-        name = _text(row.get('name'))
-        node_name = _text(row.get('node'))
+        name = _text(row.get('group_name'))
+        node_name = _text(row.get('node_name'))
         groups[name] = WaterGroup.objects.create(
             name=name,
             node=nodes[node_name],
-            notes=_append_note(_text(row.get('notes')), f"Тип из источника: {_text(row.get('kind'))}"),
+            notes=_append_note(_text(row.get('notes')), f"Тип из источника: {_text(row.get('source'))}"),
         )
 
     meters = {}
     meter_rows = list(_rows(book, 'Индивидуальные счетчики')) + list(_rows(book, 'Общие и контрольные'))
     for row in meter_rows:
-        key = _text(row.get('meter_key'))
-        plot_key = _text(row.get('plot_key'))
-        group_name = _text(row.get('group'))
-        node_name = _text(row.get('node'))
+        key = _text(row.get('meter_id'))
+        plot_key = _text(row.get('plot_id'))
+        group_name = _text(row.get('group_name'))
+        node_name = _text(row.get('node_name'))
         kind = _text(row.get('kind')) or Meter.INDIVIDUAL
         if kind not in dict(Meter.KIND_CHOICES):
             kind = Meter.OTHER
+        notes = _text(row.get('notes'))
+        source_text = _text(row.get('source_text'))
+        source_sheet = _text(row.get('source_sheet'))
+        source_row = _text(row.get('source_row'))
+        status = _text(row.get('status'))
+        if source_text:
+            notes = _append_note(notes, f'Исходные данные: {source_text}')
+        if source_sheet or source_row or status:
+            notes = _append_note(notes, f'Источник: {source_sheet}; строка: {source_row}; статус: {status}')
         meter = Meter.objects.create(
             name=key,
             kind=kind,
@@ -109,7 +116,7 @@ def import_verified_water_package(uploaded_file):
             account=accounts.get(plot_key),
             group=groups.get(group_name),
             node=nodes.get(node_name),
-            notes=_text(row.get('notes')),
+            notes=notes,
         )
         meters[key] = meter
 
@@ -117,30 +124,33 @@ def import_verified_water_package(uploaded_file):
     skipped = 0
     dated_deferred = 0
     for row in _rows(book, 'Показания'):
-        meter = meters[_text(row.get('meter_key'))]
+        meter = meters[_text(row.get('meter_id'))]
         raw_date = row.get('date')
-        raw_value = row.get('value')
+        raw_value = row.get('value_m3')
         if raw_value in (None, ''):
             skipped += 1
             continue
+        source = _text(row.get('source_sheet'))
+        source_row = _text(row.get('source_row'))
+        original_note = _text(row.get('notes'))
         if raw_date in (None, ''):
-            meter.notes = _append_note(
-                meter.notes,
-                f"Недатированное исходное показание: {_text(raw_value)}; источник: {_text(row.get('source'))}; строка источника: {_text(row.get('source_row'))}",
-            )
+            line = f'Недатированное исходное показание: {_text(raw_value)}; источник: {source}; строка источника: {source_row}'
+            if original_note:
+                line += f'; примечание: {original_note}'
+            meter.notes = _append_note(meter.notes, line)
             meter.save(update_fields=['notes'])
             preserved += 1
             continue
-        # Reading requires a trustworthy date plus production semantics (period,
-        # chronology/rollover checks). Preserve the fact but defer creation.
-        meter.notes = _append_note(
-            meter.notes,
-            f"Датированное исходное показание (не импортировано как Reading): {_text(raw_date)} = {_text(raw_value)}; источник: {_text(row.get('source'))}",
-        )
+        line = f'Датированное исходное показание (не импортировано как Reading): {_text(raw_date)} = {_text(raw_value)}; источник: {source}'
+        if source_row:
+            line += f'; строка источника: {source_row}'
+        if original_note:
+            line += f'; примечание: {original_note}'
+        meter.notes = _append_note(meter.notes, line)
         meter.save(update_fields=['notes'])
         dated_deferred += 1
 
-    result = {
+    return {
         'accounts': Account.objects.count(),
         'plots': LandPlot.objects.count(),
         'people': Person.objects.count(),
@@ -153,4 +163,3 @@ def import_verified_water_package(uploaded_file):
         'plot_relations_created': 0,
         'memberships_created': 0,
     }
-    return result
