@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=6dd6676f6f692cd43aa81b275f8ce6ccfed2d7b1
+EXPECTED=9ef2bd793c361fdc487719d717353dbceaff1cd1
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
@@ -63,6 +63,15 @@ trap rollback ERR
 CHANGED=1
 systemctl stop trud-1-site.service
 gitapp checkout --detach "$TARGET"
+install -o root -g root -m 700 "$APP/ops/backup-trud-site.sh" /usr/local/sbin/trud-1-backup
+install -o root -g root -m 644 "$APP/ops/trud-1-backup.service" /etc/systemd/system/trud-1-backup.service
+install -o root -g root -m 644 "$APP/ops/trud-1-backup.timer" /etc/systemd/system/trud-1-backup.timer
+bash -n /usr/local/sbin/trud-1-backup
+systemd-analyze verify /etc/systemd/system/trud-1-backup.service /etc/systemd/system/trud-1-backup.timer
+systemctl daemon-reload
+systemctl enable --now trud-1-backup.timer
+systemctl is-enabled --quiet trud-1-backup.timer
+systemctl is-active --quiet trud-1-backup.timer
 install -d -o trudsite -g trudsite -m 700 "$APP/private-data"
 manage check
 manage migrate --noinput
@@ -81,6 +90,6 @@ test "$code" = 200
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)
 test "$code" = 200
 trap - ERR
-echo 'ГОТОВО: восстановление доступа и подключение дополнительных счетов установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
-echo 'Путь восстановления: Доступ жителей → открыть доступ → Создать одноразовую ссылку.'
+echo 'ГОТОВО: ежедневные проверяемые резервные копии установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
+echo 'Расписание: ежедневно около 03:20 МСК; хранение 30 дней; каталог /var/backups/trud-1-daily.'
 echo "Предыдущий коммит: $PREVIOUS; копия базы: $BACKUP/trud_site.dump"

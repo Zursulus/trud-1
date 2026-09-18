@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily verified backup of Trud-1
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Europe/Moscow
+RandomizedDelaySec=30m
+Persistent=true
+Unit=trud-1-backup.service
+
+[Install]
+WantedBy=timers.target
