@@ -1,6 +1,6 @@
 """Validation for the multi-sheet water import workbook.
 
-This module deliberately performs no writes to the working registry.  It is the
+This module deliberately performs no writes to the working registry. It is the
 first gate for the staged import package prepared from the legacy water file.
 """
 from collections import Counter
@@ -74,13 +74,14 @@ def inspect_water_package(upload):
         raise ValidationError('Нет обязательных листов: ' + ', '.join(missing))
 
     parsed = {}
-    issues = []
+    blocking_issues = []
+    review_notes = []
     counts = {}
     for name, required in SHEETS.items():
         header, rows = _rows(workbook[name])
         absent = [column for column in required if column not in header]
         if absent:
-            issues.append(f'{name}: нет колонок {", ".join(absent)}.')
+            blocking_issues.append(f'{name}: нет колонок {", ".join(absent)}.')
         parsed[name] = rows
         counts[name] = len(rows)
     workbook.close()
@@ -92,7 +93,7 @@ def inspect_water_package(upload):
         found = values(sheet, field)
         for value, count in Counter(found).items():
             if count > 1:
-                issues.append(f'{sheet}: {field} «{value}» повторяется {count} раза.')
+                blocking_issues.append(f'{sheet}: {field} «{value}» повторяется {count} раза.')
         return set(found)
 
     plot_ids = unique('Участки', 'plot_id')
@@ -103,60 +104,97 @@ def inspect_water_package(upload):
     system_meter_ids = unique('Общие и контрольные', 'meter_id')
     meter_ids = individual_meter_ids | system_meter_ids
     if individual_meter_ids & system_meter_ids:
-        issues.append('Одинаковый meter_id встречается в индивидуальных и общих счётчиках.')
+        blocking_issues.append('Одинаковый meter_id встречается в индивидуальных и общих счётчиках.')
 
     for number, row in parsed['Люди']:
         if row.get('plot_id') and row['plot_id'] not in plot_ids:
-            issues.append(f'Люди строка {number}: неизвестный plot_id {row["plot_id"]}.')
+            blocking_issues.append(f'Люди строка {number}: неизвестный plot_id {row["plot_id"]}.')
     for number, row in parsed['Группы']:
         if row.get('node_name') not in node_names:
-            issues.append(f'Группы строка {number}: неизвестный узел {row.get("node_name") or "(пусто)"}.')
+            blocking_issues.append(f'Группы строка {number}: неизвестный узел {row.get("node_name") or "(пусто)"}.')
     for number, row in parsed['Состав групп']:
         if row.get('plot_id') not in plot_ids:
-            issues.append(f'Состав групп строка {number}: неизвестный plot_id {row.get("plot_id") or "(пусто)"}.')
+            blocking_issues.append(f'Состав групп строка {number}: неизвестный plot_id {row.get("plot_id") or "(пусто)"}.')
         if row.get('group_name') not in group_names:
-            issues.append(f'Состав групп строка {number}: неизвестная группа {row.get("group_name") or "(пусто)"}.')
+            blocking_issues.append(f'Состав групп строка {number}: неизвестная группа {row.get("group_name") or "(пусто)"}.')
 
     allowed_kinds = {'main', 'line', 'individual', 'irrigation'}
     for sheet in ('Индивидуальные счетчики', 'Общие и контрольные'):
         for number, row in parsed[sheet]:
             kind = row.get('kind')
             if kind not in allowed_kinds:
-                issues.append(f'{sheet} строка {number}: неизвестный kind {kind or "(пусто)"}.')
+                blocking_issues.append(f'{sheet} строка {number}: неизвестный kind {kind or "(пусто)"}.')
             if row.get('node_name') not in node_names:
-                issues.append(f'{sheet} строка {number}: неизвестный узел {row.get("node_name") or "(пусто)"}.')
+                blocking_issues.append(f'{sheet} строка {number}: неизвестный узел {row.get("node_name") or "(пусто)"}.')
             if kind == 'individual' and row.get('plot_id') not in plot_ids:
-                issues.append(f'{sheet} строка {number}: неизвестный plot_id {row.get("plot_id") or "(пусто)"}.')
+                blocking_issues.append(f'{sheet} строка {number}: неизвестный plot_id {row.get("plot_id") or "(пусто)"}.')
             if kind == 'line' and row.get('group_name') not in group_names:
-                issues.append(f'{sheet} строка {number}: для линейного счётчика нужна существующая группа.')
+                blocking_issues.append(f'{sheet} строка {number}: для линейного счётчика нужна существующая группа.')
             if kind in {'main', 'irrigation'} and row.get('group_name'):
-                issues.append(f'{sheet} строка {number}: общий/поливочный счётчик не должен иметь группу.')
+                blocking_issues.append(f'{sheet} строка {number}: общий/поливочный счётчик не должен иметь группу.')
 
     reading_keys = set()
+    dated_readings = 0
+    undated_values = 0
+    empty_readings = 0
     for number, row in parsed['Показания']:
         meter_id = row.get('meter_id')
         if meter_id not in meter_ids:
-            issues.append(f'Показания строка {number}: неизвестный meter_id {meter_id or "(пусто)"}.')
-        if not row.get('date'):
-            issues.append(f'Показания строка {number}: дата неизвестна; импорт показания запрещён до уточнения.')
-        try:
-            value = Decimal(row.get('value_m3', '').replace(',', '.'))
-            if value < 0:
-                raise InvalidOperation
-        except (InvalidOperation, ValueError):
-            issues.append(f'Показания строка {number}: некорректное значение {row.get("value_m3") or "(пусто)"}.')
-        key = (meter_id, row.get('date'))
-        if row.get('date') and key in reading_keys:
-            issues.append(f'Показания строка {number}: повтор meter_id + date.')
+            blocking_issues.append(f'Показания строка {number}: неизвестный meter_id {meter_id or "(пусто)"}.')
+
+        raw_value = row.get('value_m3', '')
+        value = None
+        if raw_value:
+            try:
+                value = Decimal(raw_value.replace(',', '.'))
+                if value < 0:
+                    raise InvalidOperation
+            except (InvalidOperation, ValueError):
+                blocking_issues.append(f'Показания строка {number}: некорректное значение {raw_value}.')
+        else:
+            empty_readings += 1
+            review_notes.append(
+                f'Показания строка {number}: значение отсутствует в источнике; показание не создаётся.'
+            )
+
+        reading_date = row.get('date')
+        if not reading_date:
+            if value is not None:
+                undated_values += 1
+                source = row.get('source_sheet') or 'не указан'
+                source_row = row.get('source_row') or 'не указана'
+                review_notes.append(
+                    f'Показания строка {number}: {value} м³ без достоверной даты; '
+                    f'сохранить как недатированное исходное значение в примечании счётчика '
+                    f'(источник: {source}, строка {source_row}), Reading не создавать.'
+                )
+            continue
+
+        if value is None:
+            continue
+        dated_readings += 1
+        key = (meter_id, reading_date)
+        if key in reading_keys:
+            blocking_issues.append(f'Показания строка {number}: повтор meter_id + date.')
         reading_keys.add(key)
 
+    issues = blocking_issues + review_notes
     return {
         'counts': counts,
         'issues': issues,
-        'ready': not issues,
+        'blocking_issues': blocking_issues,
+        'review_notes': review_notes,
+        'ready': not blocking_issues,
+        'structure_ready': not blocking_issues,
+        'reading_plan': {
+            'dated': dated_readings,
+            'undated_to_meter_notes': undated_values,
+            'empty_skipped': empty_readings,
+        },
         'summary': (
             f'Участков: {len(plot_ids)}; людей: {len(person_ids)}; узлов: {len(node_names)}; '
             f'групп: {len(group_names)}; счётчиков: {len(meter_ids)}; '
-            f'показаний: {counts["Показания"]}; замечаний: {len(issues)}.'
+            f'строк показаний: {counts["Показания"]}; блокирующих ошибок: {len(blocking_issues)}; '
+            f'требуют сохранения/проверки: {len(review_notes)}.'
         ),
     }
