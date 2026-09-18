@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=3edbde242f5cb314655beb22c7f42bbdbb675431
+EXPECTED=03d060718453b09a666f98162634d51efc3d31fd
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
@@ -45,6 +45,15 @@ manage() {
         --property=EnvironmentFile=/etc/trud-1-site.env \
         "$APP/.venv/bin/python" "$APP/backend/manage.py" "$@"
 }
+write_deployment_status() {
+    revision=$1
+    install -d -o root -g trudsite -m 750 /var/lib/trud-1
+    status_tmp=$(mktemp /var/lib/trud-1/deployment-status.XXXXXXXX)
+    printf '{"project":"trud-1","commit":"%s","deployed_at":"%s"}\n' \
+        "$revision" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status_tmp"
+    install -o root -g trudsite -m 640 "$status_tmp" /var/lib/trud-1/deployment-status.json
+    rm -f "$status_tmp"
+}
 CHANGED=0
 rollback() {
     result=$?
@@ -53,6 +62,7 @@ rollback() {
     if [ "$CHANGED" = 1 ]; then
         gitapp checkout --detach "$PREVIOUS"
         systemctl restart trud-1-site.service
+        write_deployment_status "$PREVIOUS" || echo 'Не удалось восстановить маркер версии.'
         echo 'Восстановлена прежняя версия кода. Добавленные поля базы совместимы с ней.'
     fi
     echo "Копия базы: $BACKUP/trud_site.dump"
@@ -79,6 +89,7 @@ manage setup_roles
 manage collectstatic --noinput
 systemctl start trud-1-site.service
 systemctl is-active --quiet trud-1-site.service
+write_deployment_status "$TARGET"
 for attempt in {1..10}; do
     code=$(curl --connect-timeout 3 --max-time 5 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/admin/ || true)
     [ "$code" = 302 ] && break
@@ -89,7 +100,11 @@ code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}'
 test "$code" = 200
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)
 test "$code" = 200
+status_commit=$(curl --connect-timeout 3 --max-time 10 -sS https://trud-1.ru/admin/deployment-status/ \
+    | /usr/bin/python3 -c 'import json, sys; print(json.load(sys.stdin)["commit"])')
+test "$status_commit" = "$TARGET"
 trap - ERR
-echo 'ГОТОВО: ежедневные проверяемые резервные копии установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
+echo 'ГОТОВО: публичный маркер версии установлен. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
+echo "Версия: https://trud-1.ru/admin/deployment-status/ → $TARGET"
 echo 'Расписание: ежедневно около 03:20 МСК; хранение 30 дней; каталог /var/backups/trud-1-daily.'
 echo "Предыдущий коммит: $PREVIOUS; копия базы: $BACKUP/trud_site.dump"

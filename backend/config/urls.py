@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from two_factor.admin import AdminSiteOTPRequired
 from two_factor.urls import urlpatterns as two_factor_urls
+from config.status import deployment_status
 from water import portal
 
 # Keep existing registrations but require an OTP-verified session for every
@@ -10,6 +11,8 @@ from water import portal
 admin.site.__class__ = AdminSiteOTPRequired
 
 urlpatterns = [
+    # Public, read-only deployment marker for external uptime/status checks.
+    path('admin/deployment-status/', deployment_status, name='deployment_status'),
     # Resident pages stay under the already proxied /admin/ prefix, but are
     # separate from the staff admin and never weaken its OTP requirement.
     path('admin/cabinet/login/', auth_views.LoginView.as_view(

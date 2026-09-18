@@ -5,6 +5,9 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DEPLOYMENT_STATUS_FILE = Path(os.environ.get(
+    'TRUD_DEPLOYMENT_STATUS_FILE', '/var/lib/trud-1/deployment-status.json',
+))
 DEBUG = os.environ.get('DJANGO_DEBUG') == '1'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
 if not SECRET_KEY:
