@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.template.response import TemplateResponse
 
@@ -23,7 +24,7 @@ def package_dry_run(request):
             form.add_error('file', '; '.join(error.messages))
 
     context = {
-        **request.current_app.each_context(request) if hasattr(request.current_app, 'each_context') else {},
+        **admin.site.each_context(request),
         'title': 'Проверка пакета воды без импорта',
         'form': form,
         'report': report,
