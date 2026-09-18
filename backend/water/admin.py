@@ -24,7 +24,8 @@ from .models import (
     DocumentCategory,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
-    ResidentAppeal, ResidentAppealMessage, ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
+    ResidentAppeal, ResidentAppealMessage, ResidentInvite, ResidentPasswordReset,
+    SupplyNode, Tariff, User, WaterGroup,
 )
 
 admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
@@ -293,10 +294,14 @@ class AccountAdmin(RecordedAdmin):
         invite_url = None
         if request.method == 'POST' and form.is_valid():
             from .portal import issue_invite
-            invite, raw = issue_invite(
-                account, form.cleaned_data['email'], form.cleaned_data['role'], actor=request.user,
-            )
-            invite_url = request.build_absolute_uri(reverse('resident_invite', args=[raw]))
+            try:
+                invite, raw = issue_invite(
+                    account, form.cleaned_data['email'], form.cleaned_data['role'], actor=request.user,
+                )
+            except ValidationError as error:
+                form.add_error(None, validation_text(error))
+            else:
+                invite_url = request.build_absolute_uri(reverse('resident_invite', args=[raw]))
         context = {
             **self.admin_site.each_context(request), 'title': f'Приглашение: {account}',
             'opts': self.model._meta, 'account': account, 'form': form, 'invite_url': invite_url,
@@ -891,6 +896,46 @@ class ResidentAccessAdmin(RecordedAdmin):
     list_filter = ('role', 'starts', 'ends')
     search_fields = ('user__username', 'user__email', 'account__number', 'account__plot')
     autocomplete_fields = ('account',)
+    readonly_fields = ('password_reset_link',)
+
+    def get_urls(self):
+        return [
+            path(
+                '<path:object_id>/reset-password/', self.admin_site.admin_view(self.reset_password_view),
+                name='water_residentaccess_reset_password',
+            ),
+        ] + super().get_urls()
+
+    @admin.display(description='Восстановление доступа')
+    def password_reset_link(self, obj):
+        if not obj.pk:
+            return 'Появится после сохранения'
+        return format_html(
+            '<a class="button" href="{}">Создать одноразовую ссылку</a>',
+            reverse('admin:water_residentaccess_reset_password', args=[obj.pk]),
+        )
+
+    def reset_password_view(self, request, object_id):
+        if not request.user.has_perm('water.add_residentpasswordreset'):
+            raise PermissionDenied
+        access = self.get_object(request, object_id)
+        if access is None:
+            raise PermissionDenied
+        reset_url = None
+        error = None
+        if request.method == 'POST':
+            from .portal import issue_password_reset
+            try:
+                reset, raw = issue_password_reset(access.user, actor=request.user)
+            except ValidationError as validation_error:
+                error = validation_text(validation_error)
+            else:
+                reset_url = request.build_absolute_uri(reverse('resident_password_reset', args=[raw]))
+        context = {
+            **self.admin_site.each_context(request), 'title': f'Восстановление доступа: {access.user}',
+            'opts': self.model._meta, 'access': access, 'reset_url': reset_url, 'error': error,
+        }
+        return TemplateResponse(request, 'admin/water/residentaccess/reset_password.html', context)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'user':
@@ -919,6 +964,29 @@ class ResidentInviteAdmin(RecordedAdmin):
             invite.save()
             changed += 1
         messages.success(request, f'Отозвано приглашений: {changed}.')
+
+
+@admin.register(ResidentPasswordReset)
+class ResidentPasswordResetAdmin(RecordedAdmin):
+    list_display = ('user', 'expires_at', 'used_at', 'revoked')
+    list_filter = ('revoked', 'expires_at', 'used_at')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('user', 'token_hash', 'expires_at', 'used_at')
+    actions = ('revoke_resets',)
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description='Отозвать выбранные ссылки восстановления')
+    def revoke_resets(self, request, queryset):
+        changed = 0
+        for reset in queryset.filter(used_at__isnull=True, revoked=False):
+            reset.revoked = True
+            reset._history_user = request.user
+            reset._change_reason = 'Ссылка восстановления отозвана администратором'
+            reset.save()
+            changed += 1
+        messages.success(request, f'Отозвано ссылок: {changed}.')
 
 
 @admin.register(AppealCategory)

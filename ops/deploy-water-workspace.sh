@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=2646a8e230e8a2f35c442c986cf23244a013e87b
+EXPECTED=6dd6676f6f692cd43aa81b275f8ce6ccfed2d7b1
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
@@ -81,6 +81,6 @@ test "$code" = 200
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)
 test "$code" = 200
 trap - ERR
-echo 'ГОТОВО: обращения и защищённые документы установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
-echo 'Разделы: Обращения жителей и Документы жителей; файлы доступны только связанным жителям.'
+echo 'ГОТОВО: восстановление доступа и подключение дополнительных счетов установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
+echo 'Путь восстановления: Доступ жителей → открыть доступ → Создать одноразовую ссылку.'
 echo "Предыдущий коммит: $PREVIOUS; копия базы: $BACKUP/trud_site.dump"

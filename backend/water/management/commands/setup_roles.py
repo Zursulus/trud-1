@@ -5,6 +5,7 @@ from django.db import transaction
 WATER = ('account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption')
 REGISTRY = (
     'person', 'landplot', 'plotrelation', 'importbatch', 'importrow', 'residentaccess', 'residentinvite',
+    'residentpasswordreset',
     'appealcategory', 'residentappeal', 'residentappealmessage', 'documentcategory', 'accountdocument',
 )
 FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'charge', 'payment', 'paymentallocation')

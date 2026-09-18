@@ -739,6 +739,28 @@ class ResidentInvite(RecordedModel):
         return f'{self.email} → {self.account}'
 
 
+class ResidentPasswordReset(RecordedModel):
+    user = models.ForeignKey(User, verbose_name='Житель', on_delete=models.PROTECT, related_name='resident_password_resets')
+    token_hash = models.CharField('Хэш ссылки', max_length=64, unique=True, editable=False)
+    expires_at = models.DateTimeField('Действует до')
+    used_at = models.DateTimeField('Использовано', blank=True, null=True, editable=False)
+    revoked = models.BooleanField('Отозвано', default=False)
+
+    class Meta:
+        verbose_name = 'Восстановление доступа жителя'
+        verbose_name_plural = '19 · Восстановление доступа'
+        ordering = ['-id']
+
+    def clean(self):
+        if self.user_id and (self.user.is_staff or not self.user.is_active):
+            raise ValidationError({'user': 'Восстановление доступно только действующему кабинету жителя.'})
+        if self._state.adding and self.expires_at and self.expires_at <= timezone.now():
+            raise ValidationError({'expires_at': 'Срок ссылки должен быть в будущем.'})
+
+    def __str__(self):
+        return f'{self.user} · до {timezone.localtime(self.expires_at):%d.%m.%Y %H:%M}'
+
+
 class AppealCategory(RecordedModel):
     name = models.CharField('Тема обращения', max_length=120, unique=True)
     active = models.BooleanField('Доступна жителям', default=True)
@@ -747,7 +769,7 @@ class AppealCategory(RecordedModel):
 
     class Meta:
         verbose_name = 'Тема обращения'
-        verbose_name_plural = '19 · Темы обращений'
+        verbose_name_plural = '20 · Темы обращений'
         ordering = ['sort_order', 'name']
 
     def __str__(self):
@@ -774,7 +796,7 @@ class ResidentAppeal(RecordedModel):
 
     class Meta:
         verbose_name = 'Обращение жителя'
-        verbose_name_plural = '20 · Обращения жителей'
+        verbose_name_plural = '21 · Обращения жителей'
         ordering = ['-opened_at', '-id']
 
     def clean(self):
@@ -823,7 +845,7 @@ class DocumentCategory(RecordedModel):
 
     class Meta:
         verbose_name = 'Вид документа'
-        verbose_name_plural = '21 · Виды документов'
+        verbose_name_plural = '22 · Виды документов'
         ordering = ['sort_order', 'name']
 
     def __str__(self):
@@ -848,7 +870,7 @@ class AccountDocument(RecordedModel):
 
     class Meta:
         verbose_name = 'Документ лицевого счёта'
-        verbose_name_plural = '22 · Документы жителей'
+        verbose_name_plural = '23 · Документы жителей'
         ordering = ['-published_at', '-id']
 
     def clean(self):

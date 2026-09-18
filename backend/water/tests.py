@@ -15,13 +15,14 @@ from axes.utils import reset
 
 from .billing import account_totals, allocate_payment, calculate_period
 from .imports import apply_import_row, stage_import
-from .portal import issue_invite
+from .portal import issue_invite, issue_password_reset
 from .models import (
     Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     DocumentCategory,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
-    ResidentAppeal, ResidentAppealMessage, ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
+    ResidentAppeal, ResidentAppealMessage, ResidentInvite, ResidentPasswordReset,
+    SupplyNode, Tariff, User, WaterGroup,
 )
 
 
@@ -1044,10 +1045,32 @@ class ResidentPortalTests(MFAAccessMixin, TestCase):
     def test_revoked_expired_and_existing_email_invites_are_safe(self):
         existing = self.create_resident()
         invite, raw = issue_invite(self.other, existing.email, 'owner')
-        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{raw}/').status_code, 409)
-        invite.revoked = True
-        invite.save()
-        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{raw}/').status_code, 410)
+        url = f'/admin/cabinet/invite/{raw}/'
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.client.force_login(existing)
+        self.assertContains(self.client.get(url), 'Подключить лицевой счёт')
+        self.assertRedirects(self.client.post(url), f'/admin/cabinet/account/{self.other.pk}/')
+        self.assertTrue(ResidentAccess.objects.filter(user=existing, account=self.other).exists())
+        self.assertEqual(self.client.get(url).status_code, 410)
+        revoked, revoked_raw = issue_invite(self.other, 'revoked@example.test', 'owner')
+        revoked.revoked = True
+        revoked.save()
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{revoked_raw}/').status_code, 410)
+        expired, expired_raw = issue_invite(self.other, 'expired@example.test', 'owner')
+        expired.expires_at = timezone.now() - timedelta(minutes=1)
+        expired.save()
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{expired_raw}/').status_code, 410)
+
+    def test_existing_email_invite_rejects_wrong_or_ambiguous_user(self):
+        existing = self.create_resident()
+        wrong = self.create_resident('wrong@example.test', self.other)
+        invite, raw = issue_invite(self.other, existing.email, 'payer')
+        url = f'/admin/cabinet/invite/{raw}/'
+        self.client.force_login(wrong)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        User.objects.create_user(username='duplicate-email', email=existing.email, password=self.password)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 409)
 
     def test_new_invite_revokes_previous_unused_link(self):
         first, first_raw = issue_invite(self.account, 'replace@example.test', 'owner')
@@ -1074,6 +1097,52 @@ class ResidentPortalTests(MFAAccessMixin, TestCase):
         self.assertContains(response, '/admin/cabinet/invite/')
         self.assertEqual(ResidentInvite.objects.count(), 1)
         self.assertEqual(ResidentInvite.objects.get().history.first().history_user, manager)
+
+    def test_password_change_and_one_time_recovery(self):
+        resident = self.create_resident()
+        self.client.force_login(resident)
+        changed_password = 'resident-changed-password-2026!'
+        response = self.client.post('/admin/cabinet/password/', {
+            'old_password': self.password, 'new_password1': changed_password, 'new_password2': changed_password,
+        })
+        self.assertRedirects(response, '/admin/cabinet/')
+        self.assertEqual(self.client.get('/admin/cabinet/').status_code, 200)
+        resident.refresh_from_db()
+        self.assertTrue(resident.check_password(changed_password))
+
+        reset, raw = issue_password_reset(resident)
+        recovered_password = 'resident-recovered-password-2026!'
+        url = f'/admin/cabinet/reset/{raw}/'
+        self.client.logout()
+        response = self.client.post(url, {
+            'password1': recovered_password, 'password2': recovered_password,
+        })
+        self.assertRedirects(response, '/admin/cabinet/')
+        resident.refresh_from_db()
+        reset.refresh_from_db()
+        self.assertTrue(resident.check_password(recovered_password))
+        self.assertIsNotNone(reset.used_at)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 410)
+
+    def test_manager_can_create_recovery_link_but_operator_cannot(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        resident = self.create_resident()
+        access = ResidentAccess.objects.get(user=resident, account=self.account)
+        manager = User.objects.create_user(username='recovery-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        operator = User.objects.create_user(username='recovery-operator', is_staff=True)
+        operator.groups.add(Group.objects.get(name='Оператор воды'))
+        url = f'/admin/water/residentaccess/{access.pk}/reset-password/'
+        self.login_as(operator)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login_as(manager)
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/admin/cabinet/reset/')
+        self.assertEqual(ResidentPasswordReset.objects.count(), 1)
+        self.assertEqual(ResidentPasswordReset.objects.get().history.first().history_user, manager)
 
     def test_resident_creates_and_reads_only_own_appeals(self):
         category = AppealCategory.objects.create(name='Перерасчёт')

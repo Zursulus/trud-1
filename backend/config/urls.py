@@ -18,6 +18,8 @@ urlpatterns = [
     ), name='resident_login'),
     path('admin/cabinet/logout/', auth_views.LogoutView.as_view(next_page='resident_login'), name='resident_logout'),
     path('admin/cabinet/invite/<str:token>/', portal.register_invite, name='resident_invite'),
+    path('admin/cabinet/reset/<str:token>/', portal.reset_password, name='resident_password_reset'),
+    path('admin/cabinet/password/', portal.change_password, name='resident_password_change'),
     path('admin/cabinet/', portal.dashboard, name='resident_dashboard'),
     path('admin/cabinet/account/<int:account_id>/', portal.resident_account, name='resident_account'),
     path('admin/cabinet/account/<int:account_id>/meter/<int:meter_id>/reading/', portal.submit_reading, name='resident_reading'),
