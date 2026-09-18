@@ -209,6 +209,20 @@ class AccessTests(MFAAccessMixin, TestCase):
         self.assertEqual(result.status_code, 302)
         self.assertIn('/admin/account/login/', result['Location'])
 
+    def test_regular_manager_can_use_password_without_otp(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(
+            username='password-manager', password='test-only-long-password', is_staff=True,
+        )
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        response = self.client.post('/admin/login/', {
+            'username': manager.username, 'password': 'test-only-long-password', 'next': '/admin/',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.get('/admin/water/account/').status_code, 200)
+        self.assertFalse(manager.is_superuser)
+
     def test_password_guessing_locks_login(self):
         for _ in range(5):
             self.client.post('/admin/account/login/', {

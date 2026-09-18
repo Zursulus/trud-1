@@ -1,15 +1,27 @@
 from django.contrib import admin
+from django.contrib.admin import AdminSite
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-from two_factor.admin import AdminSiteOTPRequired
+from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from water import portal
 from water.package_views import package_dry_run
 
-# Keep existing registrations but require an OTP-verified session for every
-# admin view. two_factor also patches the old admin login route to this flow.
-admin.site.__class__ = AdminSiteOTPRequired
+class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
+    """Password-only staff access; the technical superuser still requires OTP."""
+
+    def has_permission(self, request):
+        allowed = AdminSite.has_permission(self, request)
+        return allowed and (not request.user.is_superuser or request.user.is_verified())
+
+    def login(self, request, extra_context=None):
+        if request.user.is_authenticated and request.user.is_superuser and not request.user.is_verified():
+            return AdminSiteOTPRequiredMixin.login(self, request, extra_context)
+        return original_login(self, request, extra_context)
+
+
+admin.site.__class__ = MainAdminOTPOnlySite
 
 urlpatterns = [
     # Public, read-only deployment marker for external uptime/status checks.
