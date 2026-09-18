@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=03d060718453b09a666f98162634d51efc3d31fd
+EXPECTED=447e269511879acdc7b4ba742f2c7920f19ee298
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
