@@ -46,7 +46,12 @@ def _rows(sheet):
             raise ValidationError(f'{sheet.title}: больше {MAX_ROWS_PER_SHEET} строк.')
         if not any(value not in (None, '') for value in values):
             continue
-        rows.append((number, dict(zip(header, (_text(value) for value in values)))))
+        normalized = tuple(_text(value) for value in values)
+        # Prepared workbooks may repeat a service header inside a table.
+        # Recognize it by the complete column signature rather than by position.
+        if normalized[:len(header)] == header:
+            continue
+        rows.append((number, dict(zip(header, normalized))))
     return header, rows
 
 

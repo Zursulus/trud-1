@@ -8,9 +8,13 @@ from .models import Account, LandPlot, Meter, Person, SupplyNode, WaterGroup
 
 def _rows(book, name):
     ws = book[name]
-    header = [str(v or '').strip() for v in next(ws.iter_rows(values_only=True))]
-    for values in ws.iter_rows(values_only=True):
+    values_iter = ws.iter_rows(values_only=True)
+    header = tuple(str(v or '').strip() for v in next(values_iter))
+    for values in values_iter:
         if not any(v not in (None, '') for v in values):
+            continue
+        normalized = tuple(str(v or '').strip() for v in values)
+        if normalized[:len(header)] == header:
             continue
         yield {header[i]: values[i] if i < len(values) else None for i in range(len(header))}
 

@@ -85,6 +85,19 @@ class WaterPackageImportTests(SimpleTestCase):
         with self.assertRaises(ValidationError):
             inspect_water_package(self.workbook(mutate))
 
+    def test_repeated_service_header_is_not_treated_as_data(self):
+        def mutate(book):
+            sheet = book['Общие и контрольные']
+            sheet.insert_rows(2)
+            for column, value in enumerate(SHEETS['Общие и контрольные'], 1):
+                sheet.cell(row=2, column=column, value=value)
+
+        report = inspect_water_package(self.workbook(mutate))
+
+        self.assertTrue(report['ready'])
+        self.assertEqual(report['counts']['Общие и контрольные'], 1)
+        self.assertEqual(report['blocking_issues'], [])
+
 
 class WaterPackageWriterTests(TestCase):
     def test_writer_creates_verified_structure_and_defers_dated_reading(self):
@@ -119,6 +132,19 @@ class WaterPackageWriterTests(TestCase):
         self.assertEqual(Account.objects.count(), 1)
         self.assertEqual(LandPlot.objects.count(), 0)
         self.assertEqual(Meter.objects.count(), 0)
+
+    def test_writer_skips_repeated_service_header_by_column_signature(self):
+        def mutate(book):
+            sheet = book['Общие и контрольные']
+            sheet.insert_rows(2)
+            for column, value in enumerate(SHEETS['Общие и контрольные'], 1):
+                sheet.cell(row=2, column=column, value=value)
+
+        result = import_verified_water_package(make_workbook(mutate))
+
+        self.assertEqual(result['meters'], 2)
+        self.assertEqual(Meter.objects.count(), 2)
+        self.assertFalse(Meter.objects.filter(serial='meter_id').exists())
 
     def test_blocking_package_rolls_back_without_partial_rows(self):
         def mutate(book):
