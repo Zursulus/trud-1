@@ -25,7 +25,7 @@ sha256sum "$BACKUP/trud_site.dump" "$BACKUP/commit.txt" > "$BACKUP/SHA256SUMS"
 
 echo "Бэкап проверен: $BACKUP"
 echo "Размер: $(du -h "$BACKUP/trud_site.dump" | cut -f1)"
-echo 'Очищаем только прикладные данные water; пользователей, роли, права и настройки Django не трогаем.'
+echo 'Очищаем тестовые прикладные данные water. Учётные записи User, роли, права и настройки Django не удаляем.'
 
 cd "$APP/backend"
 systemd-run --quiet --wait --pipe --collect \
@@ -35,25 +35,53 @@ systemd-run --quiet --wait --pipe --collect \
   "$APP/.venv/bin/python" manage.py shell <<'PY'
 from django.db import transaction
 from water.models import (
-    GroupConsumption, Reading, Meter, Membership, PlotRelation,
-    LandPlot, Person, WaterGroup, SupplyNode, Account,
+    Account, AccountDocument, BillingAssignment, BillingPeriod, Charge,
+    GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
+    Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
+    ResidentAppeal, ResidentAppealMessage, ResidentInvite, SupplyNode, Tariff,
+    WaterGroup,
 )
 
-# Order is deliberate: dependants first. A single transaction means all-or-nothing.
+# These are test/business records. User accounts themselves are deliberately NOT deleted.
+# Dependants must be removed first because business relations use PROTECT intentionally.
 models = [
-    GroupConsumption, Reading, Meter, Membership, PlotRelation,
-    LandPlot, Person, WaterGroup, SupplyNode, Account,
+    ResidentAppealMessage,
+    ResidentAppeal,
+    AccountDocument,
+    ResidentInvite,
+    ResidentAccess,
+    PaymentAllocation,
+    Payment,
+    Charge,
+    BillingAssignment,
+    Tariff,
+    GroupConsumption,
+    Reading,
+    Meter,
+    Membership,
+    PlotRelation,
+    ImportRow,
+    ImportBatch,
+    LandPlot,
+    Person,
+    WaterGroup,
+    SupplyNode,
+    BillingPeriod,
+    Account,
 ]
+
 with transaction.atomic():
     before = {m.__name__: m.objects.count() for m in models}
     for model in models:
         model.objects.all().delete()
     after = {m.__name__: m.objects.count() for m in models}
     if any(after.values()):
-        raise RuntimeError(f'После очистки остались записи: {after}')
+        raise RuntimeError(f'После очистки остались прикладные записи: {after}')
+
 print('До очистки:', before)
 print('После очистки:', after)
+print('User не удалялись; входные учётные записи сохранены.')
 PY
 
-echo 'ГОТОВО. Прикладные данные water очищены.'
+echo 'ГОТОВО. Тестовые прикладные данные water очищены.'
 echo "ВОССТАНОВЛЕНИЕ при необходимости: $BACKUP/trud_site.dump"
