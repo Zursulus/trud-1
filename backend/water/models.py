@@ -212,6 +212,54 @@ class Reading(RecordedModel):
         return f'{self.meter} · {self.date} · {self.value}'
 
 
+def controller_reading_photo_path(instance, filename):
+    suffix = Path(filename).suffix.lower()[:12]
+    return f'controller-readings/{timezone.localdate():%Y/%m}/{uuid.uuid4().hex}{suffix}'
+
+
+class ControllerReadingSubmission(RecordedModel):
+    meter = models.ForeignKey(Meter, verbose_name='Счётчик', on_delete=models.PROTECT)
+    date = models.DateField('Дата снятия', default=timezone.localdate)
+    value = models.DecimalField(
+        'Показание, м³', max_digits=14, decimal_places=3,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    photo = models.FileField('Фото счётчика', upload_to=controller_reading_photo_path, max_length=300)
+    notes = models.TextField('Примечание', blank=True, max_length=500)
+    status = models.CharField('Статус', max_length=20, choices=[
+        ('pending', 'На проверке'), ('approved', 'Принято'), ('rejected', 'Отклонено'),
+    ], default='pending', editable=False)
+    submitted_by = models.ForeignKey(
+        User, verbose_name='Контролёр', on_delete=models.PROTECT,
+        related_name='controller_reading_submissions', editable=False,
+    )
+    submitted_at = models.DateTimeField('Отправлено', default=timezone.now, editable=False)
+    reviewed_by = models.ForeignKey(
+        User, verbose_name='Проверил', on_delete=models.PROTECT, blank=True, null=True,
+        related_name='reviewed_controller_readings', editable=False,
+    )
+    reviewed_at = models.DateTimeField('Проверено', blank=True, null=True, editable=False)
+    review_comment = models.CharField('Комментарий проверки', max_length=500, blank=True, editable=False)
+    reading = models.OneToOneField(
+        Reading, verbose_name='Созданное показание', on_delete=models.PROTECT,
+        blank=True, null=True, editable=False,
+    )
+
+    class Meta:
+        verbose_name = 'Показание контролёра'
+        verbose_name_plural = '07 · Премодерация показаний'
+        ordering = ['status', '-submitted_at', '-id']
+
+    def clean(self):
+        if self.photo and getattr(self.photo, 'size', 0) > 12 * 1024 * 1024:
+            raise ValidationError({'photo': 'Фото должно быть не больше 12 МБ.'})
+        if self.date and self.date > timezone.localdate():
+            raise ValidationError({'date': 'Дата не может быть в будущем.'})
+
+    def __str__(self):
+        return f'{self.meter} · {self.date} · {self.value} · {self.get_status_display()}'
+
+
 class GroupConsumption(RecordedModel):
     group = models.ForeignKey(WaterGroup, verbose_name='Группа', on_delete=models.PROTECT)
     starts = models.DateField('Начало периода')

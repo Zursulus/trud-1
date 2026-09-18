@@ -12,10 +12,11 @@ FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'cha
 ADMIN = 'Администратор ТСН'
 LEGACY_ADMIN = 'Администратор СНТ'
 OPERATOR = 'Оператор воды'
+CONTROLLER = 'Контролёр воды'
 
 
 class Command(BaseCommand):
-    help = 'Создать/синхронизировать две штатные роли; пользователей не менять.'
+    help = 'Создать/синхронизировать штатные роли; пользователей не менять.'
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -33,11 +34,13 @@ class Command(BaseCommand):
         registry = {f'{action}_{name}' for name in REGISTRY for action in ('view', 'add', 'change')}
         registry |= {f'view_historical{name}' for name in REGISTRY}
         operator = water_view | {'add_reading', 'add_groupconsumption'}
+        controller = {'view_controllerreadingsubmission', 'add_controllerreadingsubmission'}
         finance = {f'{action}_{name}' for name in FINANCE for action in ('view', 'add', 'change')}
         finance |= {f'view_historical{name}' for name in FINANCE}
         administrator = water_view | registry | finance | {f'{action}_{name}' for name in WATER for action in ('add', 'change')}
+        administrator.update({f'{action}_controllerreadingsubmission' for action in ('view', 'add', 'change')})
         administrator.update({'export_account', 'export_reading'})
-        for name, codes in ((ADMIN, administrator), (OPERATOR, operator)):
+        for name, codes in ((ADMIN, administrator), (OPERATOR, operator), (CONTROLLER, controller)):
             permissions = list(Permission.objects.filter(content_type__app_label='water', codename__in=codes))
             if len(permissions) != len(codes):
                 raise RuntimeError('Сначала выполните migrate: не найдены все права.')

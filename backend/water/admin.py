@@ -1,4 +1,5 @@
 import csv
+from pathlib import Path
 from urllib.parse import urlencode
 
 from django import forms
@@ -9,7 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -22,7 +23,7 @@ from simple_history.admin import SimpleHistoryAdmin
 from .models import (
     Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     DocumentCategory,
-    GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
+    ControllerReadingSubmission, GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
     ResidentAppeal, ResidentAppealMessage, ResidentInvite, ResidentPasswordReset,
     SupplyNode, Tariff, User, WaterGroup,
@@ -197,6 +198,41 @@ class ImportUploadForm(forms.Form):
         label='Дата начала действия данных', widget=forms.DateInput(attrs={'type': 'date'}),
     )
     notes = forms.CharField(label='Примечание', required=False, widget=forms.Textarea(attrs={'rows': 2}))
+
+
+class ControllerMeterChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, meter):
+        account = meter.account
+        identifier = account.number or f'ID {account.pk}' if account else f'счётчик {meter.pk}'
+        address = account.plot if account else meter.group or meter.node
+        return f'{identifier} — {address} — {meter.serial}'
+
+
+class ControllerReadingCaptureForm(forms.ModelForm):
+    meter = ControllerMeterChoiceField(label='Выберите участок', queryset=Meter.objects.none())
+
+    class Meta:
+        model = ControllerReadingSubmission
+        fields = ('meter', 'date', 'value', 'photo', 'notes')
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'value': forms.NumberInput(attrs={'inputmode': 'decimal', 'step': '0.001', 'min': '0'}),
+            'photo': forms.FileInput(attrs={'accept': 'image/*', 'capture': 'environment'}),
+            'notes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['meter'].queryset = Meter.objects.select_related('account', 'group', 'node').filter(
+            kind='individual', account__archived=False,
+        ).order_by('account__plot', 'account__number', 'serial')
+
+    def clean_photo(self):
+        photo = self.cleaned_data['photo']
+        content_type = getattr(photo, 'content_type', '')
+        if content_type and not content_type.startswith('image/'):
+            raise forms.ValidationError('Приложите фотографию, а не другой файл.')
+        return photo
 
 
 class ResidentInviteForm(forms.Form):
@@ -667,6 +703,137 @@ class ReadingAdmin(RecordedAdmin):
             'missing_count': len(meters) - len(existing), 'can_export': self.has_export_permission(request),
         }
         return TemplateResponse(request, 'admin/water/reading/workspace.html', context)
+
+
+@admin.register(ControllerReadingSubmission)
+class ControllerReadingSubmissionAdmin(RecordedAdmin):
+    change_list_template = 'admin/water/controllerreadingsubmission/change_list.html'
+    change_form_template = 'admin/water/controllerreadingsubmission/change_form.html'
+    list_display = ('account_id_display', 'address_display', 'value', 'date', 'status', 'submitted_by', 'submitted_at')
+    list_filter = ('status', 'date')
+    search_fields = ('meter__account__number', 'meter__account__plot', 'meter__serial')
+    readonly_fields = (
+        'meter', 'date', 'value', 'photo_link', 'notes', 'status', 'submitted_by',
+        'submitted_at', 'reviewed_by', 'reviewed_at', 'review_comment', 'reading',
+    )
+    fields = readonly_fields
+
+    def get_urls(self):
+        return [
+            path('capture/', self.admin_site.admin_view(self.capture_view), name='water_controllerreading_capture'),
+            path('<int:object_id>/photo/', self.admin_site.admin_view(self.photo_view), name='water_controllerreading_photo'),
+            path('<int:object_id>/approve/', self.admin_site.admin_view(self.approve_view), name='water_controllerreading_approve'),
+            path('<int:object_id>/reject/', self.admin_site.admin_view(self.reject_view), name='water_controllerreading_reject'),
+        ] + super().get_urls()
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request).select_related('meter__account', 'submitted_by', 'reviewed_by', 'reading')
+        if request.user.has_perm('water.change_controllerreadingsubmission'):
+            return queryset
+        return queryset.filter(submitted_by=request.user)
+
+    def has_add_permission(self, request):
+        return request.user.has_perm('water.add_controllerreadingsubmission')
+
+    @admin.display(description='ID / лицевой счёт')
+    def account_id_display(self, obj):
+        account = obj.meter.account
+        return account.number or f'ID {account.pk}' if account else '—'
+
+    @admin.display(description='Адрес')
+    def address_display(self, obj):
+        return obj.meter.account.plot if obj.meter.account else '—'
+
+    @admin.display(description='Фото')
+    def photo_link(self, obj):
+        if not obj.pk:
+            return '—'
+        return format_html('<a href="{}" target="_blank">Открыть фото</a>', reverse('admin:water_controllerreading_photo', args=[obj.pk]))
+
+    def capture_view(self, request):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        form = ControllerReadingCaptureForm(request.POST or None, request.FILES or None)
+        if request.method == 'POST' and form.is_valid():
+            submission = form.save(commit=False)
+            submission.submitted_by = request.user
+            submission._history_user = request.user
+            submission._change_reason = 'Подача контролёром на премодерацию'
+            submission.save()
+            self.log_addition(request, submission, 'Показание отправлено на проверку')
+            messages.success(request, 'Готово. Показание отправлено на проверку.')
+            return HttpResponseRedirect(reverse('admin:water_controllerreading_capture'))
+        meter_data = {
+            str(meter.pk): {
+                'id': meter.account.number or f'ID {meter.account.pk}',
+                'address': meter.account.plot or 'Адрес не заполнен',
+                'serial': meter.serial,
+            }
+            for meter in self._capture_meters(form)
+        }
+        context = {
+            **self.admin_site.each_context(request), 'title': 'Внести показание',
+            'opts': self.model._meta, 'form': form, 'meter_data': meter_data,
+        }
+        return TemplateResponse(request, 'admin/water/controllerreadingsubmission/capture.html', context)
+
+    @staticmethod
+    def _capture_meters(form):
+        return form.fields['meter'].queryset
+
+    def _get_visible(self, request, object_id):
+        try:
+            return self.get_queryset(request).get(pk=object_id)
+        except ControllerReadingSubmission.DoesNotExist as error:
+            raise Http404 from error
+
+    def photo_view(self, request, object_id):
+        submission = self._get_visible(request, object_id)
+        response = FileResponse(submission.photo.open('rb'), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'inline; filename="meter-{submission.pk}{Path(submission.photo.name).suffix}"'
+        response['Cache-Control'] = 'private, no-store'
+        return response
+
+    def approve_view(self, request, object_id):
+        if request.method != 'POST' or not request.user.has_perm('water.change_controllerreadingsubmission'):
+            raise PermissionDenied
+        try:
+            with transaction.atomic():
+                submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
+                if submission.status != 'pending':
+                    raise ValidationError('Запись уже проверена.')
+                reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'По фото контролёра. {submission.notes}'.strip())
+                reading._history_user = request.user
+                reading._change_reason = 'Принято из премодерации'
+                reading.save()
+                submission.status = 'approved'
+                submission.reviewed_by = request.user
+                submission.reviewed_at = timezone.now()
+                submission.reading = reading
+                submission._history_user = request.user
+                submission._change_reason = 'Показание принято'
+                submission.save()
+        except (ValidationError, IntegrityError) as error:
+            messages.error(request, f'Не удалось принять: {validation_text(error) if isinstance(error, ValidationError) else "за эту дату уже есть показание"}.')
+        else:
+            messages.success(request, 'Показание принято и добавлено в журнал.')
+        return HttpResponseRedirect(reverse('admin:water_controllerreadingsubmission_change', args=[object_id]))
+
+    def reject_view(self, request, object_id):
+        if request.method != 'POST' or not request.user.has_perm('water.change_controllerreadingsubmission'):
+            raise PermissionDenied
+        with transaction.atomic():
+            submission = ControllerReadingSubmission.objects.select_for_update().get(pk=object_id)
+            if submission.status == 'pending':
+                submission.status = 'rejected'
+                submission.review_comment = request.POST.get('review_comment', '').strip()[:500]
+                submission.reviewed_by = request.user
+                submission.reviewed_at = timezone.now()
+                submission._history_user = request.user
+                submission._change_reason = 'Показание отклонено'
+                submission.save()
+        messages.success(request, 'Запись отклонена.')
+        return HttpResponseRedirect(reverse('admin:water_controllerreadingsubmission_change', args=[object_id]))
 
 
 @admin.register(GroupConsumption)

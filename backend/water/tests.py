@@ -18,7 +18,7 @@ from .imports import apply_import_row, stage_import
 from .portal import issue_invite, issue_password_reset
 from .models import (
     Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
-    DocumentCategory,
+    ControllerReadingSubmission, DocumentCategory,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
     ResidentAppeal, ResidentAppealMessage, ResidentInvite, ResidentPasswordReset,
@@ -255,6 +255,7 @@ class RoleAuditTests(MFAAccessMixin, TestCase):
         response = self.client.post('/admin/water/account/', {'action': 'export_accounts', '_selected_action': [self.account.pk]})
         self.assertNotIn('text/csv', response.get('Content-Type', ''))
         self.assertFalse(self.operator.has_perm('water.delete_reading'))
+
 
     def test_manager_correction_reason_history_and_readonly_journal(self):
         from django.contrib.admin.models import LogEntry
@@ -1221,3 +1222,38 @@ class ResidentPortalTests(MFAAccessMixin, TestCase):
             document.save()
             self.client.force_login(resident)
             self.assertEqual(self.client.get(url).status_code, 404)
+class ControllerSubmissionTests(MFAAccessMixin, TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        self.controller = User.objects.create_user(username='controller-test', is_staff=True)
+        self.controller.groups.add(Group.objects.get(name='Контролёр воды'))
+        self.manager = User.objects.create_user(username='controller-manager', is_staff=True)
+        self.manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        self.account = Account.objects.create(number='77', plot='Лесная 7')
+        self.node = SupplyNode.objects.create(name='Узел контролёра')
+        self.meter = Meter.objects.create(serial='CTRL-1', kind='individual', node=self.node, account=self.account)
+
+    def test_controller_submits_photo_and_manager_approves(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.login_as(self.controller)
+            response = self.client.post('/admin/water/controllerreadingsubmission/capture/', {
+                'meter': self.meter.pk,
+                'date': timezone.localdate().isoformat(),
+                'value': '123.45',
+                'photo': SimpleUploadedFile('meter.jpg', b'\xff\xd8\xff\xe0test', content_type='image/jpeg'),
+                'notes': 'Обход',
+            })
+            self.assertEqual(response.status_code, 302)
+            submission = ControllerReadingSubmission.objects.get()
+            self.assertEqual(submission.status, 'pending')
+            self.assertEqual(Reading.objects.count(), 0)
+            self.assertEqual(self.client.post(f'/admin/water/controllerreadingsubmission/{submission.pk}/approve/').status_code, 403)
+
+            self.login_as(self.manager)
+            response = self.client.post(f'/admin/water/controllerreadingsubmission/{submission.pk}/approve/')
+            self.assertEqual(response.status_code, 302)
+            submission.refresh_from_db()
+            self.assertEqual(submission.status, 'approved')
+            self.assertEqual(submission.reading.value, Decimal('123.450'))
+            self.assertEqual(submission.reading.history.first().history_user, self.manager)

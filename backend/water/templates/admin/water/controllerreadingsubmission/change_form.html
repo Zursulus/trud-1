@@ -1,0 +1,11 @@
+{% extends "admin/change_form.html" %}
+
+{% block submit_buttons_bottom %}
+  {% if original.status == 'pending' and perms.water.change_controllerreadingsubmission %}
+    <div class="submit-row">
+      <button type="submit" class="default" formaction="{% url 'admin:water_controllerreading_approve' original.pk %}">Принять в журнал</button>
+      <input type="text" name="review_comment" maxlength="500" placeholder="Причина (необязательно)">
+      <button type="submit" formaction="{% url 'admin:water_controllerreading_reject' original.pk %}">Отклонить</button>
+    </div>
+  {% endif %}
+{% endblock %}
