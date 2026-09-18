@@ -58,7 +58,7 @@ tar -tzf "$PARTIAL/private-data.tar.gz" >/dev/null
 runuser -u postgres -- createdb --template=template0 "$VERIFY_DB"
 VERIFY_CREATED=1
 runuser -u postgres -- pg_restore \
-    --exit-on-error --no-owner --no-privileges --dbname="$VERIFY_DB" "$PARTIAL/trud_site.dump"
+    --exit-on-error --no-owner --no-privileges --dbname="$VERIFY_DB" < "$PARTIAL/trud_site.dump"
 runuser -u postgres -- psql --dbname="$VERIFY_DB" --no-psqlrc --tuples-only --no-align \
     --command='SELECT count(*) FROM django_migrations;' >/dev/null
 runuser -u postgres -- dropdb "$VERIFY_DB"
