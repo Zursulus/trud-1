@@ -618,3 +618,63 @@ class PaymentAllocation(RecordedModel):
 
     def __str__(self):
         return f'{self.payment} → {self.charge}: {self.amount} ₽'
+
+
+class ImportBatch(RecordedModel):
+    filename = models.CharField('Имя исходного файла', max_length=255)
+    sha256 = models.CharField('Контрольная сумма SHA-256', max_length=64, unique=True, editable=False)
+    sheet = models.CharField('Лист / источник', max_length=200, blank=True)
+    effective_date = models.DateField('Дата, с которой действуют данные')
+    status = models.CharField('Состояние', max_length=20, choices=[
+        ('staged', 'Предварительно загружен'), ('partial', 'Применён частично'),
+        ('applied', 'Применён полностью'), ('rejected', 'Отклонён'),
+    ], default='staged')
+    row_count = models.PositiveIntegerField('Строк распознано', default=0, editable=False)
+    notes = models.TextField('Примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Пакет импорта'
+        verbose_name_plural = '15 · Безопасный импорт'
+        ordering = ['-id']
+
+    def __str__(self):
+        return f'{self.filename} · {self.get_status_display()}'
+
+
+class ImportRow(RecordedModel):
+    batch = models.ForeignKey(ImportBatch, verbose_name='Пакет', on_delete=models.PROTECT, related_name='rows')
+    row_number = models.PositiveIntegerField('Строка файла')
+    account_number = models.CharField('Лицевой счёт', max_length=40, blank=True)
+    plot_label = models.CharField('Участок', max_length=100, blank=True)
+    address = models.CharField('Адрес / ориентир', max_length=200, blank=True)
+    cadastral_number = models.CharField('Кадастровый номер', max_length=50, blank=True)
+    area_m2 = models.DecimalField(
+        'Площадь, м²', max_digits=12, decimal_places=2, blank=True, null=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    person_name = models.CharField('ФИО', max_length=200, blank=True)
+    phone = models.CharField('Телефон', max_length=40, blank=True)
+    email = models.EmailField('Электронная почта', blank=True)
+    status = models.CharField('Результат проверки', max_length=20, choices=[
+        ('ready', 'Готово к применению'), ('review', 'Требует проверки'),
+        ('applied', 'Применено'), ('skipped', 'Пропущено'),
+    ], default='review')
+    issues = models.TextField('Замечания', blank=True)
+    applied_account = models.ForeignKey(Account, verbose_name='Созданный/найденный счёт', on_delete=models.PROTECT, blank=True, null=True)
+    applied_plot = models.ForeignKey(LandPlot, verbose_name='Созданный/найденный участок', on_delete=models.PROTECT, blank=True, null=True)
+    applied_person = models.ForeignKey(Person, verbose_name='Созданный/найденный человек', on_delete=models.PROTECT, blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Строка импорта'
+        verbose_name_plural = '16 · Строки импорта'
+        ordering = ['batch', 'row_number']
+        constraints = [models.UniqueConstraint(fields=['batch', 'row_number'], name='import_batch_row_unique')]
+
+    def clean(self):
+        if self.status in ('ready', 'applied') and not self.account_number and not self.plot_label:
+            raise ValidationError('Нужен лицевой счёт или обозначение участка.')
+        if self.status == 'applied' and not self.applied_account_id:
+            raise ValidationError('У применённой строки должна быть связь с лицевым счётом.')
+
+    def __str__(self):
+        return f'{self.batch.filename} · строка {self.row_number}'

@@ -5,6 +5,7 @@ from io import StringIO
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, Client
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
@@ -12,10 +13,12 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from axes.utils import reset
 
 from .billing import account_totals, allocate_payment, calculate_period
+from .imports import apply_import_row, stage_import
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
-    GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
-    Person, PlotRelation, Reading, SupplyNode, Tariff, User, WaterGroup,
+    GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
+    Payment, PaymentAllocation, Person, PlotRelation, Reading, SupplyNode,
+    Tariff, User, WaterGroup,
 )
 
 
@@ -858,3 +861,86 @@ class FinancialStatementTests(MFAAccessMixin, TestCase):
         self.payment.status = 'pending'
         with self.assertRaises(ValidationError):
             self.payment.save()
+
+
+class SafeImportTests(MFAAccessMixin, TestCase):
+    def csv_upload(self, body=None, name='registry.csv'):
+        content = body or (
+            'Лицевой счёт;Участок;Адрес;Кадастровый номер;Площадь;ФИО;Телефон;Email\n'
+            'A-1;12;ул. Садовая;90:01:000000:1;600,5;Иванов Иван Иванович;+79990000000;owner@example.test\n'
+        )
+        return SimpleUploadedFile(name, content.encode('utf-8-sig'), content_type='text/csv')
+
+    def test_csv_is_staged_without_touching_working_registry(self):
+        batch = stage_import(self.csv_upload(), date(2026, 1, 1))
+        self.assertEqual(batch.row_count, 1)
+        row = batch.rows.get()
+        self.assertEqual(row.status, 'ready')
+        self.assertEqual(row.area_m2, Decimal('600.5'))
+        self.assertFalse(Account.objects.exists())
+        self.assertFalse(Person.objects.exists())
+        self.assertFalse(LandPlot.objects.exists())
+        with self.assertRaises(ValidationError):
+            stage_import(self.csv_upload(), date(2026, 1, 1))
+
+    def test_review_rows_preserve_problems_without_applying(self):
+        upload = self.csv_upload(
+            'Лицевой счёт;Участок;Площадь;ФИО\n'
+            'A-1;12;bad;=FORMULA()\n'
+            'A-1;12;100;Петров Пётр\n'
+        )
+        batch = stage_import(upload, date(2026, 1, 1))
+        rows = list(batch.rows.order_by('row_number'))
+        self.assertEqual([row.status for row in rows], ['review', 'review'])
+        self.assertIn('формула', rows[0].issues.lower())
+        self.assertIn('Повтор', rows[1].issues)
+
+    def test_ready_row_applies_once_and_creates_audited_links(self):
+        batch = stage_import(self.csv_upload(), date(2026, 1, 1))
+        row = apply_import_row(batch.rows.get())
+        self.assertEqual(row.status, 'applied')
+        self.assertEqual(Account.objects.get().number, 'A-1')
+        self.assertEqual(LandPlot.objects.get().account, Account.objects.get())
+        self.assertEqual(Person.objects.get().full_name, 'Иванов Иван Иванович')
+        self.assertEqual(PlotRelation.objects.get().starts, date(2026, 1, 1))
+        self.assertEqual(PlotRelation.objects.get().document, 'Импорт; требует сверки с документами')
+        self.assertEqual(ImportBatch.objects.get().status, 'applied')
+        with self.assertRaises(ValidationError):
+            apply_import_row(row)
+
+    def test_xlsx_is_supported_and_formulas_are_quarantined(self):
+        from io import BytesIO
+        from openpyxl import Workbook
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Реестр'
+        sheet.append(['Лицевой счёт', 'Участок', 'ФИО'])
+        sheet.append(['X-1', '77', '=CONCAT("Иванов"," Иван")'])
+        stream = BytesIO()
+        workbook.save(stream)
+        workbook.close()
+        upload = SimpleUploadedFile('registry.xlsx', stream.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        batch = stage_import(upload, date(2026, 1, 1))
+        self.assertEqual(batch.sheet, 'Реестр')
+        self.assertEqual(batch.rows.get().status, 'review')
+        self.assertIn('формула', batch.rows.get().issues.lower())
+
+    def test_manager_upload_page_and_operator_isolation(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='import-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        operator = User.objects.create_user(username='import-operator', is_staff=True)
+        operator.groups.add(Group.objects.get(name='Оператор воды'))
+        url = '/admin/water/importbatch/upload/'
+        self.login_as(operator)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login_as(manager)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.post(url, {
+            'file': self.csv_upload(), 'effective_date': '2026-01-01', 'notes': 'Первичная сверка',
+        })
+        self.assertEqual(response.status_code, 302)
+        batch = ImportBatch.objects.get()
+        self.assertEqual(batch.notes, 'Первичная сверка')
+        self.assertEqual(batch.history.first().history_user, manager)

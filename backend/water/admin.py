@@ -21,8 +21,9 @@ from simple_history.admin import SimpleHistoryAdmin
 
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
-    GroupConsumption, LandPlot, Membership, Meter, Payment, PaymentAllocation,
-    Person, PlotRelation, Reading, SupplyNode, Tariff, User, WaterGroup,
+    GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
+    Payment, PaymentAllocation, Person, PlotRelation, Reading, SupplyNode,
+    Tariff, User, WaterGroup,
 )
 
 admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
@@ -186,6 +187,14 @@ class WaterWorkspaceFilterForm(forms.Form):
         choices=[('', 'Все'), ('missing', 'Не внесено'), ('entered', 'Уже внесено')],
     )
     q = forms.CharField(label='Поиск', required=False)
+
+
+class ImportUploadForm(forms.Form):
+    file = forms.FileField(label='CSV или XLSX', help_text='До 5 МБ и 5000 строк. Исходный файл не сохраняется на сервере.')
+    effective_date = forms.DateField(
+        label='Дата начала действия данных', widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    notes = forms.CharField(label='Примечание', required=False, widget=forms.Textarea(attrs={'rows': 2}))
 
 
 def validation_text(error):
@@ -742,3 +751,89 @@ class PaymentAllocationAdmin(RecordedAdmin):
     list_display = ('payment', 'charge', 'amount')
     search_fields = ('payment__account__number', 'charge__account__number')
     autocomplete_fields = ('payment', 'charge')
+
+
+@admin.register(ImportBatch)
+class ImportBatchAdmin(RecordedAdmin):
+    change_list_template = 'admin/water/importbatch/change_list.html'
+    list_display = ('filename', 'sheet', 'effective_date', 'status', 'row_count')
+    list_filter = ('status', 'effective_date')
+    search_fields = ('filename', 'sha256', 'notes')
+    readonly_fields = ('filename', 'sha256', 'sheet', 'effective_date', 'status', 'row_count')
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_urls(self):
+        return [
+            path('upload/', self.admin_site.admin_view(self.upload_view), name='water_importbatch_upload'),
+        ] + super().get_urls()
+
+    def upload_view(self, request):
+        if not request.user.has_perm('water.add_importbatch'):
+            raise PermissionDenied
+        form = ImportUploadForm(request.POST or None, request.FILES or None, initial={'effective_date': timezone.localdate()})
+        if request.method == 'POST' and form.is_valid():
+            from .imports import stage_import
+            try:
+                batch = stage_import(form.cleaned_data['file'], form.cleaned_data['effective_date'], actor=request.user)
+            except ValidationError as error:
+                form.add_error('file', validation_text(error))
+            else:
+                batch.notes = form.cleaned_data['notes']
+                batch._history_user = request.user
+                batch._change_reason = 'Примечание к пакету импорта'
+                batch.save()
+                messages.success(request, f'Распознано строк: {batch.row_count}. Рабочая база пока не изменена.')
+                return HttpResponseRedirect(reverse('admin:water_importrow_changelist') + f'?batch__id__exact={batch.pk}')
+        context = {
+            **self.admin_site.each_context(request), 'title': 'Предварительная загрузка данных',
+            'opts': self.model._meta, 'form': form,
+        }
+        return TemplateResponse(request, 'admin/water/importbatch/upload.html', context)
+
+
+@admin.register(ImportRow)
+class ImportRowAdmin(RecordedAdmin):
+    list_display = ('batch', 'row_number', 'account_number', 'plot_label', 'person_name', 'status', 'issues')
+    list_filter = ('status', 'batch')
+    search_fields = ('account_number', 'plot_label', 'person_name', 'phone', 'email', 'cadastral_number')
+    readonly_fields = ('batch', 'row_number', 'applied_account', 'applied_plot', 'applied_person')
+    actions = ('apply_ready', 'mark_skipped')
+
+    @admin.action(description='Применить выбранные проверенные строки')
+    def apply_ready(self, request, queryset):
+        from .imports import apply_import_row
+        applied = 0
+        for row in queryset.order_by('batch_id', 'row_number'):
+            try:
+                apply_import_row(row, actor=request.user)
+            except ValidationError as error:
+                row.refresh_from_db()
+                row.status = 'review'
+                row.issues = validation_text(error)
+                row._history_user = request.user
+                row._change_reason = 'Импорт остановлен для ручной проверки'
+                row.save()
+            else:
+                applied += 1
+        messages.success(request, f'Применено строк: {applied}. Остальные оставлены для проверки.')
+
+    @admin.action(description='Пометить выбранные строки как пропущенные')
+    def mark_skipped(self, request, queryset):
+        changed = 0
+        batch_ids = set()
+        for row in queryset.exclude(status='applied'):
+            batch_ids.add(row.batch_id)
+            row.status = 'skipped'
+            row._history_user = request.user
+            row._change_reason = 'Строка пропущена администратором'
+            row.save()
+            changed += 1
+        for batch in ImportBatch.objects.filter(pk__in=batch_ids):
+            remaining = batch.rows.exclude(status__in=('applied', 'skipped')).exists()
+            batch.status = 'partial' if remaining else ('applied' if batch.rows.filter(status='applied').exists() else 'rejected')
+            batch._history_user = request.user
+            batch._change_reason = 'Обновление после пропуска строк'
+            batch.save()
+        messages.success(request, f'Пропущено строк: {changed}.')

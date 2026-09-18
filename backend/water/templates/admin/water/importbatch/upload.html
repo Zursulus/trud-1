@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Главная</a> › <a href="{% url 'admin:water_importbatch_changelist' %}">Безопасный импорт</a> › Загрузка</div>
+{% endblock %}
+{% block content %}
+<h1>Предварительная загрузка данных</h1>
+<p>Файл будет только разобран на проверяемые строки. Люди, участки и лицевые счета не изменятся до отдельной команды «Применить».</p>
+<p>Распознаются колонки: лицевой счёт, участок, адрес, кадастровый номер, площадь, ФИО, телефон и электронная почта.</p>
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  <fieldset class="module aligned">{{ form.as_p }}</fieldset>
+  <div class="submit-row"><input type="submit" value="Только проверить файл" class="default"></div>
+</form>
+{% endblock %}
