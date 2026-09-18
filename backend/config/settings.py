@@ -81,6 +81,11 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/admin-static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Private uploads are never exposed by the web server. Django streams a file
+# only after checking the resident's current access to its account.
+MEDIA_ROOT = BASE_DIR.parent / 'private-data'
+FILE_UPLOAD_PERMISSIONS = 0o600
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

@@ -16,7 +16,7 @@ gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 test -z "$(gitapp status --porcelain --untracked-files=no)"
 gitapp cat-file -e "$TARGET^{commit}"
 PREVIOUS=$(gitapp rev-parse HEAD)
-EXPECTED=0a0c90612bb343942994ddd390f746bdf6d7ca6a
+EXPECTED=2646a8e230e8a2f35c442c986cf23244a013e87b
 if [ "$PREVIOUS" != "$EXPECTED" ] && [ "$PREVIOUS" != "$TARGET" ]; then
     echo 'На сервере другая версия. Остановка для проверки совместимости.'; exit 1
 fi
@@ -26,6 +26,9 @@ printf '%s\n' "$PREVIOUS" > "$BACKUP/previous-commit"
 printf '%s\n' "$TARGET" > "$BACKUP/target-commit"
 runuser -u postgres -- pg_dump -Fc trud_site > "$BACKUP/trud_site.dump"
 pg_restore --list "$BACKUP/trud_site.dump" >/dev/null
+if [ -d "$APP/private-data" ]; then
+    tar -C "$APP" -czf "$BACKUP/private-data.tar.gz" private-data
+fi
 echo "Копия перед обновлением: $BACKUP"
 
 REQUIREMENTS=$(mktemp /tmp/trud-water-requirements.XXXXXXXX)
@@ -60,6 +63,7 @@ trap rollback ERR
 CHANGED=1
 systemctl stop trud-1-site.service
 gitapp checkout --detach "$TARGET"
+install -d -o trudsite -g trudsite -m 700 "$APP/private-data"
 manage check
 manage migrate --noinput
 manage setup_roles
@@ -77,6 +81,6 @@ test "$code" = 200
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)
 test "$code" = 200
 trap - ERR
-echo 'ГОТОВО: личный кабинет жителя установлен. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
-echo 'Создание доступа: Лицевые счета → открыть счёт → Создать одноразовое приглашение.'
+echo 'ГОТОВО: обращения и защищённые документы установлены. Главная HTTP 200, админка HTTP 302, кабинет HTTP 200.'
+echo 'Разделы: Обращения жителей и Документы жителей; файлы доступны только связанным жителям.'
 echo "Предыдущий коммит: $PREVIOUS; копия базы: $BACKUP/trud_site.dump"

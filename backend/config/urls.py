@@ -21,6 +21,9 @@ urlpatterns = [
     path('admin/cabinet/', portal.dashboard, name='resident_dashboard'),
     path('admin/cabinet/account/<int:account_id>/', portal.resident_account, name='resident_account'),
     path('admin/cabinet/account/<int:account_id>/meter/<int:meter_id>/reading/', portal.submit_reading, name='resident_reading'),
+    path('admin/cabinet/account/<int:account_id>/appeal/new/', portal.create_appeal, name='resident_appeal_new'),
+    path('admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/', portal.resident_appeal, name='resident_appeal'),
+    path('admin/cabinet/account/<int:account_id>/document/<int:document_id>/', portal.download_document, name='resident_document'),
     # Keep every staff authentication page below /admin/: production Nginx
     # proxies that prefix to Django while the public root stays static.
     path('admin/', include(two_factor_urls)),

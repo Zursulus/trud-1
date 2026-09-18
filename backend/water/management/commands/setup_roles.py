@@ -3,7 +3,10 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 WATER = ('account', 'supplynode', 'watergroup', 'membership', 'meter', 'reading', 'groupconsumption')
-REGISTRY = ('person', 'landplot', 'plotrelation', 'importbatch', 'importrow', 'residentaccess', 'residentinvite')
+REGISTRY = (
+    'person', 'landplot', 'plotrelation', 'importbatch', 'importrow', 'residentaccess', 'residentinvite',
+    'appealcategory', 'residentappeal', 'residentappealmessage', 'documentcategory', 'accountdocument',
+)
 FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'charge', 'payment', 'paymentallocation')
 ADMIN = 'Администратор ТСН'
 LEGACY_ADMIN = 'Администратор СНТ'

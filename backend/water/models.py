@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -735,3 +737,131 @@ class ResidentInvite(RecordedModel):
 
     def __str__(self):
         return f'{self.email} → {self.account}'
+
+
+class AppealCategory(RecordedModel):
+    name = models.CharField('Тема обращения', max_length=120, unique=True)
+    active = models.BooleanField('Доступна жителям', default=True)
+    sort_order = models.PositiveIntegerField('Порядок', default=100)
+    instructions = models.TextField('Подсказка жителю', blank=True)
+
+    class Meta:
+        verbose_name = 'Тема обращения'
+        verbose_name_plural = '19 · Темы обращений'
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class ResidentAppeal(RecordedModel):
+    account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, related_name='appeals')
+    author = models.ForeignKey(User, verbose_name='Житель', on_delete=models.PROTECT, related_name='resident_appeals')
+    category = models.ForeignKey(AppealCategory, verbose_name='Тема', on_delete=models.PROTECT)
+    subject = models.CharField('Кратко о вопросе', max_length=180)
+    message = models.TextField('Сообщение', max_length=5000)
+    status = models.CharField('Состояние', max_length=30, choices=[
+        ('new', 'Новое'), ('in_progress', 'В работе'),
+        ('awaiting_resident', 'Нужен ответ жителя'), ('resolved', 'Решено'), ('closed', 'Закрыто'),
+    ], default='new')
+    response = models.TextField('Ответ правления', max_length=5000, blank=True)
+    opened_at = models.DateTimeField('Создано', default=timezone.now, editable=False)
+    responded_at = models.DateTimeField('Ответ дан', blank=True, null=True, editable=False)
+    responded_by = models.ForeignKey(
+        User, verbose_name='Ответил', on_delete=models.PROTECT, blank=True, null=True,
+        related_name='answered_resident_appeals', editable=False,
+    )
+
+    class Meta:
+        verbose_name = 'Обращение жителя'
+        verbose_name_plural = '20 · Обращения жителей'
+        ordering = ['-opened_at', '-id']
+
+    def clean(self):
+        if self.author_id and self.author.is_staff:
+            raise ValidationError({'author': 'Автором обращения должен быть житель.'})
+        if self.author_id and self.account_id:
+            access = ResidentAccess.objects.filter(
+                user_id=self.author_id, account_id=self.account_id, starts__lte=self.opened_at.date(),
+            ).filter(Q(ends__isnull=True) | Q(ends__gt=self.opened_at.date()))
+            if not access.exists():
+                raise ValidationError('У автора нет доступа к этому лицевому счёту на дату обращения.')
+        if self.status in ('resolved', 'closed') and not self.response.strip():
+            raise ValidationError({'response': 'Для решённого или закрытого обращения укажите ответ.'})
+
+    def __str__(self):
+        return f'№{self.pk or "—"} · {self.subject}'
+
+
+class ResidentAppealMessage(RecordedModel):
+    appeal = models.ForeignKey(
+        ResidentAppeal, verbose_name='Обращение', on_delete=models.PROTECT, related_name='resident_messages',
+    )
+    author = models.ForeignKey(User, verbose_name='Житель', on_delete=models.PROTECT)
+    body = models.TextField('Уточнение жителя', max_length=5000)
+    created_at = models.DateTimeField('Отправлено', default=timezone.now, editable=False)
+
+    class Meta:
+        verbose_name = 'Уточнение по обращению'
+        verbose_name_plural = 'Уточнения жителей'
+        ordering = ['created_at', 'id']
+
+    def clean(self):
+        if self.appeal_id and self.author_id and self.appeal.author_id != self.author_id:
+            raise ValidationError({'author': 'Уточнение может оставить только автор обращения.'})
+        if self.appeal_id and self.appeal.status in ('resolved', 'closed'):
+            raise ValidationError('Закрытое или решённое обращение нельзя дополнять.')
+
+    def __str__(self):
+        return f'{self.appeal} · {self.created_at:%d.%m.%Y %H:%M}'
+
+
+class DocumentCategory(RecordedModel):
+    name = models.CharField('Вид документа', max_length=120, unique=True)
+    active = models.BooleanField('Можно выбирать', default=True)
+    sort_order = models.PositiveIntegerField('Порядок', default=100)
+
+    class Meta:
+        verbose_name = 'Вид документа'
+        verbose_name_plural = '21 · Виды документов'
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+def private_document_path(instance, filename):
+    suffix = Path(filename).suffix.lower()[:12]
+    return f'documents/{timezone.localdate():%Y/%m}/{uuid.uuid4().hex}{suffix}'
+
+
+class AccountDocument(RecordedModel):
+    account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, related_name='documents')
+    category = models.ForeignKey(DocumentCategory, verbose_name='Вид документа', on_delete=models.PROTECT)
+    title = models.CharField('Название', max_length=200)
+    document = models.FileField('Файл', upload_to=private_document_path, max_length=300)
+    original_name = models.CharField('Исходное имя файла', max_length=255, editable=False)
+    file_size = models.PositiveBigIntegerField('Размер, байт', editable=False)
+    published_at = models.DateTimeField('Опубликован', default=timezone.now)
+    visible_to_residents = models.BooleanField('Показывать жителям', default=True)
+    notes = models.TextField('Служебное примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Документ лицевого счёта'
+        verbose_name_plural = '22 · Документы жителей'
+        ordering = ['-published_at', '-id']
+
+    def clean(self):
+        if self.document and getattr(self.document, 'size', 0) > 10 * 1024 * 1024:
+            raise ValidationError({'document': 'Размер файла не должен превышать 10 МБ.'})
+        if self._state.adding and self.category_id and not self.category.active:
+            raise ValidationError({'category': 'Этот вид документа больше нельзя выбирать.'})
+
+    def save(self, *args, **kwargs):
+        if self.document and (self._state.adding or not self.original_name):
+            self.original_name = Path(self.document.name).name[:255]
+            self.file_size = self.document.size
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.account} · {self.title}'

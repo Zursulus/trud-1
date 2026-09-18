@@ -1,0 +1,2 @@
+{% extends "water/portal/base.html" %}{% block title %}Новое обращение{% endblock %}
+{% block content %}<p><a href="{% url 'resident_account' account.pk %}">← Лицевой счёт</a></p><h1>Новое обращение</h1><div class="card"><p>{{ account }}</p><form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="Отправить обращение"></form></div>{% endblock %}

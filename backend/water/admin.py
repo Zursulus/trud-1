@@ -20,10 +20,11 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from simple_history.admin import SimpleHistoryAdmin
 
 from .models import (
-    Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    DocumentCategory,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
-    ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
+    ResidentAppeal, ResidentAppealMessage, ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
 )
 
 admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
@@ -918,3 +919,61 @@ class ResidentInviteAdmin(RecordedAdmin):
             invite.save()
             changed += 1
         messages.success(request, f'Отозвано приглашений: {changed}.')
+
+
+@admin.register(AppealCategory)
+class AppealCategoryAdmin(RecordedAdmin):
+    list_display = ('name', 'active', 'sort_order')
+    list_filter = ('active',)
+    search_fields = ('name', 'instructions')
+
+
+@admin.register(ResidentAppeal)
+class ResidentAppealAdmin(RecordedAdmin):
+    list_display = ('id', 'opened_at', 'account', 'category', 'subject', 'status', 'responded_at')
+    list_filter = ('status', 'category', 'opened_at')
+    search_fields = ('=id', 'account__number', 'account__plot', 'author__email', 'subject', 'message', 'response')
+    readonly_fields = ('account', 'author', 'category', 'subject', 'message', 'opened_at', 'responded_at', 'responded_by')
+    autocomplete_fields = ('account',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        old_response = ResidentAppeal.objects.get(pk=obj.pk).response if obj.pk else ''
+        if obj.response.strip() and obj.response != old_response:
+            obj.responded_at = timezone.now()
+            obj.responded_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(ResidentAppealMessage)
+class ResidentAppealMessageAdmin(RecordedAdmin):
+    list_display = ('created_at', 'appeal', 'author', 'body')
+    search_fields = ('appeal__id', 'appeal__subject', 'author__email', 'body')
+    readonly_fields = ('appeal', 'author', 'body', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in ('GET', 'HEAD', 'OPTIONS') and super().has_change_permission(request, obj)
+
+
+@admin.register(DocumentCategory)
+class DocumentCategoryAdmin(RecordedAdmin):
+    list_display = ('name', 'active', 'sort_order')
+    list_filter = ('active',)
+    search_fields = ('name',)
+
+
+@admin.register(AccountDocument)
+class AccountDocumentAdmin(RecordedAdmin):
+    list_display = ('title', 'account', 'category', 'published_at', 'visible_to_residents', 'file_size')
+    list_filter = ('visible_to_residents', 'category', 'published_at')
+    search_fields = ('title', 'original_name', 'account__number', 'account__plot', 'notes')
+    autocomplete_fields = ('account',)
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = tuple(super().get_readonly_fields(request, obj)) + ('original_name', 'file_size')
+        return fields + (('document',) if obj else ())

@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
+import tempfile
 
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
@@ -16,10 +17,11 @@ from .billing import account_totals, allocate_payment, calculate_period
 from .imports import apply_import_row, stage_import
 from .portal import issue_invite
 from .models import (
-    Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+    DocumentCategory,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
     Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
-    ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
+    ResidentAppeal, ResidentAppealMessage, ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
 )
 
 
@@ -1072,3 +1074,81 @@ class ResidentPortalTests(MFAAccessMixin, TestCase):
         self.assertContains(response, '/admin/cabinet/invite/')
         self.assertEqual(ResidentInvite.objects.count(), 1)
         self.assertEqual(ResidentInvite.objects.get().history.first().history_user, manager)
+
+    def test_resident_creates_and_reads_only_own_appeals(self):
+        category = AppealCategory.objects.create(name='Перерасчёт')
+        hidden_category = AppealCategory.objects.create(name='Служебная', active=False)
+        resident = self.create_resident()
+        other_resident = self.create_resident('other-resident@example.test', self.other)
+        self.client.force_login(resident)
+        form_page = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/new/')
+        self.assertContains(form_page, 'Перерасчёт')
+        self.assertNotContains(form_page, 'Служебная')
+        response = self.client.post(f'/admin/cabinet/account/{self.account.pk}/appeal/new/', {
+            'category': category.pk, 'subject': 'Проверить сумму', 'message': 'Прошу выполнить сверку.',
+        })
+        appeal = ResidentAppeal.objects.get()
+        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/appeal/{appeal.pk}/')
+        self.assertEqual(appeal.author, resident)
+        self.assertEqual(appeal.history.first().history_user, resident)
+        appeal.status = 'awaiting_resident'
+        appeal._change_reason = 'Нужно уточнение'
+        appeal.save()
+        response = self.client.post(
+            f'/admin/cabinet/account/{self.account.pk}/appeal/{appeal.pk}/',
+            {'body': 'Дополняю сведения по запросу.'},
+        )
+        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/appeal/{appeal.pk}/')
+        appeal.refresh_from_db()
+        self.assertEqual(appeal.status, 'in_progress')
+        clarification = ResidentAppealMessage.objects.get(appeal=appeal)
+        self.assertEqual(clarification.history.first().history_user, resident)
+        foreign = ResidentAppeal.objects.create(
+            account=self.other, author=other_resident, category=category,
+            subject='Чужое обращение', message='Закрытая информация',
+        )
+        self.assertEqual(self.client.get(
+            f'/admin/cabinet/account/{self.other.pk}/appeal/{foreign.pk}/',
+        ).status_code, 404)
+
+    def test_manager_answer_is_published_with_attribution(self):
+        from django.contrib.auth.models import Group
+        category = AppealCategory.objects.create(name='Документы')
+        resident = self.create_resident()
+        appeal = ResidentAppeal.objects.create(
+            account=self.account, author=resident, category=category,
+            subject='Нужна справка', message='Прошу выдать справку.',
+        )
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='appeal-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        self.login_as(manager)
+        response = self.client.post(f'/admin/water/residentappeal/{appeal.pk}/change/', {
+            'version': appeal.version, 'status': 'resolved', 'response': 'Справка готова.',
+            'change_reason': 'Подготовлен ответ',
+        })
+        self.assertEqual(response.status_code, 302)
+        appeal.refresh_from_db()
+        self.assertEqual(appeal.responded_by, manager)
+        self.assertIsNotNone(appeal.responded_at)
+
+    def test_private_document_requires_matching_active_access(self):
+        resident = self.create_resident()
+        other_resident = self.create_resident('document-other@example.test', self.other)
+        category = DocumentCategory.objects.get(name='Квитанция')
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            document = AccountDocument.objects.create(
+                account=self.account, category=category, title='Квитанция за август',
+                document=SimpleUploadedFile('август.pdf', b'%PDF-test', content_type='application/pdf'),
+            )
+            url = f'/admin/cabinet/account/{self.account.pk}/document/{document.pk}/'
+            self.client.force_login(resident)
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'%PDF-test')
+            self.client.force_login(other_resident)
+            self.assertEqual(self.client.get(url).status_code, 404)
+            document.visible_to_residents = False
+            document.save()
+            self.client.force_login(resident)
+            self.assertEqual(self.client.get(url).status_code, 404)

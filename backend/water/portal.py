@@ -8,7 +8,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.http import Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -17,7 +17,10 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
 from .billing import account_totals
-from .models import Account, Charge, Meter, Payment, Reading, ResidentAccess, ResidentInvite, User
+from .models import (
+    Account, AccountDocument, AppealCategory, Charge, Meter, Payment, Reading,
+    ResidentAccess, ResidentAppeal, ResidentAppealMessage, ResidentInvite, User,
+)
 
 
 class ResidentAuthenticationForm(AuthenticationForm):
@@ -47,6 +50,20 @@ class ResidentReadingForm(forms.Form):
     date = forms.DateField(label='Дата показания', widget=forms.DateInput(attrs={'type': 'date'}))
     value = forms.DecimalField(label='Показание, м³', min_value=0, max_digits=14, decimal_places=3)
     notes = forms.CharField(label='Примечание', required=False, max_length=500)
+
+
+class ResidentAppealForm(forms.Form):
+    category = forms.ModelChoiceField(label='Тема', queryset=AppealCategory.objects.none())
+    subject = forms.CharField(label='Кратко о вопросе', max_length=180)
+    message = forms.CharField(label='Сообщение', max_length=5000, widget=forms.Textarea(attrs={'rows': 7}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['category'].queryset = AppealCategory.objects.filter(active=True).order_by('sort_order', 'name')
+
+
+class ResidentAppealMessageForm(forms.Form):
+    body = forms.CharField(label='Ваше уточнение', max_length=5000, widget=forms.Textarea(attrs={'rows': 5}))
 
 
 def token_digest(token):
@@ -153,6 +170,10 @@ def resident_account(request, account_id):
         'charges': Charge.objects.filter(account=account, status='approved').select_related('period').order_by('-period__starts', '-id'),
         'payments': Payment.objects.filter(account=account, status='confirmed').order_by('-paid_on', '-id'),
         'meters': Meter.objects.filter(account=account, kind='individual').order_by('serial'),
+        'appeals': ResidentAppeal.objects.filter(account=account, author=request.user).select_related('category'),
+        'documents': AccountDocument.objects.filter(
+            account=account, visible_to_residents=True, published_at__lte=timezone.now(),
+        ).select_related('category'),
     }
     return TemplateResponse(request, 'water/portal/account.html', context)
 
@@ -183,3 +204,78 @@ def submit_reading(request, account_id, meter_id):
             return HttpResponseRedirect(reverse('resident_account', args=[account_id]))
     context = {'account': access.account, 'meter': meter, 'form': form}
     return TemplateResponse(request, 'water/portal/reading.html', context, status=400)
+
+
+@csrf_protect
+@never_cache
+def create_appeal(request, account_id):
+    denied = resident_guard(request)
+    if denied:
+        return denied
+    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    form = ResidentAppealForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        appeal = ResidentAppeal(
+            account=access.account, author=request.user, category=form.cleaned_data['category'],
+            subject=form.cleaned_data['subject'], message=form.cleaned_data['message'],
+        )
+        appeal._history_user = request.user
+        appeal._change_reason = 'Обращение создано жителем через личный кабинет'
+        appeal.save()
+        return HttpResponseRedirect(reverse('resident_appeal', args=[account_id, appeal.pk]))
+    return TemplateResponse(request, 'water/portal/appeal_form.html', {'account': access.account, 'form': form})
+
+
+@never_cache
+def resident_appeal(request, account_id, appeal_id):
+    denied = resident_guard(request)
+    if denied:
+        return denied
+    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    appeal = get_object_or_404(
+        ResidentAppeal.objects.select_related('category'), pk=appeal_id,
+        account=access.account, author=request.user,
+    )
+    form = ResidentAppealMessageForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            locked = ResidentAppeal.objects.select_for_update().get(pk=appeal.pk)
+            if locked.status in ('resolved', 'closed'):
+                form.add_error(None, 'Обращение уже завершено. Создайте новое, если вопрос остался.')
+            else:
+                message = ResidentAppealMessage(
+                    appeal=locked, author=request.user, body=form.cleaned_data['body'],
+                )
+                message._history_user = request.user
+                message._change_reason = 'Уточнение отправлено жителем через личный кабинет'
+                message.save()
+                if locked.status == 'awaiting_resident':
+                    locked.status = 'in_progress'
+                    locked._history_user = request.user
+                    locked._change_reason = 'Житель прислал запрошенное уточнение'
+                    locked.save()
+                return HttpResponseRedirect(reverse('resident_appeal', args=[account_id, appeal.pk]))
+    context = {
+        'account': access.account, 'appeal': appeal, 'form': form,
+        'resident_messages': appeal.resident_messages.all(),
+    }
+    return TemplateResponse(request, 'water/portal/appeal.html', context)
+
+
+@never_cache
+def download_document(request, account_id, document_id):
+    denied = resident_guard(request)
+    if denied:
+        return denied
+    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    document = get_object_or_404(
+        AccountDocument, pk=document_id, account=access.account,
+        visible_to_residents=True, published_at__lte=timezone.now(),
+    )
+    try:
+        stream = document.document.open('rb')
+    except (FileNotFoundError, OSError) as error:
+        raise Http404 from error
+    response = FileResponse(stream, as_attachment=True, filename=document.original_name)
+    response['Cache-Control'] = 'private, no-store'
+    return response
