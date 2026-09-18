@@ -102,7 +102,7 @@ class WaterPackageWriterTests(TestCase):
         self.assertEqual(SupplyNode.objects.count(), 1)
         self.assertEqual(WaterGroup.objects.count(), 1)
         self.assertEqual(Meter.objects.count(), 2)
-        self.assertIn('Датированное исходное показание', Meter.objects.get(name='TEST-METER-001').notes)
+        self.assertIn('Датированное исходное показание', Meter.objects.get(serial='TEST-SERIAL-001').notes)
 
     def test_undated_value_is_preserved_verbatim_in_meter_notes(self):
         def mutate(book):
@@ -110,7 +110,7 @@ class WaterPackageWriterTests(TestCase):
             book['Показания']['C2'] = '123.45'
         result = import_verified_water_package(make_workbook(mutate))
         self.assertEqual(result['undated_values_preserved'], 1)
-        self.assertIn('123.45', Meter.objects.get(name='TEST-METER-001').notes)
+        self.assertIn('123.45', Meter.objects.get(serial='TEST-SERIAL-001').notes)
 
     def test_nonempty_database_is_rejected_without_changes(self):
         Account.objects.create(number='existing', plot='existing')
