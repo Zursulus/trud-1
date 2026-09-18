@@ -1,0 +1,2 @@
+{% extends "water/portal/base.html" %}{% block title %}Вход · ТСН «ТРУД-1»{% endblock %}
+{% block content %}<div class="card" style="max-width:440px;margin:40px auto"><h1>Вход жителя</h1><p class="muted">Используйте данные, созданные по одноразовому приглашению.</p><form method="post">{% csrf_token %}{{ form.as_p }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<input type="submit" value="Войти"></form><p class="muted">Сотрудники входят через защищённую административную форму с двухфакторной проверкой.</p></div>{% endblock %}

@@ -678,3 +678,60 @@ class ImportRow(RecordedModel):
 
     def __str__(self):
         return f'{self.batch.filename} · строка {self.row_number}'
+
+
+class ResidentAccess(RecordedModel):
+    user = models.ForeignKey(User, verbose_name='Житель', on_delete=models.PROTECT, related_name='resident_accesses')
+    account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, related_name='resident_accesses')
+    role = models.CharField('Основание доступа', max_length=20, choices=[
+        ('owner', 'Собственник'), ('representative', 'Представитель'), ('payer', 'Плательщик'),
+    ])
+    starts = models.DateField('Доступ с')
+    ends = models.DateField('Доступ до (не включая)', blank=True, null=True)
+    verified_at = models.DateTimeField('Подтверждён', default=timezone.now, editable=False)
+    notes = models.TextField('Примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Доступ жителя'
+        verbose_name_plural = '17 · Доступ жителей'
+        constraints = [
+            models.CheckConstraint(condition=Q(ends__isnull=True) | Q(ends__gt=models.F('starts')), name='resident_access_dates'),
+        ]
+
+    def clean(self):
+        if self.user_id and self.user.is_staff:
+            raise ValidationError('Сотрудникам не создают доступ жителя; используйте административную часть.')
+        if self.user_id and self.account_id and self.starts:
+            overlaps = ResidentAccess.objects.filter(user_id=self.user_id, account_id=self.account_id).filter(
+                Q(ends__isnull=True) | Q(ends__gt=self.starts),
+            ).exclude(pk=self.pk)
+            if self.ends:
+                overlaps = overlaps.filter(starts__lt=self.ends)
+            if overlaps.exists():
+                raise ValidationError('У пользователя уже есть доступ к этому счёту на пересекающиеся даты.')
+
+    def __str__(self):
+        return f'{self.user} → {self.account}'
+
+
+class ResidentInvite(RecordedModel):
+    account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, related_name='resident_invites')
+    email = models.EmailField('Электронная почта')
+    role = models.CharField('Основание доступа', max_length=20, choices=ResidentAccess._meta.get_field('role').choices)
+    token_hash = models.CharField('Хэш приглашения', max_length=64, unique=True, editable=False)
+    expires_at = models.DateTimeField('Действует до')
+    used_at = models.DateTimeField('Использовано', blank=True, null=True, editable=False)
+    revoked = models.BooleanField('Отозвано', default=False)
+
+    class Meta:
+        verbose_name = 'Приглашение жителя'
+        verbose_name_plural = '18 · Приглашения жителей'
+        ordering = ['-id']
+
+    def clean(self):
+        self.email = self.email.strip().lower()
+        if self._state.adding and self.expires_at and self.expires_at <= timezone.now():
+            raise ValidationError({'expires_at': 'Срок приглашения должен быть в будущем.'})
+
+    def __str__(self):
+        return f'{self.email} → {self.account}'

@@ -22,8 +22,8 @@ from simple_history.admin import SimpleHistoryAdmin
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
-    Payment, PaymentAllocation, Person, PlotRelation, Reading, SupplyNode,
-    Tariff, User, WaterGroup,
+    Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
+    ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
 )
 
 admin.site.site_header = 'ТСН «ТРУД-1» · рабочая база'
@@ -197,6 +197,11 @@ class ImportUploadForm(forms.Form):
     notes = forms.CharField(label='Примечание', required=False, widget=forms.Textarea(attrs={'rows': 2}))
 
 
+class ResidentInviteForm(forms.Form):
+    email = forms.EmailField(label='Электронная почта жителя')
+    role = forms.ChoiceField(label='Основание доступа', choices=ResidentAccess._meta.get_field('role').choices)
+
+
 def validation_text(error):
     if hasattr(error, 'message_dict'):
         return '; '.join(message for values in error.message_dict.values() for message in values)
@@ -216,7 +221,10 @@ class AccountAdmin(RecordedAdmin):
     )
     search_fields = ('=id', 'number', 'plot', 'contact_name', 'phone')
     list_filter = ('archived',)
-    readonly_fields = ('id', 'groups_today', 'latest_group_consumption', 'linked_plots', 'statement_link')
+    readonly_fields = (
+        'id', 'groups_today', 'latest_group_consumption', 'linked_plots',
+        'statement_link', 'resident_invite_link',
+    )
     actions = ['export_accounts']
 
     @staticmethod
@@ -229,13 +237,21 @@ class AccountAdmin(RecordedAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj))
-        return fields if self.can_view_finance(request) else tuple(field for field in fields if field != 'statement_link')
+        if not self.can_view_finance(request):
+            fields = tuple(field for field in fields if field != 'statement_link')
+        if not request.user.has_perm('water.add_residentinvite'):
+            fields = tuple(field for field in fields if field != 'resident_invite_link')
+        return fields
 
     def get_urls(self):
         return [
             path(
                 '<path:object_id>/statement/', self.admin_site.admin_view(self.statement_view),
                 name='water_account_statement',
+            ),
+            path(
+                '<path:object_id>/invite/', self.admin_site.admin_view(self.invite_view),
+                name='water_account_invite',
             ),
         ] + super().get_urls()
 
@@ -256,6 +272,35 @@ class AccountAdmin(RecordedAdmin):
             '<a class="button" href="{}">Открыть сверку и печатную квитанцию</a>',
             reverse('admin:water_account_statement', args=[obj.pk]),
         )
+
+    @admin.display(description='Личный кабинет жителя')
+    def resident_invite_link(self, obj):
+        if not obj.pk:
+            return 'Появится после сохранения'
+        return format_html(
+            '<a class="button" href="{}">Создать одноразовое приглашение</a>',
+            reverse('admin:water_account_invite', args=[obj.pk]),
+        )
+
+    def invite_view(self, request, object_id):
+        if not request.user.has_perm('water.add_residentinvite'):
+            raise PermissionDenied
+        account = self.get_object(request, object_id)
+        if account is None:
+            raise PermissionDenied
+        form = ResidentInviteForm(request.POST or None)
+        invite_url = None
+        if request.method == 'POST' and form.is_valid():
+            from .portal import issue_invite
+            invite, raw = issue_invite(
+                account, form.cleaned_data['email'], form.cleaned_data['role'], actor=request.user,
+            )
+            invite_url = request.build_absolute_uri(reverse('resident_invite', args=[raw]))
+        context = {
+            **self.admin_site.each_context(request), 'title': f'Приглашение: {account}',
+            'opts': self.model._meta, 'account': account, 'form': form, 'invite_url': invite_url,
+        }
+        return TemplateResponse(request, 'admin/water/account/invite.html', context)
 
     def statement_view(self, request, object_id):
         if not self.has_view_permission(request) or not self.can_view_finance(request):
@@ -837,3 +882,39 @@ class ImportRowAdmin(RecordedAdmin):
             batch._change_reason = 'Обновление после пропуска строк'
             batch.save()
         messages.success(request, f'Пропущено строк: {changed}.')
+
+
+@admin.register(ResidentAccess)
+class ResidentAccessAdmin(RecordedAdmin):
+    list_display = ('user', 'account', 'role', 'starts', 'ends', 'verified_at')
+    list_filter = ('role', 'starts', 'ends')
+    search_fields = ('user__username', 'user__email', 'account__number', 'account__plot')
+    autocomplete_fields = ('account',)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'user':
+            kwargs['queryset'] = User.objects.filter(is_staff=False, is_active=True).order_by('email', 'username')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(ResidentInvite)
+class ResidentInviteAdmin(RecordedAdmin):
+    list_display = ('email', 'account', 'role', 'expires_at', 'used_at', 'revoked')
+    list_filter = ('revoked', 'role', 'expires_at', 'used_at')
+    search_fields = ('email', 'account__number', 'account__plot')
+    readonly_fields = ('account', 'email', 'role', 'token_hash', 'expires_at', 'used_at')
+    actions = ('revoke_invites',)
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description='Отозвать выбранные неиспользованные приглашения')
+    def revoke_invites(self, request, queryset):
+        changed = 0
+        for invite in queryset.filter(used_at__isnull=True, revoked=False):
+            invite.revoked = True
+            invite._history_user = request.user
+            invite._change_reason = 'Приглашение отозвано администратором'
+            invite.save()
+            changed += 1
+        messages.success(request, f'Отозвано приглашений: {changed}.')

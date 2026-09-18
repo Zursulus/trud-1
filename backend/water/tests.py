@@ -14,11 +14,12 @@ from axes.utils import reset
 
 from .billing import account_totals, allocate_payment, calculate_period
 from .imports import apply_import_row, stage_import
+from .portal import issue_invite
 from .models import (
     Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
     GroupConsumption, ImportBatch, ImportRow, LandPlot, Membership, Meter,
-    Payment, PaymentAllocation, Person, PlotRelation, Reading, SupplyNode,
-    Tariff, User, WaterGroup,
+    Payment, PaymentAllocation, Person, PlotRelation, Reading, ResidentAccess,
+    ResidentInvite, SupplyNode, Tariff, User, WaterGroup,
 )
 
 
@@ -944,3 +945,130 @@ class SafeImportTests(MFAAccessMixin, TestCase):
         batch = ImportBatch.objects.get()
         self.assertEqual(batch.notes, 'Первичная сверка')
         self.assertEqual(batch.history.first().history_user, manager)
+
+
+class ResidentPortalTests(MFAAccessMixin, TestCase):
+    password = 'resident-unique-password-2026!'
+
+    def setUp(self):
+        self.account = Account.objects.create(number='CAB-1', plot='Участок кабинета')
+        self.other = Account.objects.create(number='CAB-2', plot='Чужой участок')
+        self.node = SupplyNode.objects.create(name='Узел кабинета')
+        self.meter = Meter.objects.create(
+            serial='CAB-METER', kind='individual', node=self.node, account=self.account,
+            commissioned_on=date(2026, 1, 1),
+        )
+        self.other_meter = Meter.objects.create(
+            serial='OTHER-METER', kind='individual', node=self.node, account=self.other,
+            commissioned_on=date(2026, 1, 1),
+        )
+        self.period = BillingPeriod.objects.create(starts=date(2026, 7, 1), ends=date(2026, 8, 1))
+        Charge.objects.create(
+            account=self.account, period=self.period, kind='service', amount=Decimal('100'), status='approved',
+        )
+        Charge.objects.create(
+            account=self.account, period=self.period, kind='adjustment', amount=Decimal('999'), status='draft',
+        )
+        Payment.objects.create(
+            account=self.account, paid_on=date(2026, 7, 15), amount=Decimal('40'), method='bank', status='confirmed',
+        )
+
+    def create_resident(self, username='resident@example.test', account=None):
+        user = User.objects.create_user(username=username, email=username, password=self.password)
+        ResidentAccess.objects.create(
+            user=user, account=account or self.account, role='owner', starts=date(2026, 1, 1),
+        )
+        return user
+
+    def test_one_time_invite_creates_nonstaff_user_and_cannot_be_reused(self):
+        invite, raw = issue_invite(self.account, 'new-resident@example.test', 'owner')
+        self.assertNotIn(raw, invite.token_hash)
+        url = f'/admin/cabinet/invite/{raw}/'
+        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.post(url, {'password1': self.password, 'password2': self.password})
+        self.assertRedirects(response, '/admin/cabinet/')
+        user = User.objects.get(email='new-resident@example.test')
+        self.assertFalse(user.is_staff)
+        self.assertTrue(ResidentAccess.objects.filter(user=user, account=self.account).exists())
+        invite.refresh_from_db()
+        self.assertIsNotNone(invite.used_at)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 410)
+
+    def test_resident_login_and_staff_otp_boundary(self):
+        resident = self.create_resident()
+        response = self.client.post('/admin/cabinet/login/', {
+            'username': resident.username, 'password': self.password,
+        })
+        self.assertRedirects(response, '/admin/cabinet/')
+        self.client.logout()
+        staff = User.objects.create_user(username='portal-staff', password=self.password, is_staff=True)
+        response = self.client.post('/admin/cabinet/login/', {
+            'username': staff.username, 'password': self.password,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Сотрудники входят через защищённую административную форму')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_dashboard_exposes_only_linked_account_and_approved_finance(self):
+        resident = self.create_resident()
+        self.client.force_login(resident)
+        response = self.client.get('/admin/cabinet/')
+        self.assertContains(response, 'CAB-1')
+        self.assertNotContains(response, 'CAB-2')
+        self.assertContains(response, '60,00')
+        detail = self.client.get(f'/admin/cabinet/account/{self.account.pk}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, '100,00')
+        self.assertNotContains(detail, '999,00')
+        self.assertEqual(self.client.get(f'/admin/cabinet/account/{self.other.pk}/').status_code, 404)
+
+    def test_resident_can_submit_only_own_meter_reading_with_attribution(self):
+        resident = self.create_resident()
+        self.client.force_login(resident)
+        response = self.client.post(
+            f'/admin/cabinet/account/{self.account.pk}/meter/{self.meter.pk}/reading/',
+            {'date': '2026-09-18', 'value': '123.456', 'notes': 'Передано владельцем'},
+        )
+        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/')
+        reading = Reading.objects.get()
+        self.assertEqual(reading.history.first().history_user, resident)
+        self.assertEqual(reading.history.first().history_change_reason, 'Показание передано через личный кабинет')
+        self.assertEqual(self.client.post(
+            f'/admin/cabinet/account/{self.account.pk}/meter/{self.other_meter.pk}/reading/',
+            {'date': '2026-09-18', 'value': '1'},
+        ).status_code, 404)
+
+    def test_revoked_expired_and_existing_email_invites_are_safe(self):
+        existing = self.create_resident()
+        invite, raw = issue_invite(self.other, existing.email, 'owner')
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{raw}/').status_code, 409)
+        invite.revoked = True
+        invite.save()
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{raw}/').status_code, 410)
+
+    def test_new_invite_revokes_previous_unused_link(self):
+        first, first_raw = issue_invite(self.account, 'replace@example.test', 'owner')
+        second, second_raw = issue_invite(self.account, 'REPLACE@example.test', 'payer')
+        first.refresh_from_db()
+        self.assertTrue(first.revoked)
+        self.assertFalse(second.revoked)
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{first_raw}/').status_code, 410)
+        self.assertEqual(self.client.get(f'/admin/cabinet/invite/{second_raw}/').status_code, 200)
+
+    def test_manager_can_issue_invite_but_operator_cannot(self):
+        from django.contrib.auth.models import Group
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='cabinet-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        operator = User.objects.create_user(username='cabinet-operator', is_staff=True)
+        operator.groups.add(Group.objects.get(name='Оператор воды'))
+        url = f'/admin/water/account/{self.account.pk}/invite/'
+        self.login_as(operator)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login_as(manager)
+        response = self.client.post(url, {'email': 'invitee@example.test', 'role': 'owner'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/admin/cabinet/invite/')
+        self.assertEqual(ResidentInvite.objects.count(), 1)
+        self.assertEqual(ResidentInvite.objects.get().history.first().history_user, manager)
