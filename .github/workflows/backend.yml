@@ -38,4 +38,10 @@ jobs:
         run: |
           bash -n ops/deploy-water-workspace.sh ops/backup-trud-site.sh
           sudo install -m 700 ops/backup-trud-site.sh /usr/local/sbin/trud-1-backup
-          systemd-analyze verify ops/trud-1-backup.service ops/trud-1-backup.timer
+          sudo install -m 644 ops/trud-1-backup.service /etc/systemd/system/trud-1-backup.service
+          sudo install -m 644 ops/trud-1-backup.timer /etc/systemd/system/trud-1-backup.timer
+          output=$(sudo systemd-analyze verify /etc/systemd/system/trud-1-backup.service /etc/systemd/system/trud-1-backup.timer 2>&1) || {
+            output=${output//$'\n'/'%0A'}
+            echo "::error file=ops/trud-1-backup.timer::$output"
+            exit 1
+          }
