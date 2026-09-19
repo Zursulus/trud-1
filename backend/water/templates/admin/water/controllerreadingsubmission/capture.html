@@ -34,6 +34,10 @@
   <script>
     const select = document.getElementById('{{ form.meter.id_for_label }}');
     const data = JSON.parse(document.getElementById('meter-data').textContent);
+    for (const option of select.options) {
+      const item = data[option.value];
+      if (item) option.textContent = item.address;
+    }
     const updateIdentity = () => {
       const item = data[select.value];
       document.getElementById('identity').hidden = !item;
