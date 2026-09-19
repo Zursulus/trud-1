@@ -3,13 +3,20 @@
 <div class="breadcrumbs"><a href="{% url 'admin:index' %}">Главная</a> › Проверка пакета воды</div>
 {% endblock %}
 {% block content %}
-<h1>Проверка пакета воды без импорта</h1>
-<p><strong>Безопасный режим:</strong> файл читается только для проверки и не сохраняется. Рабочая база не изменяется.</p>
+<h1>Проверка и импорт пакета воды</h1>
+<p>Сначала можно проверить файл. Импорт разрешён только администратору и только в пустую базу.</p>
 <form method="post" enctype="multipart/form-data" novalidate>
   {% csrf_token %}
   <fieldset class="module aligned">{{ form.as_p }}</fieldset>
-  <div class="submit-row"><input type="submit" value="Проверить пакет" class="default"></div>
+  <div class="submit-row">
+    <button type="submit" name="action" value="check">Проверить пакет</button>
+    {% if can_import %}<button type="submit" name="action" value="import" class="default">Импортировать</button>{% endif %}
+  </div>
 </form>
+{% if import_result %}
+  <h2>Импорт завершён</h2>
+  <ul>{% for name, count in import_result.items %}<li>{{ name }}: {{ count }}</li>{% endfor %}</ul>
+{% endif %}
 {% if report %}
   <h2>Результат</h2>
   <p><strong>{{ report.summary }}</strong></p>

@@ -2,6 +2,7 @@ from io import BytesIO
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from openpyxl import Workbook
 
@@ -166,3 +167,24 @@ class WaterPackageWriterTests(TestCase):
         self.assertEqual(LandPlot.objects.count(), 0)
         self.assertEqual(Person.objects.count(), 0)
         self.assertEqual(Meter.objects.count(), 0)
+
+
+class WaterPackageImportViewTests(TestCase):
+    def test_manager_can_confirm_and_import_verified_package(self):
+        from django.contrib.auth.models import Group
+        from io import StringIO
+        from .models import User
+
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='package-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        self.client.force_login(manager)
+
+        response = self.client.post('/admin/water/package-dry-run/', {
+            'file': make_workbook(), 'confirm_import': 'on', 'action': 'import',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Импорт завершён')
+        self.assertEqual(Account.objects.count(), 1)
+        self.assertEqual(Meter.objects.count(), 2)
