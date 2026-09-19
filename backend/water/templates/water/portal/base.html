@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Личный кабинет · ТСН «ТРУД-1»{% endblock %}</title>
+<style>
+body{margin:0;font:16px/1.45 system-ui,sans-serif;background:#f4f6f8;color:#17212b}header{background:#1f5d48;color:#fff;padding:16px}header a{color:#fff}main{max-width:960px;margin:auto;padding:20px}.card{background:#fff;border:1px solid #d6dde3;border-radius:10px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.value{font-size:1.4rem;font-weight:700}.button,button,input[type=submit]{display:inline-block;background:#1f5d48;color:#fff;border:0;border-radius:6px;padding:10px 14px;text-decoration:none;cursor:pointer}input,select,textarea{box-sizing:border-box;max-width:100%;padding:9px;border:1px solid #9ba8b3;border-radius:5px}textarea{width:100%}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #d6dde3}.errorlist{color:#a40000}.muted{color:#5d6872}@media(max-width:650px){table{font-size:.88rem}.scroll{overflow:auto}}
+</style></head><body>
+<header><strong>ТСН «ТРУД-1» · личный кабинет</strong>{% if request.user.is_authenticated %}<form method="post" action="{% url 'resident_logout' %}" style="float:right">{% csrf_token %}<button type="submit">Выйти</button></form>{% endif %}</header>
+<main>{% block content %}{% endblock %}</main></body></html>

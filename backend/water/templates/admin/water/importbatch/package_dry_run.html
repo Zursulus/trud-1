@@ -1,0 +1,37 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Главная</a> › Проверка пакета воды</div>
+{% endblock %}
+{% block content %}
+<h1>Проверка и импорт пакета воды</h1>
+<p>Сначала можно проверить файл. Импорт разрешён только администратору и только в пустую базу.</p>
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  <fieldset class="module aligned">{{ form.as_p }}</fieldset>
+  <div class="submit-row">
+    <button type="submit" name="action" value="check">Проверить пакет</button>
+    {% if can_import %}<button type="submit" name="action" value="import" class="default">Импортировать</button>{% endif %}
+  </div>
+</form>
+{% if import_result %}
+  <h2>Импорт завершён</h2>
+  <ul>{% for name, count in import_result.items %}<li>{{ name }}: {{ count }}</li>{% endfor %}</ul>
+{% endif %}
+{% if report %}
+  <h2>Результат</h2>
+  <p><strong>{{ report.summary }}</strong></p>
+  {% if report.ready %}
+    <p class="success">Пакет прошёл структурную проверку. Запись в базу не выполнялась.</p>
+  {% else %}
+    <p class="errornote">Пакет пока нельзя импортировать: найдено замечаний — {{ report.issues|length }}.</p>
+    <ul>
+      {% for issue in report.issues %}<li>{{ issue }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  <h3>Строки по листам</h3>
+  <table>
+    <thead><tr><th>Лист</th><th>Строк</th></tr></thead>
+    <tbody>{% for sheet, count in report.counts.items %}<tr><td>{{ sheet }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
+  </table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .capture { max-width:680px; margin:0 auto; }
+    .capture label { display:block; font-size:18px; font-weight:700; margin:18px 0 7px; }
+    .capture select, .capture input, .capture textarea { box-sizing:border-box; width:100%; min-height:52px; font-size:20px; padding:10px; }
+    .capture input[type=file] { font-size:16px; }
+    .capture .identity { margin:18px 0; padding:18px; border-radius:10px; background:var(--darkened-bg); text-align:center; }
+    .capture .identity strong { display:block; font-size:44px; line-height:1.1; }
+    .capture .identity span { display:block; margin-top:8px; font-size:15px; }
+    .capture button { width:100%; min-height:58px; margin-top:24px; font-size:22px; }
+    .capture .errorlist { color:var(--error-fg); font-weight:700; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="capture">
+    <p>Выберите участок, введите цифры и сфотографируйте счётчик. В журнал данные попадут после проверки.</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label for="{{ form.meter.id_for_label }}">{{ form.meter.label }}</label>{{ form.meter.errors }}{{ form.meter }}
+      <div class="identity" id="identity" hidden><strong id="account-id"></strong><span id="address"></span><span id="serial"></span></div>
+      <label for="{{ form.value.id_for_label }}">Текущее показание</label>{{ form.value.errors }}{{ form.value }}
+      <label for="{{ form.photo.id_for_label }}">Фото счётчика</label>{{ form.photo.errors }}{{ form.photo }}
+      <label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>{{ form.date.errors }}{{ form.date }}
+      <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>{{ form.notes.errors }}{{ form.notes }}
+      <button type="submit" class="default">Отправить на проверку</button>
+    </form>
+  </div>
+  {{ meter_data|json_script:"meter-data" }}
+  <script>
+    const select = document.getElementById('{{ form.meter.id_for_label }}');
+    const data = JSON.parse(document.getElementById('meter-data').textContent);
+    for (const option of select.options) {
+      const item = data[option.value];
+      if (item) option.textContent = item.address;
+    }
+    const updateIdentity = () => {
+      const item = data[select.value];
+      document.getElementById('identity').hidden = !item;
+      if (!item) return;
+      document.getElementById('account-id').textContent = item.id;
+      document.getElementById('address').textContent = item.address;
+      document.getElementById('serial').textContent = 'Счётчик: ' + item.serial;
+    };
+    select.addEventListener('change', updateIdentity);
+    updateIdentity();
+  </script>
+{% endblock %}
