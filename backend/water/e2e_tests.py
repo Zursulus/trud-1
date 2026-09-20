@@ -50,13 +50,16 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
 
     @contextmanager
     def _browser_page(self, viewport):
+        # Django ORM/test-client work must happen before Playwright starts its
+        # sync facade, which owns an event loop in this thread.
+        session_cookie = self._verified_session_cookie()
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             context = browser.new_context(viewport=viewport)
             context.add_cookies([{
                 "name": settings.SESSION_COOKIE_NAME,
-                "value": self._verified_session_cookie(),
+                "value": session_cookie,
                 "url": self.live_server_url,
             }])
             context.tracing.start(screenshots=True, snapshots=True, sources=True)
