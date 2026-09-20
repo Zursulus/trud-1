@@ -1,0 +1,2 @@
+# Browser-only test dependency. Keep out of production/runtime requirements.
+playwright==1.63.0
