@@ -66,7 +66,7 @@ class DeployTests(unittest.TestCase):
             file = root / 'bin' / name
             file.write_text(MOCK)
             file.chmod(0o755)
-        script = SOURCE.read_text()
+        script = SOURCE.read_text(encoding='utf-8')
         for source, target in (('/opt/trud-1-site', root / 'app'),
                                ('/var/lib/trud-1', root / 'state'),
                                ('/var/backups', root / 'backups'),
