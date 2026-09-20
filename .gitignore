@@ -5,6 +5,7 @@ __pycache__/
 *.sqlite3
 *.sqlite3-*
 backend/staticfiles/
+backend/test-artifacts/
 private-data/
 *.dump
 *.pickle
