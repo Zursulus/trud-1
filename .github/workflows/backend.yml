@@ -46,3 +46,46 @@ jobs:
             echo "::error file=ops/trud-1-backup.timer::$output"
             exit 1
           }
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: trud_site
+          POSTGRES_USER: trud_site
+          POSTGRES_PASSWORD: ci-test-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_DEBUG: '1'
+      PGDATABASE: trud_site
+      PGUSER: trud_site
+      PGPASSWORD: ci-test-password
+      PGHOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-e2e.txt
+      - run: pip install -r backend/requirements.txt -r backend/requirements-e2e.txt
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+      - name: Run critical browser regressions
+        run: python backend/manage.py test water.e2e_tests -v 2
+      - name: Upload browser trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-e2e-trace
+          path: backend/test-artifacts/*.zip
+          if-no-files-found: ignore
+          retention-days: 7
