@@ -6,6 +6,7 @@ import tempfile
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, Client, override_settings
+from django.db.models import Sum
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
@@ -799,6 +800,55 @@ class AutomaticPaymentAllocationTests(TestCase):
         self.assertEqual(len(allocations), 1)
         self.assertEqual(allocations[0].charge, self.old_charge)
         self.assertEqual(allocations[0].amount, Decimal('100'))
+
+
+class FinanceCoreTests(TestCase):
+    def setUp(self):
+        self.account = Account.objects.create(number='CORE-1')
+        self.period = BillingPeriod.objects.create(starts=date(2026, 1, 1), ends=date(2026, 2, 1))
+
+    def charge(self, amount='100', **kwargs):
+        return Charge.objects.create(
+            account=self.account, period=self.period, kind=kwargs.pop('kind', 'service'),
+            amount=Decimal(amount), status='approved', **kwargs,
+        )
+
+    def payment(self, amount='60'):
+        return Payment.objects.create(
+            account=self.account, paid_on=date(2026, 1, 15), amount=Decimal(amount),
+            method='bank', status='confirmed',
+        )
+
+    def test_partial_payment_leaves_charge_balance(self):
+        charge = self.charge()
+        payment = self.payment('40')
+        PaymentAllocation.objects.create(payment=payment, charge=charge, amount=Decimal('40'))
+
+        self.assertEqual(charge.amount - charge.allocations.aggregate(total=Sum('amount'))['total'], Decimal('60'))
+        self.assertEqual(account_totals(self.account)['balance'], Decimal('60.00'))
+
+    def test_overpayment_is_retained_as_unallocated_balance(self):
+        charge = self.charge('100')
+        payment = self.payment('150')
+        PaymentAllocation.objects.create(payment=payment, charge=charge, amount=Decimal('100'))
+
+        self.assertEqual(account_totals(self.account)['balance'], Decimal('-50.00'))
+        self.assertEqual(payment.amount - payment.allocations.aggregate(total=Sum('amount'))['total'], Decimal('50'))
+
+    def test_opening_balance_is_a_charge_and_is_audited(self):
+        opening = self.charge('125', kind='opening', notes='Сверка на дату начала учёта')
+
+        self.assertEqual(account_totals(self.account)['balance'], Decimal('125.00'))
+        self.assertEqual(opening.history.count(), 1)
+
+    def test_correction_is_separate_and_preserves_original_history(self):
+        original = self.charge('100')
+        correction = self.charge('-25', kind='adjustment', notes='Исправление начисления')
+
+        self.assertEqual(account_totals(self.account)['balance'], Decimal('75.00'))
+        self.assertEqual(original.amount, Decimal('100'))
+        self.assertEqual(correction.kind, 'adjustment')
+        self.assertEqual(original.history.count(), 1)
 
 
 class FinancialStatementTests(MFAAccessMixin, TestCase):
