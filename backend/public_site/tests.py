@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -77,11 +78,24 @@ class PublicContentTests(TestCase):
 
         download = self.client.get(reverse('public_document_download', args=[visible.pk]))
         self.assertEqual(download.status_code, 200)
+        self.assertIn('attachment;', download['Content-Disposition'])
+        self.assertEqual(download['X-Content-Type-Options'], 'nosniff')
         self.assertEqual(b''.join(download.streaming_content), b'public text')
         self.assertEqual(
             self.client.get(reverse('public_document_download', args=[hidden.pk])).status_code,
             404,
         )
+
+    def test_public_document_rejects_html_like_upload(self):
+        category = PublicDocumentCategory.objects.create(name='Документы')
+        item = PublicDocument(
+            category=category,
+            title='Опасный файл',
+            document=SimpleUploadedFile('page.html', b'<script>alert(1)</script>', content_type='text/html'),
+            document_date=timezone.localdate(),
+        )
+        with self.assertRaises(ValidationError):
+            item.full_clean()
 
     def test_publication_form_requires_explicit_confirmation(self):
         data = {
