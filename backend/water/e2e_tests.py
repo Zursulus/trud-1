@@ -17,6 +17,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from playwright.sync_api import sync_playwright
