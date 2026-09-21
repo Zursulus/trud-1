@@ -63,9 +63,11 @@ def public_document_download(request, document_id):
         raise Http404 from exc
     if not item.document:
         raise Http404
+    # Public files are deliberately sent as attachments. This prevents an
+    # uploaded HTML-like payload from executing in the trud-1.ru origin.
     response = FileResponse(
         item.document.open('rb'),
-        as_attachment=False,
+        as_attachment=True,
         filename=item.original_name or item.document.name.rsplit('/', 1)[-1],
     )
     response['Cache-Control'] = 'public, max-age=300'
