@@ -240,9 +240,9 @@ class ControllerReadingSubmission(RecordedModel):
     )
     reviewed_at = models.DateTimeField('Проверено', blank=True, null=True, editable=False)
     review_comment = models.CharField('Комментарий проверки', max_length=500, blank=True, editable=False)
-    reading = models.OneToOneField(
+    reading = models.ForeignKey(
         Reading, verbose_name='Созданное показание', on_delete=models.PROTECT,
-        blank=True, null=True, editable=False,
+        blank=True, null=True, editable=False, related_name='controller_submissions',
     )
 
     class Meta:

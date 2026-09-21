@@ -1300,6 +1300,8 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
 
     def test_admin_home_add_link_opens_editable_capture_without_otp(self):
         self.client.force_login(self.controller)
+        self.meter.serial = 'TRUD-PLOT-77'
+        self.meter.save()
         url = '/admin/water/controllerreadingsubmission/add/'
         self.assertContains(self.client.get('/admin/'), f'href="{url}"')
         response = self.client.get(url)
@@ -1308,8 +1310,58 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
             self.assertContains(response, f'name="{field}"')
         self.assertNotContains(response, 'Фото счётчика')
         self.assertNotContains(response, 'TRUD-PLOT-')
+        self.assertContains(response, 'Позавчера')
+        self.assertContains(response, 'Вчера')
+        self.assertContains(response, 'Сегодня')
+        self.assertContains(response, f'value="{timezone.localdate().isoformat()}"')
         self.assertContains(response, 'Отправить на проверку')
         self.assertEqual(response.context['form'].fields['meter'].queryset.count(), 1)
+
+    def test_repeated_pending_submission_updates_one_record_with_history(self):
+        self.login_as(self.controller)
+        url = '/admin/water/controllerreadingsubmission/capture/'
+        payload = {'meter': self.meter.pk, 'date': timezone.localdate().isoformat(), 'value': '10.000', 'notes': 'Первое'}
+        self.assertEqual(self.client.post(url, payload).status_code, 302)
+        payload.update(value='12.345', notes='Повтор')
+        self.assertEqual(self.client.post(url, payload).status_code, 302)
+        self.assertEqual(ControllerReadingSubmission.objects.filter(status='pending').count(), 1)
+        submission = ControllerReadingSubmission.objects.get()
+        self.assertEqual(submission.value, Decimal('12.345'))
+        self.assertEqual(submission.notes, 'Повтор')
+        self.assertEqual(submission.history.count(), 2)
+        self.assertEqual(submission.history.order_by('history_date').first().value, Decimal('10.000'))
+
+    def test_repeated_after_approve_updates_existing_reading_only_on_approval(self):
+        reading = Reading.objects.create(meter=self.meter, date=timezone.localdate(), value=Decimal('10.000'), notes='Исходное')
+        self.login_as(self.controller)
+        url = '/admin/water/controllerreadingsubmission/capture/'
+        self.assertEqual(self.client.post(url, {
+            'meter': self.meter.pk, 'date': timezone.localdate().isoformat(), 'value': '12.345', 'notes': 'Исправление',
+        }).status_code, 302)
+        reading.refresh_from_db()
+        self.assertEqual(reading.value, Decimal('10.000'))
+        submission = ControllerReadingSubmission.objects.get()
+        self.login_as(self.manager)
+        self.assertContains(self.client.get(f'/admin/water/controllerreadingsubmission/{submission.pk}/change/'), '10.000')
+        self.assertEqual(self.client.post(f'/admin/water/controllerreadingsubmission/{submission.pk}/approve/').status_code, 302)
+        reading.refresh_from_db()
+        submission.refresh_from_db()
+        self.assertEqual(reading.value, Decimal('12.345'))
+        self.assertEqual(reading.notes, 'Корректировка по заявке контролёра. Исправление')
+        self.assertEqual(reading.history.count(), 2)
+        self.assertEqual(reading.history.last().value, Decimal('10.000'))
+        self.assertEqual(reading.history.first().history_user, self.manager)
+        self.assertEqual(submission.reading_id, reading.pk)
+
+    def test_future_capture_date_is_rejected(self):
+        self.login_as(self.controller)
+        future = (timezone.localdate() + timedelta(days=1)).isoformat()
+        response = self.client.post('/admin/water/controllerreadingsubmission/capture/', {
+            'meter': self.meter.pk, 'date': future, 'value': '12.345',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].errors)
+        self.assertEqual(ControllerReadingSubmission.objects.count(), 0)
 
     def test_standard_add_submits_for_review_and_preserves_validation(self):
         self.client.force_login(self.controller)
