@@ -11,6 +11,9 @@ class AuditedAdminForm(forms.ModelForm):
         widget=forms.Textarea(attrs={'rows': 2}),
     )
 
+    class Meta:
+        fields = '__all__'
+
     def clean(self):
         data = super().clean()
         if self.instance.pk and not data.get('change_reason', '').strip():
