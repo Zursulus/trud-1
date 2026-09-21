@@ -86,7 +86,7 @@ PY
 systemctl is-active --quiet trud-1-site.service
 
 # This installer is intentionally limited to ZUR-42 plus the docs-only plan commit.
-unexpected=$(gitapp diff --name-only "$EXPECTED" "$TARGET" | grep -Ev '^(.github/workflows/backend.yml|app.js|index.html|public-content.css|docs/PLAN.md|backend/config/settings.py|backend/config/urls.py|backend/public_site/.*|backend/water/management/commands/setup_roles.py|backend/water/templates/admin/water/index.html|backend/water/test_admin_navigation.py|ops/deploy-public-content.sh|ops/DEPLOYMENT.md)$' || true)
+unexpected=$(gitapp diff --name-only "$EXPECTED" "$TARGET" | grep -Ev '^(.github/workflows/backend.yml|app.js|index.html|public-content.css|docs/PLAN.md|backend/config/settings.py|backend/config/urls.py|backend/public_site/.*|backend/water/management/commands/setup_roles.py|backend/water/templates/admin/water/index.html|backend/water/test_admin_navigation.py|ops/deploy-public-content.sh|ops/DEPLOYMENT.md|ops/tests/test_public_root.py)$' || true)
 if [ -n "$unexpected" ]; then
     echo 'В выпуск попали неожиданные файлы:' >&2
     printf '%s\n' "$unexpected" >&2
