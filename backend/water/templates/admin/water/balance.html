@@ -20,7 +20,7 @@
     .balance-node h2 { margin-top: 0; }
     .balance-table-wrap { overflow-x: auto; }
     .balance-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    .balance-table th, .balance-table td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    .balance-table th, .balance-table td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
     .balance-table th { background: #f8fafc; white-space: nowrap; }
     .balance-bad { color: #b91c1c; font-weight: 700; }
     .balance-good { color: #166534; font-weight: 700; }
@@ -30,12 +30,22 @@
       .balance-form { display: block; }
       .balance-form p { margin-bottom: 12px; }
       .balance-node { padding: 14px; }
+      .balance-table-wrap { overflow: visible; }
+      .balance-table, .balance-table tbody, .balance-table tr, .balance-table td { display: block; width: 100%; box-sizing: border-box; }
+      .balance-table thead { display: none; }
+      .balance-table tr { margin: 12px 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #fff; }
+      .balance-table td { display: grid; grid-template-columns: minmax(88px, 34%) minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
+      .balance-table td:last-child { border-bottom: 0; }
+      .balance-table td::before { content: attr(data-label); color: #64748b; font-weight: 700; }
+      .balance-bad, .balance-good { font-weight: 600; }
     }
     @media (prefers-color-scheme: dark) {
       .balance-form, .balance-card, .balance-node { background: #1f2937; border-color: #475569; }
       .balance-lead, .balance-muted, .balance-form .helptext { color: #cbd5e1; }
       .balance-table th { background: #334155; }
       .balance-table th, .balance-table td { border-color: #475569; }
+      .balance-table tr { background: #1f2937; border-color: #475569; }
+      .balance-table td::before { color: #cbd5e1; }
       .balance-warning { background: #422006; }
       .balance-ok { background: #052e16; }
     }
@@ -45,6 +55,8 @@
 {% block breadcrumbs %}
 <div class="breadcrumbs"><a href="{% url 'admin:index' %}">Начало</a> › Водный баланс</div>
 {% endblock %}
+
+{% block content_title %}{% endblock %}
 
 {% block content %}
 <div class="balance-page">
@@ -108,13 +120,13 @@
             <thead><tr><th>Раздел</th><th>Источник</th><th>Объём</th><th>Проверка</th></tr></thead>
             <tbody>
               {% for line in node.input_lines %}
-                <tr><td>Вход · {{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+                <tr><td data-label="Раздел">Вход · {{ line.label }}</td><td data-label="Источник">{{ line.source }}</td><td data-label="Объём">{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td data-label="Проверка" class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
               {% endfor %}
               {% for line in node.group_lines %}
-                <tr><td>Группа · {{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+                <tr><td data-label="Раздел">Группа · {{ line.label }}</td><td data-label="Источник">{{ line.source }}</td><td data-label="Объём">{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td data-label="Проверка" class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
               {% endfor %}
               {% for line in node.other_lines %}
-                <tr><td>{{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+                <tr><td data-label="Раздел">{{ line.label }}</td><td data-label="Источник">{{ line.source }}</td><td data-label="Объём">{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td data-label="Проверка" class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
