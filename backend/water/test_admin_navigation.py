@@ -34,11 +34,14 @@ class AdminNavigationTests(TestCase):
         response = self.client.get('/admin/')
         self.assertEqual(response.status_code, 200)
         for label in (
-            'Показания на проверке', 'Журнал показаний', 'Участки', 'Счётчики',
-            'Жители', 'Начисления', 'Документы', 'Настройки / служебное',
+            'Показания на проверке', 'Новости сайта', 'Публичные документы',
+            'Журнал показаний', 'Участки', 'Счётчики', 'Жители', 'Начисления',
+            'Документы жителей', 'Настройки / служебное',
         ):
             self.assertContains(response, label)
         self.assertContains(response, '?status__exact=pending')
+        self.assertContains(response, '/admin/public_site/publicnews/')
+        self.assertContains(response, '/admin/public_site/publicdocument/')
 
     def test_controller_sees_capture_but_not_manager_sections(self):
         self.login_as(self.controller)
@@ -47,3 +50,5 @@ class AdminNavigationTests(TestCase):
         self.assertContains(response, 'Внести показание')
         self.assertNotContains(response, 'Начисления')
         self.assertNotContains(response, 'Показания на проверке')
+        self.assertNotContains(response, 'Новости сайта')
+        self.assertNotContains(response, 'Публичные документы')
