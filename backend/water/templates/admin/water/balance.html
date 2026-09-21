@@ -1,0 +1,114 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .balance-page { max-width: 1180px; }
+    .balance-lead { color: #475569; max-width: 850px; line-height: 1.45; }
+    .balance-form { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: end; margin: 20px 0 24px; padding: 16px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .balance-form p { margin: 0; }
+    .balance-form label { display: block; margin-bottom: 5px; font-weight: 700; }
+    .balance-form input { min-height: 36px; }
+    .balance-form .helptext { display: block; max-width: 320px; color: #64748b; font-size: 12px; margin-top: 4px; }
+    .balance-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0; }
+    .balance-card { padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .balance-card strong { display: block; font-size: 22px; margin-top: 5px; }
+    .balance-muted { color: #64748b; }
+    .balance-warning { padding: 12px 14px; border-left: 4px solid #b45309; background: #fffbeb; margin: 14px 0; }
+    .balance-ok { padding: 12px 14px; border-left: 4px solid #15803d; background: #f0fdf4; margin: 14px 0; }
+    .balance-node { margin: 22px 0; padding: 18px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .balance-node h2 { margin-top: 0; }
+    .balance-table-wrap { overflow-x: auto; }
+    .balance-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .balance-table th, .balance-table td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    .balance-table th { background: #f8fafc; white-space: nowrap; }
+    .balance-bad { color: #b91c1c; font-weight: 700; }
+    .balance-good { color: #166534; font-weight: 700; }
+    .balance-issues { margin: 10px 0 0; padding-left: 22px; }
+    @media (max-width: 600px) {
+      #content { padding: 16px !important; }
+      .balance-form { display: block; }
+      .balance-form p { margin-bottom: 12px; }
+      .balance-node { padding: 14px; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .balance-form, .balance-card, .balance-node { background: #1f2937; border-color: #475569; }
+      .balance-lead, .balance-muted, .balance-form .helptext { color: #cbd5e1; }
+      .balance-table th { background: #334155; }
+      .balance-table th, .balance-table td { border-color: #475569; }
+      .balance-warning { background: #422006; }
+      .balance-ok { background: #052e16; }
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Начало</a> › Водный баланс</div>
+{% endblock %}
+
+{% block content %}
+<div class="balance-page">
+  <h1>Водный баланс и контроль потерь</h1>
+  <p class="balance-lead">Отчёт ничего не начисляет и не распределяет. Для приборов используются только показания точно на начало и конец выбранного периода. Если данных не хватает, потери не рассчитываются и причина показывается явно.</p>
+
+  <form method="get" class="balance-form">
+    {{ form.as_p }}
+    <div><button type="submit" class="button default">Показать баланс</button></div>
+  </form>
+
+  {% if report %}
+    <p><strong>Период:</strong> {{ report.starts|date:"d.m.Y" }} — {{ report.ends|date:"d.m.Y" }}</p>
+
+    <div class="balance-summary">
+      <div class="balance-card"><span class="balance-muted">Известный вход</span><strong>{{ report.input_known }} м³</strong></div>
+      <div class="balance-card"><span class="balance-muted">Известный подтверждённый расход</span><strong>{{ report.confirmed_known }} м³</strong></div>
+      <div class="balance-card"><span class="balance-muted">Разница / потери</span><strong>{% if report.loss_volume != None %}{{ report.loss_volume }} м³{% else %}—{% endif %}</strong></div>
+      <div class="balance-card"><span class="balance-muted">Потери от входа</span><strong>{% if report.loss_percent != None %}{{ report.loss_percent }}%{% else %}—{% endif %}</strong></div>
+    </div>
+
+    {% if report.complete %}
+      <div class="balance-ok">Баланс полный: для всех узлов и выбранных источников есть данные на точные границы периода.</div>
+    {% else %}
+      <div class="balance-warning">Баланс неполный. Показанные суммы «известный вход» и «известный расход» — только подтверждённые части; общая разница не вычисляется, пока не заполнены все обязательные данные.</div>
+    {% endif %}
+
+    {% for node in report.nodes %}
+      <section class="balance-node">
+        <h2>{{ node.node.name }}</h2>
+        <div class="balance-summary">
+          <div class="balance-card"><span class="balance-muted">Вход</span><strong>{% if node.input_volume != None %}{{ node.input_volume }} м³{% else %}{{ node.input_known }} м³*</strong><span class="balance-muted">* известная часть{% endif %}</span></div>
+          <div class="balance-card"><span class="balance-muted">Подтверждённый расход</span><strong>{% if node.confirmed_volume != None %}{{ node.confirmed_volume }} м³{% else %}{{ node.confirmed_known }} м³*</strong><span class="balance-muted">* известная часть{% endif %}</span></div>
+          <div class="balance-card"><span class="balance-muted">Разница</span><strong>{% if node.loss_volume != None %}{{ node.loss_volume }} м³{% else %}—{% endif %}</strong></div>
+          <div class="balance-card"><span class="balance-muted">Потери</span><strong>{% if node.loss_percent != None %}{{ node.loss_percent }}%{% else %}—{% endif %}</strong></div>
+        </div>
+
+        {% if node.issues %}
+          <div class="balance-warning">
+            <strong>Не хватает данных:</strong>
+            <ul class="balance-issues">{% for issue in node.issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+          </div>
+        {% endif %}
+
+        <div class="balance-table-wrap">
+          <table class="balance-table">
+            <thead><tr><th>Раздел</th><th>Источник</th><th>Объём</th><th>Проверка</th></tr></thead>
+            <tbody>
+              {% for line in node.input_lines %}
+                <tr><td>Вход · {{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+              {% endfor %}
+              {% for line in node.group_lines %}
+                <tr><td>Группа · {{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+              {% endfor %}
+              {% for line in node.other_lines %}
+                <tr><td>{{ line.label }}</td><td>{{ line.source }}</td><td>{% if line.volume != None %}{{ line.volume }} м³{% else %}—{% endif %}</td><td class="{% if line.complete %}balance-good{% else %}balance-bad{% endif %}">{{ line.detail }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% empty %}
+      <div class="balance-warning">В базе пока нет общих узлов водоснабжения.</div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}
