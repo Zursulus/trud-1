@@ -88,6 +88,20 @@
       </a>
     {% endif %}
 
+    {% if perms.public_site.view_publicnews %}
+      <a class="trud-card" href="{% url 'admin:public_site_publicnews_changelist' %}">
+        <strong>Новости сайта</strong>
+        <span>Создание и публикация новостей и объявлений на главной странице.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.public_site.view_publicdocument %}
+      <a class="trud-card" href="{% url 'admin:public_site_publicdocument_changelist' %}">
+        <strong>Публичные документы</strong>
+        <span>Документы для открытого раздела сайта: категории, даты и файлы.</span>
+      </a>
+    {% endif %}
+
     {% if perms.water.view_reading %}
       <a class="trud-card" href="{% url 'admin:water_reading_changelist' %}">
         <strong>Журнал показаний</strong>
@@ -125,8 +139,8 @@
 
     {% if perms.water.view_accountdocument %}
       <a class="trud-card" href="{% url 'admin:water_accountdocument_changelist' %}">
-        <strong>Документы</strong>
-        <span>Документы по лицевым счетам и публикация жителям.</span>
+        <strong>Документы жителей</strong>
+        <span>Закрытые документы по лицевым счетам, доступные только в кабинете.</span>
       </a>
     {% endif %}
   </div>
