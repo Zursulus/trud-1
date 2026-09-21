@@ -76,8 +76,22 @@
       <section class="balance-node">
         <h2>{{ node.node.name }}</h2>
         <div class="balance-summary">
-          <div class="balance-card"><span class="balance-muted">Вход</span><strong>{% if node.input_volume != None %}{{ node.input_volume }} м³{% else %}{{ node.input_known }} м³*</strong><span class="balance-muted">* известная часть{% endif %}</span></div>
-          <div class="balance-card"><span class="balance-muted">Подтверждённый расход</span><strong>{% if node.confirmed_volume != None %}{{ node.confirmed_volume }} м³{% else %}{{ node.confirmed_known }} м³*</strong><span class="balance-muted">* известная часть{% endif %}</span></div>
+          <div class="balance-card">
+            <span class="balance-muted">Вход</span>
+            {% if node.input_volume != None %}
+              <strong>{{ node.input_volume }} м³</strong>
+            {% else %}
+              <strong>{{ node.input_known }} м³*</strong><span class="balance-muted">* известная часть</span>
+            {% endif %}
+          </div>
+          <div class="balance-card">
+            <span class="balance-muted">Подтверждённый расход</span>
+            {% if node.confirmed_volume != None %}
+              <strong>{{ node.confirmed_volume }} м³</strong>
+            {% else %}
+              <strong>{{ node.confirmed_known }} м³*</strong><span class="balance-muted">* известная часть</span>
+            {% endif %}
+          </div>
           <div class="balance-card"><span class="balance-muted">Разница</span><strong>{% if node.loss_volume != None %}{{ node.loss_volume }} м³{% else %}—{% endif %}</strong></div>
           <div class="balance-card"><span class="balance-muted">Потери</span><strong>{% if node.loss_percent != None %}{{ node.loss_percent }}%{% else %}—{% endif %}</strong></div>
         </div>
