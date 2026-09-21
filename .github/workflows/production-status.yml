@@ -1,0 +1,55 @@
+name: Production status
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-status.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe production and compare with water-admin HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+
+          endpoint='https://trud-1.ru/admin/deployment-status/'
+          body=$(curl -4 --fail --silent --show-error             --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 20             "$endpoint")
+
+          prod_commit=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"])' <<<"$body")
+          deployed_at=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at",""))' <<<"$body")
+
+          branch_json=$(curl --fail --silent --show-error             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/$REPO/branches/feature%2Fwater-admin")
+          head_commit=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])' <<<"$branch_json")
+
+          echo "PRODUCTION_COMMIT=$prod_commit"
+          echo "WATER_ADMIN_HEAD=$head_commit"
+          echo "DEPLOYED_AT=$deployed_at"
+
+          {
+            echo "## Trud-1 production status"
+            echo
+            echo "- Production: \`$prod_commit\`"
+            echo "- feature/water-admin: \`$head_commit\`"
+            echo "- deployed_at: \`$deployed_at\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$prod_commit" = "$head_commit" ]; then
+            echo "STATUS=MATCH"
+            echo "- Status: **MATCH**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "STATUS=MISMATCH"
+            echo "- Status: **MISMATCH**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
