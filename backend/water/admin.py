@@ -203,9 +203,8 @@ class ImportUploadForm(forms.Form):
 class ControllerMeterChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, meter):
         account = meter.account
-        identifier = account.number or f'ID {account.pk}' if account else f'счётчик {meter.pk}'
         address = account.plot if account else meter.group or meter.node
-        return f'{identifier} — {address} — {meter.serial}'
+        return f'{address} — Счётчик: {meter.serial}'
 
 
 class ControllerReadingCaptureForm(forms.ModelForm):
@@ -213,11 +212,10 @@ class ControllerReadingCaptureForm(forms.ModelForm):
 
     class Meta:
         model = ControllerReadingSubmission
-        fields = ('meter', 'date', 'value', 'photo', 'notes')
+        fields = ('meter', 'date', 'value', 'notes')
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'value': forms.NumberInput(attrs={'inputmode': 'decimal', 'step': '0.001', 'min': '0'}),
-            'photo': forms.FileInput(attrs={'accept': 'image/*', 'capture': 'environment'}),
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
 
@@ -226,13 +224,6 @@ class ControllerReadingCaptureForm(forms.ModelForm):
         self.fields['meter'].queryset = Meter.objects.select_related('account', 'group', 'node').filter(
             kind='individual', account__archived=False,
         ).order_by('account__plot', 'account__number', 'serial')
-
-    def clean_photo(self):
-        photo = self.cleaned_data['photo']
-        content_type = getattr(photo, 'content_type', '')
-        if content_type and not content_type.startswith('image/'):
-            raise forms.ValidationError('Приложите фотографию, а не другой файл.')
-        return photo
 
 
 class ResidentInviteForm(forms.Form):
@@ -751,7 +742,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
 
     @admin.display(description='Фото')
     def photo_link(self, obj):
-        if not obj.pk:
+        if not obj.pk or not obj.photo:
             return '—'
         return format_html('<a href="{}" target="_blank">Открыть фото</a>', reverse('admin:water_controllerreading_photo', args=[obj.pk]))
 
@@ -770,7 +761,6 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
             return HttpResponseRedirect(reverse('admin:water_controllerreading_capture'))
         meter_data = {
             str(meter.pk): {
-                'id': meter.account.number or f'ID {meter.account.pk}',
                 'address': meter.account.plot or 'Адрес не заполнен',
                 'serial': meter.serial,
             }
@@ -794,6 +784,8 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
 
     def photo_view(self, request, object_id):
         submission = self._get_visible(request, object_id)
+        if not submission.photo:
+            raise Http404
         response = FileResponse(submission.photo.open('rb'), content_type='application/octet-stream')
         response['Content-Disposition'] = f'inline; filename="meter-{submission.pk}{Path(submission.photo.name).suffix}"'
         response['Cache-Control'] = 'private, no-store'
@@ -807,7 +799,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
                 if submission.status != 'pending':
                     raise ValidationError('Запись уже проверена.')
-                reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'По фото контролёра. {submission.notes}'.strip())
+                reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'Показание контролёра. {submission.notes}'.strip())
                 reading._history_user = request.user
                 reading._change_reason = 'Принято из премодерации'
                 reading.save()

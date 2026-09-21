@@ -1304,9 +1304,10 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
         self.assertContains(self.client.get('/admin/'), f'href="{url}"')
         response = self.client.get(url)
         self.assertTemplateUsed(response, 'admin/water/controllerreadingsubmission/capture.html')
-        for field in ('meter', 'value', 'photo', 'date', 'notes'):
+        for field in ('meter', 'value', 'date', 'notes'):
             self.assertContains(response, f'name="{field}"')
-        self.assertContains(response, 'multipart/form-data')
+        self.assertNotContains(response, 'Фото счётчика')
+        self.assertNotContains(response, 'TRUD-PLOT-')
         self.assertContains(response, 'Отправить на проверку')
         self.assertEqual(response.context['form'].fields['meter'].queryset.count(), 1)
 
@@ -1321,7 +1322,6 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
             response = self.client.post(url, {
                 'meter': self.meter.pk, 'date': timezone.localdate().isoformat(),
                 'value': '12.5',
-                'photo': SimpleUploadedFile('meter.jpg', b'\xff\xd8\xff\xe0test', content_type='image/jpeg'),
             })
             self.assertRedirects(response, '/admin/water/controllerreadingsubmission/capture/')
             submission = ControllerReadingSubmission.objects.get()
@@ -1337,14 +1337,13 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
         for method in (self.client.get, self.client.post):
             self.assertEqual(method('/admin/water/controllerreadingsubmission/add/').status_code, 403)
 
-    def test_controller_submits_photo_and_manager_approves(self):
+    def test_controller_submits_without_photo_and_manager_approves(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             self.login_as(self.controller)
             response = self.client.post('/admin/water/controllerreadingsubmission/capture/', {
                 'meter': self.meter.pk,
                 'date': timezone.localdate().isoformat(),
                 'value': '123.45',
-                'photo': SimpleUploadedFile('meter.jpg', b'\xff\xd8\xff\xe0test', content_type='image/jpeg'),
                 'notes': 'Обход',
             })
             self.assertEqual(response.status_code, 302)
@@ -1359,4 +1358,5 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
             submission.refresh_from_db()
             self.assertEqual(submission.status, 'approved')
             self.assertEqual(submission.reading.value, Decimal('123.450'))
+            self.assertEqual(submission.reading.notes, 'Показание контролёра. Обход')
             self.assertEqual(submission.reading.history.first().history_user, self.manager)

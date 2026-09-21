@@ -224,7 +224,7 @@ class ControllerReadingSubmission(RecordedModel):
         'Показание, м³', max_digits=14, decimal_places=3,
         validators=[MinValueValidator(Decimal('0'))],
     )
-    photo = models.FileField('Фото счётчика', upload_to=controller_reading_photo_path, max_length=300)
+    photo = models.FileField('Фото счётчика', upload_to=controller_reading_photo_path, max_length=300, blank=True)
     notes = models.TextField('Примечание', blank=True, max_length=500)
     status = models.CharField('Статус', max_length=20, choices=[
         ('pending', 'На проверке'), ('approved', 'Принято'), ('rejected', 'Отклонено'),
