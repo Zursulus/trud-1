@@ -21,7 +21,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
     'axes', 'simple_history',
     'django_otp', 'django_otp.plugins.otp_static', 'django_otp.plugins.otp_totp',
-    'two_factor', 'water',
+    'two_factor', 'water', 'public_site',
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware',
@@ -85,7 +85,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/admin-static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Private uploads are never exposed by the web server. Django streams a file
-# only after checking the resident's current access to its account.
+# only after checking the resident's current access or explicit public-publish gate.
 MEDIA_ROOT = BASE_DIR.parent / 'private-data'
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
