@@ -5,8 +5,10 @@ from django.urls import include, path
 from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
+from public_site import views as public_views
 from water import portal
 from water.package_views import package_dry_run
+
 
 class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
     """Password-only staff access; the technical superuser still requires OTP."""
@@ -26,6 +28,11 @@ admin.site.__class__ = MainAdminOTPOnlySite
 urlpatterns = [
     # Public, read-only deployment marker for external uptime/status checks.
     path('admin/deployment-status/', deployment_status, name='deployment_status'),
+    # The public root remains static in Nginx. These read-only endpoints are
+    # intentionally below /admin/ because that prefix is already proxied to Django.
+    # They are NOT wrapped in admin_view and expose only explicitly published data.
+    path('admin/public/content/', public_views.public_content, name='public_content'),
+    path('admin/public/document/<int:document_id>/', public_views.public_document_download, name='public_document_download'),
     # Resident pages stay under the already proxied /admin/ prefix, but are
     # separate from the staff admin and never weaken its OTP requirement.
     path('admin/cabinet/login/', auth_views.LoginView.as_view(
