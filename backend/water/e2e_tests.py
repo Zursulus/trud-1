@@ -97,11 +97,11 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             self.assertEqual(response.status, 200)
 
             add_link = page.locator(
-                'a[href="/admin/water/controllerreadingsubmission/add/"]'
+                'a[href="/admin/water/controllerreadingsubmission/capture/"]'
             ).first
             self.assertTrue(add_link.is_visible())
             add_link.click()
-            page.wait_for_url("**/admin/water/controllerreadingsubmission/add/")
+            page.wait_for_url("**/admin/water/controllerreadingsubmission/capture/")
 
             self.assertTrue(page.get_by_role("button", name="Отправить на проверку").is_visible())
             select = page.locator("#id_meter")
