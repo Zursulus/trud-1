@@ -124,7 +124,7 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
                 self.assertTrue(page.locator(selector).is_visible())
             self.assertEqual(page.locator("#id_photo").count(), 0)
             for label in ("Позавчера", "Вчера", "Сегодня"):
-                self.assertTrue(page.get_by_role("button", name=label).is_visible())
+                self.assertTrue(page.get_by_role("button", name=label, exact=True).is_visible())
             self.assertTrue(page.get_by_role("button", name="Отправить на проверку").is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
