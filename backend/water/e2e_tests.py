@@ -162,7 +162,7 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             self.assertTrue(page.get_by_role("button", name="Отклонить", exact=True).is_visible())
 
             page.get_by_role("button", name="Принять показание", exact=True).click()
-            confirmation = page.get_by_text("Показание принято и записано в журнал.", exact=True)
+            confirmation = page.get_by_text("Показание принято и добавлено в журнал.", exact=True)
             confirmation.wait_for(state="visible")
             self.assertTrue(confirmation.is_visible())
             self.assertTrue(page.get_by_role("link", name="Открыть журнал показаний", exact=True).is_visible())
