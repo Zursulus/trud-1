@@ -203,9 +203,8 @@ class ImportUploadForm(forms.Form):
 class ControllerMeterChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, meter):
         account = meter.account
-        identifier = account.number or f'ID {account.pk}' if account else f'счётчик {meter.pk}'
         address = account.plot if account else meter.group or meter.node
-        return f'{identifier} — {address} — {meter.serial}'
+        return str(address)
 
 
 class ControllerReadingCaptureForm(forms.ModelForm):
@@ -213,26 +212,20 @@ class ControllerReadingCaptureForm(forms.ModelForm):
 
     class Meta:
         model = ControllerReadingSubmission
-        fields = ('meter', 'date', 'value', 'photo', 'notes')
+        fields = ('meter', 'date', 'value', 'notes')
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'value': forms.NumberInput(attrs={'inputmode': 'decimal', 'step': '0.001', 'min': '0'}),
-            'photo': forms.FileInput(attrs={'accept': 'image/*', 'capture': 'environment'}),
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.fields['date'].initial = timezone.localdate()
         self.fields['meter'].queryset = Meter.objects.select_related('account', 'group', 'node').filter(
             kind='individual', account__archived=False,
         ).order_by('account__plot', 'account__number', 'serial')
-
-    def clean_photo(self):
-        photo = self.cleaned_data['photo']
-        content_type = getattr(photo, 'content_type', '')
-        if content_type and not content_type.startswith('image/'):
-            raise forms.ValidationError('Приложите фотографию, а не другой файл.')
-        return photo
 
 
 class ResidentInviteForm(forms.Form):
@@ -715,6 +708,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
     readonly_fields = (
         'meter', 'date', 'value', 'photo_link', 'notes', 'status', 'submitted_by',
         'submitted_at', 'reviewed_by', 'reviewed_at', 'review_comment', 'reading',
+        'current_reading_value',
     )
     fields = readonly_fields
 
@@ -749,9 +743,14 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
     def address_display(self, obj):
         return obj.meter.account.plot if obj.meter.account else '—'
 
+    @admin.display(description='Текущее утверждённое значение')
+    def current_reading_value(self, obj):
+        reading = obj.reading or Reading.objects.filter(meter=obj.meter, date=obj.date).first()
+        return f'{reading.value:.3f}' if reading else '—'
+
     @admin.display(description='Фото')
     def photo_link(self, obj):
-        if not obj.pk:
+        if not obj.pk or not obj.photo:
             return '—'
         return format_html('<a href="{}" target="_blank">Открыть фото</a>', reverse('admin:water_controllerreading_photo', args=[obj.pk]))
 
@@ -760,19 +759,33 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
             raise PermissionDenied
         form = ControllerReadingCaptureForm(request.POST or None, request.FILES or None)
         if request.method == 'POST' and form.is_valid():
-            submission = form.save(commit=False)
-            submission.submitted_by = request.user
-            submission._history_user = request.user
-            submission._change_reason = 'Подача контролёром на премодерацию'
-            submission.save()
+            with transaction.atomic():
+                meter = Meter.objects.select_for_update().get(pk=form.cleaned_data['meter'].pk)
+                submission = ControllerReadingSubmission.objects.select_for_update().filter(
+                    meter=meter, date=form.cleaned_data['date'], status='pending',
+                ).order_by('-submitted_at', '-pk').first()
+                if submission is None:
+                    submission = form.save(commit=False)
+                else:
+                    submission.value = form.cleaned_data['value']
+                    submission.notes = form.cleaned_data['notes']
+                    submission.submitted_at = timezone.now()
+                submission.meter = meter
+                submission.date = form.cleaned_data['date']
+                submission.submitted_by = request.user
+                submission._history_user = request.user
+                submission._change_reason = 'Уточнение показания контролёром' if submission.pk else 'Подача контролёром на премодерацию'
+                submission.save()
             self.log_addition(request, submission, 'Показание отправлено на проверку')
-            messages.success(request, 'Готово. Показание отправлено на проверку.')
+            address = meter.account.plot if meter.account else 'Адрес не заполнен'
+            messages.success(
+                request,
+                f'{address} · {submission.value:.3f} м³ · {submission.date:%d.%m.%Y} — отправлено на проверку',
+            )
             return HttpResponseRedirect(reverse('admin:water_controllerreading_capture'))
         meter_data = {
             str(meter.pk): {
-                'id': meter.account.number or f'ID {meter.account.pk}',
                 'address': meter.account.plot or 'Адрес не заполнен',
-                'serial': meter.serial,
             }
             for meter in self._capture_meters(form)
         }
@@ -794,6 +807,8 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
 
     def photo_view(self, request, object_id):
         submission = self._get_visible(request, object_id)
+        if not submission.photo:
+            raise Http404
         response = FileResponse(submission.photo.open('rb'), content_type='application/octet-stream')
         response['Content-Disposition'] = f'inline; filename="meter-{submission.pk}{Path(submission.photo.name).suffix}"'
         response['Cache-Control'] = 'private, no-store'
@@ -807,9 +822,14 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
                 if submission.status != 'pending':
                     raise ValidationError('Запись уже проверена.')
-                reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'По фото контролёра. {submission.notes}'.strip())
+                reading = Reading.objects.filter(meter=submission.meter, date=submission.date).first()
+                if reading:
+                    reading.value = submission.value
+                    reading.notes = f'Корректировка по заявке контролёра. {submission.notes}'.strip()
+                else:
+                    reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'Показание контролёра. {submission.notes}'.strip())
                 reading._history_user = request.user
-                reading._change_reason = 'Принято из премодерации'
+                reading._change_reason = 'Корректировка по заявке контролёра' if reading.pk else 'Принято из премодерации'
                 reading.save()
                 submission.status = 'approved'
                 submission.reviewed_by = request.user

@@ -106,9 +106,9 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             ).inner_text()
             self.assertEqual(option_text.strip(), "Лесная 7")
             self.assertTrue(page.locator("#identity").is_visible())
-            self.assertEqual(page.locator("#account-id").inner_text().strip(), "77")
             self.assertEqual(page.locator("#address").inner_text().strip(), "Лесная 7")
-            self.assertIn("CTRL-E2E-1", page.locator("#serial").inner_text())
+            self.assertEqual(page.locator("#account-id").count(), 0)
+            self.assertEqual(page.locator("#serial").count(), 0)
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
 
@@ -120,8 +120,11 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
 
-            for selector in ("#id_meter", "#id_value", "#id_photo", "#id_date", "#id_notes"):
+            for selector in ("#id_meter", "#id_value", "#id_date", "#id_notes"):
                 self.assertTrue(page.locator(selector).is_visible())
+            self.assertEqual(page.locator("#id_photo").count(), 0)
+            for label in ("Позавчера", "Вчера", "Сегодня"):
+                self.assertTrue(page.get_by_role("button", name=label, exact=True).is_visible())
             self.assertTrue(page.get_by_role("button", name="Отправить на проверку").is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
