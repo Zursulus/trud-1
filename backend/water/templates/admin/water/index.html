@@ -109,6 +109,13 @@
       </a>
     {% endif %}
 
+    {% if perms.water.view_reading and perms.water.view_meter and perms.water.view_watergroup %}
+      <a class="trud-card" href="{% url 'water_balance' %}">
+        <strong>Водный баланс</strong>
+        <span>Входной объём, подтверждённый расход, разница и контроль потерь за период.</span>
+      </a>
+    {% endif %}
+
     {% if perms.water.view_landplot %}
       <a class="trud-card" href="{% url 'admin:water_landplot_changelist' %}">
         <strong>Участки</strong>
