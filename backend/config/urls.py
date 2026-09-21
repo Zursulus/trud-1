@@ -7,6 +7,7 @@ from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
 from water import portal
+from water.balance import water_balance_view
 from water.package_views import package_dry_run
 
 
@@ -49,6 +50,8 @@ urlpatterns = [
     path('admin/cabinet/account/<int:account_id>/appeal/new/', portal.create_appeal, name='resident_appeal_new'),
     path('admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/', portal.resident_appeal, name='resident_appeal'),
     path('admin/cabinet/account/<int:account_id>/document/<int:document_id>/', portal.download_document, name='resident_document'),
+    # Read-only operational report. admin_view preserves the same staff/OTP gate.
+    path('admin/water/balance/', admin.site.admin_view(water_balance_view), name='water_balance'),
     # Prepared multi-sheet water package: validation only, no database writes.
     # admin_view keeps the same staff/OTP protection as the rest of /admin/.
     path('admin/water/package-dry-run/', admin.site.admin_view(package_dry_run), name='water_package_dry_run'),
