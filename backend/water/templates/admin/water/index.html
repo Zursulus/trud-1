@@ -1,0 +1,142 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .trud-dashboard { max-width: 1180px; }
+    .trud-dashboard h1 { margin: 0 0 8px; font-size: 28px; }
+    .trud-lead { margin: 0 0 22px; color: #475569; font-size: 16px; line-height: 1.45; }
+    .trud-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .trud-card {
+      display: block;
+      min-height: 86px;
+      padding: 18px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: #fff;
+      color: #172033 !important;
+      text-decoration: none !important;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+    }
+    .trud-card:hover, .trud-card:focus {
+      border-color: #0b57d0;
+      box-shadow: 0 0 0 2px rgba(11, 87, 208, .12);
+      outline: none;
+    }
+    .trud-card strong { display: block; margin-bottom: 6px; font-size: 18px; color: #111827; }
+    .trud-card span { display: block; color: #475569; font-size: 14px; line-height: 1.35; }
+    .trud-card.trud-primary { background: #0b57d0; border-color: #0b57d0; color: #fff !important; }
+    .trud-card.trud-primary strong, .trud-card.trud-primary span { color: #fff; }
+    .trud-service {
+      margin-top: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .trud-service > summary {
+      cursor: pointer;
+      padding: 16px 18px;
+      font-size: 17px;
+      font-weight: 700;
+      color: #172033;
+      background: #eef2f7;
+    }
+    .trud-service-note { margin: 0; padding: 14px 18px 4px; color: #475569; }
+    .trud-service .module { margin: 14px 18px 18px; }
+    @media (max-width: 600px) {
+      #content { padding: 16px !important; }
+      .trud-dashboard h1 { font-size: 24px; }
+      .trud-card { min-height: 74px; padding: 16px; }
+      .trud-card strong { font-size: 17px; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .trud-lead, .trud-card span, .trud-service-note { color: #cbd5e1; }
+      .trud-card, .trud-service { background: #1f2937; border-color: #475569; }
+      .trud-card, .trud-card strong, .trud-service > summary { color: #f8fafc !important; }
+      .trud-service > summary { background: #334155; }
+    }
+  </style>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard trud-simple-dashboard{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div id="content-main" class="trud-dashboard">
+  <h1>Рабочая панель</h1>
+  <p class="trud-lead">Здесь оставлены основные рабочие действия. Полная техническая структура базы спрятана ниже в разделе «Настройки / служебное».</p>
+
+  <div class="trud-grid" aria-label="Основные рабочие разделы">
+    {% if perms.water.add_controllerreadingsubmission %}
+      <a class="trud-card trud-primary" href="{% url 'admin:water_controllerreading_capture' %}">
+        <strong>Внести показание</strong>
+        <span>Форма для контролёра: адрес, дата и текущее значение.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.change_controllerreadingsubmission %}
+      <a class="trud-card trud-primary" href="{% url 'admin:water_controllerreadingsubmission_changelist' %}?status__exact=pending">
+        <strong>Показания на проверке</strong>
+        <span>Сравнить с предыдущим значением, принять или отклонить.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_reading %}
+      <a class="trud-card" href="{% url 'admin:water_reading_changelist' %}">
+        <strong>Журнал показаний</strong>
+        <span>Все утверждённые показания и история учёта.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_landplot %}
+      <a class="trud-card" href="{% url 'admin:water_landplot_changelist' %}">
+        <strong>Участки</strong>
+        <span>Адреса, лицевые счета и привязки участков.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_meter %}
+      <a class="trud-card" href="{% url 'admin:water_meter_changelist' %}">
+        <strong>Счётчики</strong>
+        <span>Индивидуальные и общие приборы учёта.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_person %}
+      <a class="trud-card" href="{% url 'admin:water_person_changelist' %}">
+        <strong>Жители</strong>
+        <span>Люди и их связи с участками.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_charge %}
+      <a class="trud-card" href="{% url 'admin:water_charge_changelist' %}">
+        <strong>Начисления</strong>
+        <span>Черновики, утверждённые начисления и корректировки.</span>
+      </a>
+    {% endif %}
+
+    {% if perms.water.view_accountdocument %}
+      <a class="trud-card" href="{% url 'admin:water_accountdocument_changelist' %}">
+        <strong>Документы</strong>
+        <span>Документы по лицевым счетам и публикация жителям.</span>
+      </a>
+    {% endif %}
+  </div>
+
+  <details class="trud-service" id="service-admin">
+    <summary>Настройки / служебное</summary>
+    <p class="trud-service-note">Полная административная структура сохранена. Открывайте её только для редких настроек и технических операций.</p>
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </details>
+</div>
+{% endblock %}
+
+{% block sidebar %}{% endblock %}
