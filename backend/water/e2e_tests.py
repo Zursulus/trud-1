@@ -8,6 +8,8 @@ water.tests. They exercise real browser navigation and JavaScript only against
 test data and the Django test database.
 """
 from contextlib import contextmanager
+from datetime import timedelta
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
@@ -19,40 +21,43 @@ from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from playwright.sync_api import sync_playwright
 
-from .models import Account, Meter, SupplyNode, User
+from .models import Account, ControllerReadingSubmission, Meter, Reading, SupplyNode, User
 
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "test-artifacts"
 
 
 class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
-    """Protect the controller Add -> capture flow that previously regressed."""
+    """Protect the controller Add -> capture flow and moderation UI."""
 
     def setUp(self):
         call_command("setup_roles", stdout=StringIO())
         self.controller = User.objects.create_user(username="controller-e2e", is_staff=True)
         self.controller.groups.add(Group.objects.get(name="Контролёр воды"))
+        self.manager = User.objects.create_user(username="manager-e2e", is_staff=True)
+        self.manager.groups.add(Group.objects.get(name="Администратор ТСН"))
         self.account = Account.objects.create(number="77", plot="Лесная 7")
         self.node = SupplyNode.objects.create(name="Узел контролёра E2E")
         self.meter = Meter.objects.create(
             serial="CTRL-E2E-1", kind="individual", node=self.node, account=self.account,
         )
 
-    def _verified_session_cookie(self):
+    def _verified_session_cookie(self, user=None):
+        user = user or self.controller
         device, _ = TOTPDevice.objects.get_or_create(
-            user=self.controller, defaults={"name": "e2e test device"},
+            user=user, defaults={"name": "e2e test device"},
         )
-        self.client.force_login(self.controller)
+        self.client.force_login(user)
         session = self.client.session
         session[DEVICE_ID_SESSION_KEY] = device.persistent_id
         session.save()
         return self.client.cookies[settings.SESSION_COOKIE_NAME].value
 
     @contextmanager
-    def _browser_page(self, viewport):
+    def _browser_page(self, viewport, user=None):
         # Django ORM/test-client work must happen before Playwright starts its
         # sync facade, which owns an event loop in this thread.
-        session_cookie = self._verified_session_cookie()
+        session_cookie = self._verified_session_cookie(user)
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
@@ -129,5 +134,35 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
+            self.assertEqual(page_errors, [])
+            self.assertEqual(console_errors, [])
+
+    def test_manager_moderates_with_comparison_and_clear_actions(self):
+        today = timezone.localdate()
+        Reading.objects.create(
+            meter=self.meter, date=today - timedelta(days=30), value=Decimal("1100.000"),
+        )
+        submission = ControllerReadingSubmission.objects.create(
+            meter=self.meter, date=today, value=Decimal("1183.000"),
+            submitted_by=self.controller, notes="Контрольный обход",
+        )
+
+        with self._browser_page({"width": 1280, "height": 900}, self.manager) as (page, page_errors, console_errors):
+            response = page.goto(
+                f"{self.live_server_url}/admin/water/controllerreadingsubmission/{submission.pk}/change/"
+            )
+            self.assertIsNotNone(response)
+            self.assertEqual(response.status, 200)
+            self.assertTrue(page.get_by_text("Проверка показания", exact=True).is_visible())
+            self.assertTrue(page.get_by_text("Предыдущее утверждённое", exact=True).is_visible())
+            self.assertTrue(page.get_by_text("Разница", exact=True).is_visible())
+            self.assertTrue(page.get_by_role("button", name="Принять показание", exact=True).is_visible())
+            self.assertTrue(page.get_by_label("Комментарий при отклонении (необязательно)").is_visible())
+            self.assertTrue(page.get_by_role("button", name="Отклонить", exact=True).is_visible())
+
+            page.get_by_role("button", name="Принять показание", exact=True).click()
+            page.wait_for_url(f"**/controllerreadingsubmission/{submission.pk}/change/")
+            self.assertTrue(page.get_by_text("Показание принято и записано в журнал.", exact=True).is_visible())
+            self.assertTrue(page.get_by_role("link", name="Открыть журнал показаний", exact=True).is_visible())
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
