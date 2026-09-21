@@ -7,6 +7,9 @@ from django.db import models
 from django.utils import timezone
 
 
+PUBLIC_DOCUMENT_EXTENSIONS = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.odt', '.ods', '.txt'}
+
+
 def public_document_path(instance, filename):
     suffix = Path(filename).suffix.lower()[:12]
     return f'public-documents/{timezone.localdate():%Y/%m}/{uuid.uuid4().hex}{suffix}'
@@ -81,8 +84,13 @@ class PublicDocument(models.Model):
         ordering = ['-document_date', '-id']
 
     def clean(self):
-        if self.document and getattr(self.document, 'size', 0) > 20 * 1024 * 1024:
-            raise ValidationError({'document': 'Размер файла не должен превышать 20 МБ.'})
+        if self.document:
+            if getattr(self.document, 'size', 0) > 20 * 1024 * 1024:
+                raise ValidationError({'document': 'Размер файла не должен превышать 20 МБ.'})
+            suffix = Path(self.document.name).suffix.lower()
+            if suffix not in PUBLIC_DOCUMENT_EXTENSIONS:
+                allowed = ', '.join(sorted(PUBLIC_DOCUMENT_EXTENSIONS))
+                raise ValidationError({'document': f'Недопустимый тип файла. Разрешены: {allowed}.'})
         if self._state.adding and self.category_id and not self.category.active:
             raise ValidationError({'category': 'Эту категорию больше нельзя выбирать.'})
 
