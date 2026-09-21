@@ -8,11 +8,40 @@ cd /
 
 test "$(id -u)" -eq 0
 APP=/opt/trud-1-site
-PUBLIC_ROOT=/var/www/trud-1
+NGINX_SITE=/etc/nginx/sites-enabled/trud-1
 STATUS=/var/lib/trud-1/deployment-status.json
 TARGET=${1:?Target full SHA required}
 EXPECTED=${2:?Expected installed full SHA required}
 [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$EXPECTED" =~ ^[0-9a-f]{40}$ ]]
+
+resolve_public_root() {
+    local configured_root canonical_root
+    test -f "$NGINX_SITE" || {
+        echo "Не найден конфиг Nginx: $NGINX_SITE" >&2
+        return 1
+    }
+    nginx -t -q
+    configured_root=$(awk '$1 == "root" { sub(/;$/, "", $2); print $2; exit }' "$NGINX_SITE")
+    [ -n "$configured_root" ] || {
+        echo "В $NGINX_SITE не найден server root." >&2
+        return 1
+    }
+    canonical_root=$(readlink -f "$configured_root")
+    case "$canonical_root" in
+        /var/www/trud-1/releases/*) ;;
+        *)
+            echo "Неожиданный public root Nginx: $canonical_root" >&2
+            return 1
+            ;;
+    esac
+    test -d "$canonical_root" || {
+        echo "Public root не существует: $canonical_root" >&2
+        return 1
+    }
+    printf '%s\n' "$canonical_root"
+}
+PUBLIC_ROOT=$(resolve_public_root)
+echo "Публичный root Nginx: $PUBLIC_ROOT"
 
 exec 9>/run/trud-backup.lock
 flock -n 9 || { echo 'Выполняется бэкап или обновление.'; exit 1; }
@@ -57,7 +86,7 @@ PY
 systemctl is-active --quiet trud-1-site.service
 
 # This installer is intentionally limited to ZUR-42 plus the docs-only plan commit.
-unexpected=$(gitapp diff --name-only "$EXPECTED" "$TARGET" | grep -Ev '^(.github/workflows/backend.yml|app.js|index.html|public-content.css|docs/PLAN.md|backend/config/settings.py|backend/config/urls.py|backend/public_site/.*|backend/water/management/commands/setup_roles.py|backend/water/templates/admin/water/index.html|ops/deploy-public-content.sh|ops/DEPLOYMENT.md)$' || true)
+unexpected=$(gitapp diff --name-only "$EXPECTED" "$TARGET" | grep -Ev '^(.github/workflows/backend.yml|app.js|index.html|public-content.css|docs/PLAN.md|backend/config/settings.py|backend/config/urls.py|backend/public_site/.*|backend/water/management/commands/setup_roles.py|backend/water/templates/admin/water/index.html|backend/water/test_admin_navigation.py|ops/deploy-public-content.sh|ops/DEPLOYMENT.md)$' || true)
 if [ -n "$unexpected" ]; then
     echo 'В выпуск попали неожиданные файлы:' >&2
     printf '%s\n' "$unexpected" >&2
