@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 from django import forms
+from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.template.response import TemplateResponse
@@ -142,10 +143,9 @@ def _individual_group_line(group, starts, ends):
     counted = 0
     for membership in memberships:
         account = membership.account
-        meters = _active_meters(
+        meters = list(_active_meters(
             Meter.objects.filter(account=account, kind='individual'), starts, ends,
-        )
-        meters = list(meters)
+        ))
         if not meters:
             problems.append(f'{account}: нет индивидуального счётчика на весь период')
             continue
@@ -253,7 +253,12 @@ def calculate_water_balance(starts, ends):
             if not line.complete:
                 result.issues.append(f'{meter.serial}: {line.detail}')
 
-        outflow_complete = all(line.complete for line in result.group_lines + result.other_lines)
+        has_outflow_sources = bool(result.group_lines or result.other_lines)
+        if not has_outflow_sources:
+            result.issues.append('Нет ни одной группы или отдельного учтённого расхода для сравнения с входом.')
+        outflow_complete = has_outflow_sources and all(
+            line.complete for line in result.group_lines + result.other_lines
+        )
         result.complete = input_total is not None and outflow_complete
         if result.complete:
             result.confirmed_volume = result.confirmed_known
@@ -304,7 +309,7 @@ def water_balance_view(request):
         report = calculate_water_balance(form.cleaned_data['starts'], form.cleaned_data['ends'])
 
     context = {
-        **request.admin_site.each_context(request) if hasattr(request, 'admin_site') else {},
+        **admin.site.each_context(request),
         'title': 'Водный баланс и контроль потерь',
         'form': form,
         'report': report,
