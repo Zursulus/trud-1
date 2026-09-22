@@ -222,7 +222,10 @@ def reassign_reading(*, reading_id, destination_meter_id, reason, actor, expecte
         old_id = reading.pk
         old_meter_label = str(source)
         destination_label = str(destination)
-        audit_reason = f'Исправление привязки: {old_meter_label} → {destination_label}. {reason}'
+        full_audit_reason = f'Исправление привязки: {old_meter_label} → {destination_label}. {reason}'
+        history_reason = (
+            f'Исправление привязки Reading #{old_id}: meter {source.pk}→{destination.pk}. {reason}'
+        )[:100]
 
         replacement = Reading(
             meter=destination,
@@ -231,7 +234,7 @@ def reassign_reading(*, reading_id, destination_meter_id, reason, actor, expecte
             notes=reading.notes,
         )
         replacement._history_user = actor
-        replacement._change_reason = audit_reason
+        replacement._change_reason = history_reason
         replacement.save()
 
         submissions = list(
@@ -241,14 +244,14 @@ def reassign_reading(*, reading_id, destination_meter_id, reason, actor, expecte
             submission.meter = destination
             submission.reading = replacement
             submission._history_user = actor
-            submission._change_reason = audit_reason
+            submission._change_reason = history_reason
             submission.save(update_fields=['meter', 'reading'])
 
         reading._history_user = actor
-        reading._change_reason = audit_reason
+        reading._change_reason = history_reason
         reading.delete()
 
-        return replacement, old_id, len(submissions), old_meter_label, destination_label
+        return replacement, old_id, len(submissions), old_meter_label, destination_label, full_audit_reason
 
 
 def reassign_reading_view(request, reading_id):
@@ -276,7 +279,7 @@ def reassign_reading_view(request, reading_id):
             }
             if request.POST.get('confirm') == 'yes':
                 try:
-                    replacement, old_id, linked_count, old_label, new_label = reassign_reading(
+                    replacement, old_id, linked_count, old_label, new_label, full_reason = reassign_reading(
                         reading_id=reading.pk,
                         destination_meter_id=destination.pk,
                         reason=form.cleaned_data['reason'],
@@ -295,7 +298,7 @@ def reassign_reading_view(request, reading_id):
                         change_message=(
                             f'Исправлена привязка показания: Reading #{old_id}; '
                             f'{old_label} → {new_label}; связанных заявок контролёра: {linked_count}; '
-                            f'причина: {form.cleaned_data["reason"]}'
+                            f'{full_reason}'
                         ),
                     )
                     messages.success(
