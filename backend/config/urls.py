@@ -6,7 +6,7 @@ from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
-from water import portal
+from water import portal, portal_ui
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
@@ -29,35 +29,35 @@ class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
 admin.site.__class__ = MainAdminOTPOnlySite
 
 urlpatterns = [
-    # Public, read-only deployment marker for external uptime/status checks.
     path('admin/deployment-status/', deployment_status, name='deployment_status'),
-    # The public root remains static in Nginx. These read-only endpoints are
-    # intentionally below /admin/ because that prefix is already proxied to Django.
-    # They are NOT wrapped in admin_view and expose only explicitly published data.
     path('admin/public/content/', public_views.public_content, name='public_content'),
     path('admin/public/document/<int:document_id>/', public_views.public_document_download, name='public_document_download'),
-    # Resident pages stay under the already proxied /admin/ prefix, but are
-    # separate from the staff admin and never weaken its OTP requirement.
     path('admin/cabinet/login/', auth_views.LoginView.as_view(
         template_name='water/portal/login.html', authentication_form=portal.ResidentAuthenticationForm,
         redirect_authenticated_user=True, next_page='resident_dashboard',
     ), name='resident_login'),
     path('admin/cabinet/logout/', auth_views.LogoutView.as_view(next_page='resident_login'), name='resident_logout'),
+    path('admin/cabinet/help/', portal_ui.access_help, name='resident_access_help'),
     path('admin/cabinet/invite/<str:token>/', portal.register_invite, name='resident_invite'),
     path('admin/cabinet/reset/<str:token>/', portal.reset_password, name='resident_password_reset'),
     path('admin/cabinet/password/', portal.change_password, name='resident_password_change'),
-    path('admin/cabinet/', portal.dashboard, name='resident_dashboard'),
-    path('admin/cabinet/account/<int:account_id>/', portal.resident_account, name='resident_account'),
+    path('admin/cabinet/', portal_ui.dashboard, name='resident_dashboard'),
+    path('admin/cabinet/plots/', portal_ui.plots, name='resident_plots'),
+    path('admin/cabinet/account/<int:account_id>/', portal_ui.account_home, name='resident_account'),
+    path('admin/cabinet/account/<int:account_id>/payments/', portal_ui.payments, name='resident_payments'),
+    path('admin/cabinet/account/<int:account_id>/water/', portal_ui.water, name='resident_water'),
+    path('admin/cabinet/account/<int:account_id>/appeals/', portal_ui.appeals, name='resident_appeals'),
+    path('admin/cabinet/account/<int:account_id>/documents/', portal_ui.documents, name='resident_documents'),
+    path('admin/cabinet/account/<int:account_id>/notifications/', portal_ui.notifications, name='resident_notifications'),
+    path('admin/cabinet/account/<int:account_id>/more/', portal_ui.more, name='resident_more'),
+    path('admin/cabinet/account/<int:account_id>/profile/', portal_ui.profile, name='resident_profile'),
+    path('admin/cabinet/account/<int:account_id>/security/', portal_ui.security, name='resident_security'),
     path('admin/cabinet/account/<int:account_id>/meter/<int:meter_id>/reading/', portal.submit_reading, name='resident_reading'),
     path('admin/cabinet/account/<int:account_id>/appeal/new/', portal.create_appeal, name='resident_appeal_new'),
     path('admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/', portal.resident_appeal, name='resident_appeal'),
     path('admin/cabinet/account/<int:account_id>/document/<int:document_id>/', portal.download_document, name='resident_document'),
-    # Read-only operational report. admin_view preserves the same staff/OTP gate.
     path('admin/water/balance/', admin.site.admin_view(water_balance_view), name='water_balance'),
-    # Prepared multi-sheet water package: validation only, no database writes.
-    # admin_view keeps the same staff/OTP protection as the rest of /admin/.
     path('admin/water/package-dry-run/', admin.site.admin_view(package_dry_run), name='water_package_dry_run'),
-    # Readings review/export and explicit superuser-approved correction workflow.
     path('admin/water/readings/review/', admin.site.admin_view(reading_review_view), name='water_readings_review'),
     path('admin/water/readings/export-xlsx/', admin.site.admin_view(export_readings_xlsx), name='water_readings_xlsx'),
     path(
@@ -65,8 +65,6 @@ urlpatterns = [
         admin.site.admin_view(reassign_reading_view),
         name='water_reading_reassign',
     ),
-    # Keep every staff authentication page below /admin/: production Nginx
-    # proxies that prefix to Django while the public root stays static.
     path('admin/', include(two_factor_urls)),
     path('admin/', admin.site.urls),
 ]
