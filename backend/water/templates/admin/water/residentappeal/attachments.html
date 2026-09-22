@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:water_residentappeal_change' appeal.pk %}">← Вернуться к обращению №{{ appeal.pk }}</a></p>
+<h1>Вложения обращения №{{ appeal.pk }}</h1>
+<p><strong>{{ appeal.subject }}</strong><br>{{ appeal.account }}</p>
+<div class="module aligned">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Добавить файл в ответ правления" class="default">
+  </form>
+</div>
+<h2>Файлы переписки</h2>
+<table>
+  <thead><tr><th>Когда</th><th>Файл</th><th>Кто загрузил</th><th>Контекст</th></tr></thead>
+  <tbody>
+  {% for item in attachments %}
+    <tr>
+      <td>{{ item.created_at|date:"d.m.Y H:i" }}</td>
+      <td><a href="{% url 'admin_appeal_attachment_download' item.pk %}">{{ item.original_name }}</a> · {{ item.file_size|filesizeformat }}</td>
+      <td>{{ item.uploaded_by.get_full_name|default:item.uploaded_by.username }}</td>
+      <td>{% if item.uploaded_by.is_staff %}Ответ правления{% elif item.message_id %}Уточнение жителя{% else %}Первое сообщение жителя{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">Вложений пока нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>Файлы закрытые: они скачиваются только после проверки прав и не публикуются через публичный каталог.</p>
+{% endblock %}
