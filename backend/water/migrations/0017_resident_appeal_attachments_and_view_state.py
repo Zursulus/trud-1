@@ -12,6 +12,21 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
+            name='ResidentAppealBoardMessage',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('body', models.TextField(max_length=5000, verbose_name='Сообщение правления')),
+                ('created_at', models.DateTimeField(default=django.utils.timezone.now, editable=False, verbose_name='Отправлено')),
+                ('appeal', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='board_messages', to='water.residentappeal', verbose_name='Обращение')),
+                ('author', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='board_appeal_messages', to=settings.AUTH_USER_MODEL, verbose_name='Сотрудник')),
+            ],
+            options={
+                'verbose_name': 'Сообщение правления по обращению',
+                'verbose_name_plural': 'Сообщения правления по обращениям',
+                'ordering': ['created_at', 'id'],
+            },
+        ),
+        migrations.CreateModel(
             name='ResidentAppealAttachment',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
@@ -20,6 +35,7 @@ class Migration(migrations.Migration):
                 ('file_size', models.PositiveBigIntegerField(editable=False, verbose_name='Размер, байт')),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, editable=False, verbose_name='Загружено')),
                 ('appeal', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='attachments', to='water.residentappeal', verbose_name='Обращение')),
+                ('board_message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='attachments', to='water.residentappealboardmessage', verbose_name='Сообщение правления')),
                 ('message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='attachments', to='water.residentappealmessage', verbose_name='Сообщение жителя')),
                 ('uploaded_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='resident_appeal_attachments', to=settings.AUTH_USER_MODEL, verbose_name='Загрузил')),
             ],
