@@ -2,7 +2,16 @@
 
 {% block content %}
   <div id="content-main">
+    <style>
+      .reassign-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:12px 0 18px; }
+      .reassign-card { border:1px solid var(--hairline-color); border-radius:6px; padding:12px; background:var(--body-bg); }
+      .reassign-card strong { display:block; margin-top:4px; font-size:18px; }
+      .reassign-good { border-left:4px solid #4f8a10; }
+      .reassign-warn { border-left:4px solid #d49b00; }
+    </style>
+
     <h1>{{ title }}</h1>
+    <p>Используйте этот экран только для исправления ошибочно выбранного счётчика. Значение и дата показания не меняются.</p>
 
     <fieldset class="module aligned">
       <h2>Сейчас</h2>
@@ -15,16 +24,25 @@
       <div class="form-row"><strong>Связанных заявок контролёра:</strong> {{ linked_submissions|length }}</div>
     </fieldset>
 
+    <div class="reassign-summary">
+      <div class="reassign-card reassign-warn">
+        <span>Текущий расход</span>
+        <strong>{% if source_consumption != None %}{{ source_consumption }} м³{% else %}нет предыдущего показания{% endif %}</strong>
+        {% if source_previous %}<small>{{ source_previous.date|date:"d.m.Y" }}: {{ source_previous.value }} → {{ reading.value }}</small>{% endif %}
+      </div>
+    </div>
+
     <form method="post" novalidate>
       {% csrf_token %}
       {{ form.non_field_errors }}
       {{ form.reading_version }}
       <fieldset class="module aligned">
-        <h2>Исправление</h2>
+        <h2>Куда перенести</h2>
         <div class="form-row">
           {{ form.destination_meter.errors }}
           {{ form.destination_meter.label_tag }}
           {{ form.destination_meter }}
+          <div class="help">Выберите правильный счётчик. Система сама проверит дату, последовательность и конфликт записей.</div>
         </div>
         <div class="form-row">
           {{ form.reason.errors }}
@@ -36,31 +54,39 @@
 
       {% if preview %}
         <fieldset class="module aligned">
-          <h2>Проверка: было → станет</h2>
+          <h2>Проверка перед записью: было → станет</h2>
           <div class="form-row"><strong>Было:</strong> {{ reading.meter }}</div>
           <div class="form-row"><strong>Станет:</strong> {{ preview.destination }}</div>
-          <div class="form-row"><strong>Предыдущее на новом счётчике:</strong>
-            {% if preview.previous %}{{ preview.previous.date|date:"d.m.Y" }} · {{ preview.previous.value }} м³{% else %}нет{% endif %}
+
+          <div class="reassign-summary">
+            <div class="reassign-card reassign-good">
+              <span>Расход после переноса</span>
+              <strong>{% if preview.previous_consumption != None %}{{ preview.previous_consumption }} м³{% else %}начальное показание{% endif %}</strong>
+              {% if preview.previous %}<small>{{ preview.previous.date|date:"d.m.Y" }}: {{ preview.previous.value }} → {{ reading.value }}</small>{% endif %}
+            </div>
+            <div class="reassign-card">
+              <span>Следующий интервал</span>
+              <strong>{% if preview.following_consumption != None %}{{ preview.following_consumption }} м³{% else %}следующего показания нет{% endif %}</strong>
+              {% if preview.following %}<small>{{ reading.value }} → {{ preview.following.value }} · {{ preview.following.date|date:"d.m.Y" }}</small>{% endif %}
+            </div>
           </div>
-          <div class="form-row"><strong>Следующее на новом счётчике:</strong>
-            {% if preview.following %}{{ preview.following.date|date:"d.m.Y" }} · {{ preview.following.value }} м³{% else %}нет{% endif %}
-          </div>
+
           <p class="help">
-            При подтверждении будет создана новая валидная запись на правильном счётчике,
-            связанные заявки контролёра будут перенесены, ошибочная запись будет удалена.
-            Операция выполняется одной транзакцией и сохраняется в истории.
+            Проверка пройдена: конфликт записи на эту дату и нарушение последовательности не обнаружены.
+            При подтверждении будет создана запись на правильном счётчике, связанные заявки контролёра будут перенесены,
+            ошибочная запись будет удалена. Всё выполняется одной транзакцией и сохраняется в истории.
           </p>
         </fieldset>
         <div class="submit-row">
-          <button type="submit" name="confirm" value="yes" class="default">Подтверждаю исправление</button>
+          <button type="submit" name="confirm" value="yes" class="default">Подтверждаю: исправить привязку</button>
         </div>
       {% else %}
         <div class="submit-row">
-          <button type="submit" class="default">Проверить перед исправлением</button>
+          <button type="submit" class="default">Проверить, что получится</button>
         </div>
       {% endif %}
     </form>
 
-    <p><a href="{% url 'admin:water_reading_change' reading.pk %}">← Вернуться к показанию</a></p>
+    <p><a href="{% url 'water_readings_review' %}">← К проверке показаний</a> · <a href="{% url 'admin:water_reading_change' reading.pk %}">Открыть карточку показания</a></p>
   </div>
 {% endblock %}
