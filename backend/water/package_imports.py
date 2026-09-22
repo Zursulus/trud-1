@@ -33,6 +33,12 @@ def _looks_like_phone_number(value):
     return compact.isdigit() and 10 <= len(compact) <= 12
 
 
+def _note_says_exact_date_unknown(value):
+    """Detect source notes that explicitly say the exact reading date is unknown."""
+    note = _text(value).casefold()
+    return 'дата неизвестна' in note or ('точн' in note and 'дат' in note and 'неизвест' in note)
+
+
 def _text(value):
     if value is None:
         return ''
@@ -178,6 +184,12 @@ def inspect_water_package(upload):
             )
 
         reading_date = row.get('date')
+        if reading_date and _note_says_exact_date_unknown(row.get('notes')):
+            blocking_issues.append(
+                f'Показания строка {number}: дата {reading_date} указана, хотя примечание говорит, '
+                'что точная дата неизвестна; нельзя подставлять техническую дату.'
+            )
+            continue
         if not reading_date:
             if value is not None:
                 undated_values += 1
