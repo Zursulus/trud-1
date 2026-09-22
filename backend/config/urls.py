@@ -9,7 +9,8 @@ from public_site import views as public_views
 from water import portal
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
-from water.reading_admin_tools import export_readings_xlsx, reading_review_view, reassign_reading_view
+from water.reading_admin_tools import reassign_reading_view
+from water.reading_review_config import export_readings_xlsx, reading_review_view
 
 
 class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
