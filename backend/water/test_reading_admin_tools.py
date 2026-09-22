@@ -10,7 +10,7 @@ from .models import (
     Account, ControllerReadingSubmission, Meter, Reading, SupplyNode, User, WaterGroup,
 )
 from .reading_admin_tools import (
-    export_readings_xlsx, reading_review_view, reassign_reading,
+    _audit_readings, export_readings_xlsx, reading_review_view, reassign_reading,
     reassign_reading_view,
 )
 
@@ -151,6 +151,32 @@ class ReadingAdminToolsTests(TestCase):
         self.assertIn('6,000', html)
         self.assertIn('Проверка пройдена', html)
 
+    def test_individual_consumption_threshold_is_10_inclusive(self):
+        below = Reading.objects.create(
+            meter=self.destination, date=date(2026, 9, 10), value='1186',
+        )
+        threshold = Reading.objects.create(
+            meter=self.destination, date=date(2026, 9, 20), value='1196',
+        )
+        rows = {row['reading'].pk: row for row in _audit_readings()}
+        self.assertFalse(rows[below.pk]['review'])
+        self.assertTrue(rows[threshold.pk]['review'])
+        self.assertEqual(rows[threshold.pk]['severity'], 'review')
+        self.assertIn('10 м³ или больше', rows[threshold.pk]['review_reason'])
+
+    def test_controller_link_checks_meter_date_value_and_status(self):
+        self.submission.date = date(2026, 9, 20)
+        self.submission.value = Decimal('1182')
+        self.submission.status = 'pending'
+        self.submission._change_reason = 'Тест несоответствия заявки'
+        self.submission.save()
+
+        row = next(row for row in _audit_readings() if row['reading'].pk == self.reading.pk)
+        self.assertEqual(row['severity'], 'critical')
+        self.assertIn('Дата заявки контролёра не совпадает', row['review_reason'])
+        self.assertIn('Значение заявки контролёра не совпадает', row['review_reason'])
+        self.assertIn('без статуса «Принято»', row['review_reason'])
+
     def test_review_dashboard_lists_real_anomaly_with_actions(self):
         request = self.otp_admin_request('get', '/admin/water/readings/review/')
         response = reading_review_view(request)
@@ -158,7 +184,8 @@ class ReadingAdminToolsTests(TestCase):
         html = response.content.decode('utf-8')
         self.assertIn('Морская 17', html)
         self.assertIn('976', html)
-        self.assertIn('Расход больше 100', html)
+        self.assertIn('Расход 10', html)
+        self.assertIn('счётчик, дата и значение', html)
         self.assertIn('Исправить привязку', html)
         self.assertIn('Скачать удобный XLSX', html)
 
@@ -175,6 +202,8 @@ class ReadingAdminToolsTests(TestCase):
         summary = workbook['Сводка']
         self.assertEqual(summary['A1'].value, 'Проверка показаний ТСН «ТРУД-1»')
         self.assertEqual(summary['B4'].value, 1)
+        self.assertIn('≥ 10', summary['B7'].value)
+        self.assertIn('несоответствие счётчика, даты, значения', summary['B10'].value)
 
         review = workbook['Требуют проверки']
         headers = [cell.value for cell in review[1]]
@@ -194,7 +223,7 @@ class ReadingAdminToolsTests(TestCase):
         self.assertEqual(exported[5], 'Морская 17')
         self.assertEqual(exported[12], 976)
         self.assertEqual(exported[13], 'ПРОВЕРИТЬ')
-        self.assertIn('Расход больше 100', exported[14])
+        self.assertIn('Расход 10', exported[14])
         self.assertIn('Контролёр:', exported[15])
         self.assertEqual(exported[17], 'Открыть')
         self.assertEqual(exported[18], 'Исправить')
