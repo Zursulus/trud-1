@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django import forms
+from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -43,7 +44,7 @@ def manage_appeal_attachments(request, appeal_id):
         return HttpResponseRedirect(reverse('admin_appeal_attachments', args=[appeal.pk]))
     attachments = ResidentAppealAttachment.objects.filter(appeal=appeal).select_related('uploaded_by', 'message')
     return TemplateResponse(request, 'admin/water/residentappeal/attachments.html', {
-        **request.current_app.each_context(request) if hasattr(request.current_app, 'each_context') else {},
+        **admin.site.each_context(request),
         'title': f'Вложения обращения №{appeal.pk}',
         'appeal': appeal,
         'form': form,
