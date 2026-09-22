@@ -5,6 +5,13 @@
     <style>
       .review-actions { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
       .review-actions a { display:inline-block; padding:8px 12px; border-radius:4px; background:var(--button-bg); color:var(--button-fg); text-decoration:none; }
+      .review-threshold { border:1px solid var(--hairline-color); border-radius:6px; padding:14px; margin:0 0 18px; background:var(--body-bg); }
+      .review-threshold form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+      .review-threshold label { display:block; font-weight:600; margin-bottom:5px; }
+      .review-threshold input { width:130px; min-height:38px; padding:6px 9px; font-size:16px; }
+      .review-threshold button { min-height:38px; padding:7px 14px; border:0; border-radius:4px; background:var(--button-bg); color:var(--button-fg); cursor:pointer; }
+      .review-threshold .hint { flex-basis:100%; color:var(--body-quiet-color); font-size:12px; }
+      .review-threshold .error { flex-basis:100%; color:var(--error-fg); font-weight:600; }
       .review-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:0 0 20px; }
       .review-card { border:1px solid var(--hairline-color); border-radius:6px; padding:14px; background:var(--body-bg); }
       .review-card strong { display:block; font-size:24px; margin-top:4px; }
@@ -23,6 +30,12 @@
       .review-small { color:var(--body-quiet-color); font-size:12px; }
       .review-links { white-space:nowrap; }
       .review-links a { margin-right:8px; }
+      @media (max-width: 767px) {
+        .review-threshold form > div { width:100%; }
+        .review-threshold input, .review-threshold button { width:100%; box-sizing:border-box; }
+        .review-table { min-width:900px; }
+        .module { overflow-x:auto; }
+      }
     </style>
 
     <h1>{{ title }}</h1>
@@ -30,6 +43,18 @@
       Здесь собраны только строки, которые система предлагает перепроверить. Это <strong>не означает, что запись ошибочная</strong>.
       Для индивидуальных счётчиков текущий порог контроля расхода — <strong>{{ threshold }} м³ и больше</strong> между соседними показаниями.
     </p>
+
+    <div class="review-threshold">
+      <form method="get">
+        <div>
+          <label for="id_threshold">Порог индивидуального расхода, м³</label>
+          <input id="id_threshold" name="threshold" type="number" inputmode="decimal" min="0.001" max="100000" step="0.001" value="{{ threshold_query|default:threshold }}">
+        </div>
+        <button type="submit">Применить</button>
+        {% if threshold_error %}<div class="error">{{ threshold_error }} Использован порог по умолчанию {{ default_threshold }} м³.</div>{% endif %}
+        <div class="hint">Меняется только чувствительность списка «ПРОВЕРИТЬ». Критические проверки дат, последовательности и заявок контролёра работают всегда.</div>
+      </form>
+    </div>
 
     <div class="review-rules">
       <strong>Что система проверяет автоматически</strong>
@@ -44,7 +69,7 @@
     </div>
 
     <div class="review-actions">
-      {% if can_export %}<a href="{% url 'water_readings_xlsx' %}">Скачать удобный XLSX</a>{% endif %}
+      {% if can_export %}<a href="{% url 'water_readings_xlsx' %}?threshold={{ threshold_query|default:threshold }}">Скачать удобный XLSX с этим порогом</a>{% endif %}
       <a href="{% url 'admin:water_reading_changelist' %}">Все показания</a>
       <a href="{% url 'admin:water_reading_workspace' %}">Рабочее место оператора</a>
     </div>
