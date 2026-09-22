@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{{ title }}</h1>
+
+    <fieldset class="module aligned">
+      <h2>Сейчас</h2>
+      <div class="form-row"><strong>Reading ID:</strong> {{ reading.pk }}</div>
+      <div class="form-row"><strong>Счётчик:</strong> {{ reading.meter }}</div>
+      <div class="form-row"><strong>Участок:</strong> {{ reading.meter.account|default:"—" }}</div>
+      <div class="form-row"><strong>Дата:</strong> {{ reading.date|date:"d.m.Y" }}</div>
+      <div class="form-row"><strong>Показание:</strong> {{ reading.value }} м³</div>
+      <div class="form-row"><strong>Примечание:</strong> {{ reading.notes|default:"—" }}</div>
+      <div class="form-row"><strong>Связанных заявок контролёра:</strong> {{ linked_submissions|length }}</div>
+    </fieldset>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {{ form.reading_version }}
+      <fieldset class="module aligned">
+        <h2>Исправление</h2>
+        <div class="form-row">
+          {{ form.destination_meter.errors }}
+          {{ form.destination_meter.label_tag }}
+          {{ form.destination_meter }}
+        </div>
+        <div class="form-row">
+          {{ form.reason.errors }}
+          {{ form.reason.label_tag }}
+          {{ form.reason }}
+          {% if form.reason.help_text %}<div class="help">{{ form.reason.help_text }}</div>{% endif %}
+        </div>
+      </fieldset>
+
+      {% if preview %}
+        <fieldset class="module aligned">
+          <h2>Проверка: было → станет</h2>
+          <div class="form-row"><strong>Было:</strong> {{ reading.meter }}</div>
+          <div class="form-row"><strong>Станет:</strong> {{ preview.destination }}</div>
+          <div class="form-row"><strong>Предыдущее на новом счётчике:</strong>
+            {% if preview.previous %}{{ preview.previous.date|date:"d.m.Y" }} · {{ preview.previous.value }} м³{% else %}нет{% endif %}
+          </div>
+          <div class="form-row"><strong>Следующее на новом счётчике:</strong>
+            {% if preview.following %}{{ preview.following.date|date:"d.m.Y" }} · {{ preview.following.value }} м³{% else %}нет{% endif %}
+          </div>
+          <p class="help">
+            При подтверждении будет создана новая валидная запись на правильном счётчике,
+            связанные заявки контролёра будут перенесены, ошибочная запись будет удалена.
+            Операция выполняется одной транзакцией и сохраняется в истории.
+          </p>
+        </fieldset>
+        <div class="submit-row">
+          <button type="submit" name="confirm" value="yes" class="default">Подтверждаю исправление</button>
+        </div>
+      {% else %}
+        <div class="submit-row">
+          <button type="submit" class="default">Проверить перед исправлением</button>
+        </div>
+      {% endif %}
+    </form>
+
+    <p><a href="{% url 'admin:water_reading_change' reading.pk %}">← Вернуться к показанию</a></p>
+  </div>
+{% endblock %}
