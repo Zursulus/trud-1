@@ -10,6 +10,7 @@ from public_site.models import PublicDocument, PublicNews
 from .billing import account_totals
 from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
 from .portal import active_accesses, resident_guard
+from .resident_models import ResidentAppealViewState
 
 
 def _accesses(user):
@@ -29,7 +30,6 @@ def _common(request, access=None, section='home'):
         'access': access,
         'account': account,
         'active_section': section,
-        'is_board_member': request.user.groups.filter(name__in=('Правление', 'board_member')).exists(),
     }
 
 
@@ -39,6 +39,26 @@ def _latest_reading(account):
     ).select_related('meter').order_by('-date', '-id').first()
 
 
+def _appeals_with_unread(user, account):
+    appeals = list(
+        ResidentAppeal.objects.filter(account=account, author=user)
+        .select_related('category')
+        .order_by('-opened_at', '-id')
+    )
+    states = {
+        state.appeal_id: state.last_seen_response_at
+        for state in ResidentAppealViewState.objects.filter(user=user, appeal__in=appeals)
+    }
+    for appeal in appeals:
+        seen_at = states.get(appeal.pk)
+        appeal.portal_unread = bool(
+            appeal.responded_at
+            and appeal.response.strip()
+            and (seen_at is None or seen_at < appeal.responded_at)
+        )
+    return appeals
+
+
 def _home_context(request, access):
     account = access.account
     totals = account_totals(account)
@@ -46,9 +66,9 @@ def _home_context(request, access):
     latest_charge = Charge.objects.filter(
         account=account, status='approved',
     ).select_related('period').order_by('-period__starts', '-id').first()
-    latest_appeal = ResidentAppeal.objects.filter(
-        account=account, author=request.user,
-    ).select_related('category').order_by('-opened_at', '-id').first()
+    appeals = _appeals_with_unread(request.user, account)
+    latest_appeal = appeals[0] if appeals else None
+    unread_appeal = next((item for item in appeals if item.portal_unread), None)
     latest_document = AccountDocument.objects.filter(
         account=account, visible_to_residents=True, published_at__lte=timezone.now(),
     ).select_related('category').order_by('-published_at', '-id').first()
@@ -65,10 +85,15 @@ def _home_context(request, access):
             'text': 'Откройте платежи, чтобы посмотреть начисления и историю оплат.',
             'url': reverse('resident_payments', args=[account.pk]),
         })
-    awaiting = ResidentAppeal.objects.filter(
-        account=account, author=request.user, status='awaiting_resident',
-    ).order_by('-opened_at').first()
-    if awaiting:
+    if unread_appeal:
+        attention.append({
+            'kind': 'appeal',
+            'title': 'Новый ответ правления',
+            'text': unread_appeal.subject,
+            'url': reverse('resident_appeal', args=[account.pk, unread_appeal.pk]),
+        })
+    awaiting = next((item for item in appeals if item.status == 'awaiting_resident'), None)
+    if awaiting and awaiting.pk != getattr(unread_appeal, 'pk', None):
         attention.append({
             'kind': 'appeal',
             'title': 'Правление ждёт ваш ответ',
@@ -180,9 +205,7 @@ def appeals(request, account_id):
         return denied
     access = _access_or_404(request.user, account_id)
     context = _common(request, access, 'more')
-    context['appeals'] = ResidentAppeal.objects.filter(
-        account=access.account, author=request.user,
-    ).select_related('category').order_by('-opened_at', '-id')
+    context['appeals'] = _appeals_with_unread(request.user, access.account)
     return TemplateResponse(request, 'water/portal/appeals.html', context)
 
 
