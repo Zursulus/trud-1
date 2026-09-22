@@ -6,7 +6,7 @@ from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
-from water import portal, portal_ui
+from water import appeal_admin_tools, portal, portal_ui, resident_actions
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
@@ -53,9 +53,24 @@ urlpatterns = [
     path('admin/cabinet/account/<int:account_id>/profile/', portal_ui.profile, name='resident_profile'),
     path('admin/cabinet/account/<int:account_id>/security/', portal_ui.security, name='resident_security'),
     path('admin/cabinet/account/<int:account_id>/meter/<int:meter_id>/reading/', portal.submit_reading, name='resident_reading'),
-    path('admin/cabinet/account/<int:account_id>/appeal/new/', portal.create_appeal, name='resident_appeal_new'),
-    path('admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/', portal.resident_appeal, name='resident_appeal'),
+    path('admin/cabinet/account/<int:account_id>/appeal/new/', resident_actions.create_appeal, name='resident_appeal_new'),
+    path('admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/', resident_actions.resident_appeal, name='resident_appeal'),
+    path(
+        'admin/cabinet/account/<int:account_id>/appeal/<int:appeal_id>/attachment/<int:attachment_id>/',
+        resident_actions.download_appeal_attachment,
+        name='resident_appeal_attachment',
+    ),
     path('admin/cabinet/account/<int:account_id>/document/<int:document_id>/', portal.download_document, name='resident_document'),
+    path(
+        'admin/water/residentappeal/<int:appeal_id>/attachments/',
+        admin.site.admin_view(appeal_admin_tools.manage_appeal_attachments),
+        name='admin_appeal_attachments',
+    ),
+    path(
+        'admin/water/residentappeal/attachment/<int:attachment_id>/',
+        admin.site.admin_view(appeal_admin_tools.download_appeal_attachment),
+        name='admin_appeal_attachment_download',
+    ),
     path('admin/water/balance/', admin.site.admin_view(water_balance_view), name='water_balance'),
     path('admin/water/package-dry-run/', admin.site.admin_view(package_dry_run), name='water_package_dry_run'),
     path('admin/water/readings/review/', admin.site.admin_view(reading_review_view), name='water_readings_review'),
