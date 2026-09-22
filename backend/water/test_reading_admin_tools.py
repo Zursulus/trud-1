@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from io import BytesIO
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -46,7 +47,7 @@ class ReadingAdminToolsTests(TestCase):
 
     def test_reassign_moves_reading_and_controller_submission_atomically(self):
         old_id = self.reading.pk
-        replacement, returned_old_id, linked, old_label, new_label = reassign_reading(
+        replacement, returned_old_id, linked, old_label, new_label, full_reason = reassign_reading(
             reading_id=old_id,
             destination_meter_id=self.destination.pk,
             reason='Контролёр выбрал соседний участок',
@@ -58,21 +59,22 @@ class ReadingAdminToolsTests(TestCase):
         self.assertEqual(linked, 1)
         self.assertIn('0055', old_label)
         self.assertIn('0056', new_label)
+        self.assertIn('Контролёр выбрал соседний участок', full_reason)
         self.assertFalse(Reading.objects.filter(pk=old_id).exists())
         self.assertEqual(replacement.meter, self.destination)
         self.assertEqual(replacement.date, date(2026, 9, 21))
-        self.assertEqual(replacement.value, self.reading.value)
+        self.assertEqual(replacement.value, Decimal('1183'))
 
         self.submission.refresh_from_db()
         self.assertEqual(self.submission.meter, self.destination)
         self.assertEqual(self.submission.reading, replacement)
 
-        self.assertTrue(
-            replacement.history.filter(
-                history_user=self.admin,
-                history_change_reason__icontains='Исправление привязки',
-            ).exists()
-        )
+        history = replacement.history.filter(
+            history_user=self.admin,
+            history_change_reason__icontains='Исправление привязки',
+        ).first()
+        self.assertIsNotNone(history)
+        self.assertLessEqual(len(history.history_change_reason), 100)
         self.assertTrue(
             Reading.history.filter(
                 id=old_id, history_type='-', history_user=self.admin,
