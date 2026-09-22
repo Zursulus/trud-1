@@ -1,8 +1,9 @@
 {% extends "admin/change_list.html" %}
 
 {% block object-tools-items %}
+  <li><a href="{% url 'water_readings_review' %}">Проверка показаний</a></li>
   {% if perms.water.export_reading %}
-    <li><a href="{% url 'water_readings_xlsx' %}">Выгрузить всю таблицу XLSX</a></li>
+    <li><a href="{% url 'water_readings_xlsx' %}">Скачать XLSX для сверки</a></li>
   {% endif %}
   {% if has_add_permission %}
     <li><a href="{% url 'admin:water_reading_workspace' %}" class="addlink">Рабочее место оператора</a></li>
