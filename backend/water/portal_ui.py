@@ -43,6 +43,7 @@ def _appeals_with_unread(user, account):
     appeals = list(
         ResidentAppeal.objects.filter(account=account, author=user)
         .select_related('category')
+        .prefetch_related('board_messages')
         .order_by('-opened_at', '-id')
     )
     states = {
@@ -50,12 +51,16 @@ def _appeals_with_unread(user, account):
         for state in ResidentAppealViewState.objects.filter(user=user, appeal__in=appeals)
     }
     for appeal in appeals:
+        board_messages = list(appeal.board_messages.all())
+        board_message_at = board_messages[-1].created_at if board_messages else None
+        legacy_response_at = appeal.responded_at if appeal.response.strip() else None
+        candidates = [value for value in (board_message_at, legacy_response_at) if value]
+        latest_board_at = max(candidates) if candidates else None
         seen_at = states.get(appeal.pk)
         appeal.portal_unread = bool(
-            appeal.responded_at
-            and appeal.response.strip()
-            and (seen_at is None or seen_at < appeal.responded_at)
+            latest_board_at and (seen_at is None or seen_at < latest_board_at)
         )
+        appeal.portal_latest_board_at = latest_board_at
     return appeals
 
 
