@@ -9,7 +9,7 @@ from public_site import views as public_views
 from water import portal
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
-from water.reading_admin_tools import export_readings_xlsx, reassign_reading_view
+from water.reading_admin_tools import export_readings_xlsx, reading_review_view, reassign_reading_view
 
 
 class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
@@ -56,7 +56,8 @@ urlpatterns = [
     # Prepared multi-sheet water package: validation only, no database writes.
     # admin_view keeps the same staff/OTP protection as the rest of /admin/.
     path('admin/water/package-dry-run/', admin.site.admin_view(package_dry_run), name='water_package_dry_run'),
-    # Readings audit/export and explicit superuser-approved correction workflow.
+    # Readings review/export and explicit superuser-approved correction workflow.
+    path('admin/water/readings/review/', admin.site.admin_view(reading_review_view), name='water_readings_review'),
     path('admin/water/readings/export-xlsx/', admin.site.admin_view(export_readings_xlsx), name='water_readings_xlsx'),
     path(
         'admin/water/readings/<int:reading_id>/reassign/',
