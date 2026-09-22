@@ -1,0 +1,7 @@
+{% extends "admin/change_form.html" %}
+{% block object-tools-items %}
+  {% if original %}
+    <li><a href="{% url 'admin_appeal_attachments' original.pk %}">Вложения обращения</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
