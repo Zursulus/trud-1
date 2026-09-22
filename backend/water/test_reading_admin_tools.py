@@ -9,7 +9,10 @@ from openpyxl import load_workbook
 from .models import (
     Account, ControllerReadingSubmission, Meter, Reading, SupplyNode, User, WaterGroup,
 )
-from .reading_admin_tools import export_readings_xlsx, reassign_reading, reassign_reading_view
+from .reading_admin_tools import (
+    export_readings_xlsx, reading_review_view, reassign_reading,
+    reassign_reading_view,
+)
 
 
 class ReadingAdminToolsTests(TestCase):
@@ -124,27 +127,74 @@ class ReadingAdminToolsTests(TestCase):
         with self.assertRaises(PermissionDenied):
             reassign_reading_view(request, self.reading.pk)
 
-    def test_xlsx_export_contains_audit_columns_and_review_flag(self):
-        request = RequestFactory().get('/admin/water/readings/export-xlsx/')
+    def test_reassign_preview_shows_current_976_and_new_6_consumption(self):
+        request = RequestFactory().post(
+            f'/admin/water/readings/{self.reading.pk}/reassign/',
+            data={
+                'destination_meter': self.destination.pk,
+                'reason': 'Контролёр выбрал соседний участок',
+                'reading_version': self.reading.version,
+            },
+        )
+        request.user = self.admin
+        response = reassign_reading_view(request, self.reading.pk)
+        response.render()
+        html = response.content.decode('utf-8')
+        self.assertIn('976', html)
+        self.assertIn('6.000', html)
+        self.assertIn('Проверка пройдена', html)
+
+    def test_review_dashboard_lists_real_anomaly_with_actions(self):
+        request = RequestFactory().get('/admin/water/readings/review/')
+        request.user = self.admin
+        response = reading_review_view(request)
+        response.render()
+        html = response.content.decode('utf-8')
+        self.assertIn('Морская 17', html)
+        self.assertIn('976', html)
+        self.assertIn('Расход больше 100', html)
+        self.assertIn('Исправить привязку', html)
+        self.assertIn('Скачать удобный XLSX', html)
+
+    def test_xlsx_export_is_review_friendly_and_links_back_to_admin(self):
+        request = RequestFactory().get('/admin/water/readings/export-xlsx/', HTTP_HOST='testserver')
         request.user = self.admin
         response = export_readings_xlsx(request)
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('spreadsheetml', response['Content-Type'])
         workbook = load_workbook(BytesIO(response.content), data_only=True)
-        self.assertEqual(workbook.sheetnames, ['Показания', 'Пояснение'])
-        sheet = workbook['Показания']
-        headers = [cell.value for cell in sheet[1]]
-        self.assertEqual(headers[0], 'Reading ID')
-        self.assertIn('Import / meter ID', headers)
-        self.assertIn('Контроль', headers)
-        self.assertIn('Источник', headers)
+        self.assertEqual(workbook.sheetnames, ['Сводка', 'Требуют проверки', 'Все показания'])
 
-        rows = list(sheet.iter_rows(min_row=2, values_only=True))
-        row_by_id = {row[0]: row for row in rows}
-        exported = row_by_id[self.reading.pk]
+        summary = workbook['Сводка']
+        self.assertEqual(summary['A1'].value, 'Проверка показаний ТСН «ТРУД-1»')
+        self.assertEqual(summary['B4'].value, 1)
+
+        review = workbook['Требуют проверки']
+        headers = [cell.value for cell in review[1]]
+        self.assertEqual(headers[0], 'Reading ID')
+        self.assertIn('Статус проверки', headers)
+        self.assertIn('Причина проверки', headers)
+        self.assertIn('Открыть в админке', headers)
+        self.assertIn('Исправить привязку', headers)
+        self.assertEqual(review.freeze_panes, 'A2')
+        self.assertEqual(len(review.tables), 1)
+
+        rows = list(review.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(rows), 1)
+        exported = rows[0]
+        self.assertEqual(exported[0], self.reading.pk)
         self.assertEqual(exported[1], 'IND-TRUD-PLOT-0055')
         self.assertEqual(exported[5], 'Морская 17')
-        self.assertEqual(exported[10], 976)
-        self.assertIn('ПРОВЕРИТЬ', exported[11])
-        self.assertIn('Контролёр:', exported[12])
+        self.assertEqual(exported[12], 976)
+        self.assertEqual(exported[13], 'ПРОВЕРИТЬ')
+        self.assertIn('Расход больше 100', exported[14])
+        self.assertIn('Контролёр:', exported[15])
+        self.assertEqual(exported[17], 'Открыть')
+        self.assertEqual(exported[18], 'Исправить')
+        self.assertIsNotNone(review.cell(2, 18).hyperlink)
+        self.assertIsNotNone(review.cell(2, 19).hyperlink)
+
+        all_sheet = workbook['Все показания']
+        all_rows = list(all_sheet.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(all_rows), 3)
