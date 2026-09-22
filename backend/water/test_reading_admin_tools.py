@@ -48,6 +48,13 @@ class ReadingAdminToolsTests(TestCase):
             status='approved', reading=self.reading,
         )
 
+    def otp_admin_request(self, method, path, data=None):
+        factory = RequestFactory()
+        request = getattr(factory, method)(path, data=data or {})
+        request.user = self.admin
+        request.user.is_verified = lambda: True
+        return request
+
     def test_reassign_moves_reading_and_controller_submission_atomically(self):
         old_id = self.reading.pk
         replacement, returned_old_id, linked, old_label, new_label, full_reason = reassign_reading(
@@ -128,7 +135,8 @@ class ReadingAdminToolsTests(TestCase):
             reassign_reading_view(request, self.reading.pk)
 
     def test_reassign_preview_shows_current_976_and_new_6_consumption(self):
-        request = RequestFactory().post(
+        request = self.otp_admin_request(
+            'post',
             f'/admin/water/readings/{self.reading.pk}/reassign/',
             data={
                 'destination_meter': self.destination.pk,
@@ -136,7 +144,6 @@ class ReadingAdminToolsTests(TestCase):
                 'reading_version': self.reading.version,
             },
         )
-        request.user = self.admin
         response = reassign_reading_view(request, self.reading.pk)
         response.render()
         html = response.content.decode('utf-8')
@@ -145,8 +152,7 @@ class ReadingAdminToolsTests(TestCase):
         self.assertIn('Проверка пройдена', html)
 
     def test_review_dashboard_lists_real_anomaly_with_actions(self):
-        request = RequestFactory().get('/admin/water/readings/review/')
-        request.user = self.admin
+        request = self.otp_admin_request('get', '/admin/water/readings/review/')
         response = reading_review_view(request)
         response.render()
         html = response.content.decode('utf-8')
