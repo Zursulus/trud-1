@@ -9,6 +9,7 @@ from public_site import views as public_views
 from water import portal
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
+from water.reading_admin_tools import export_readings_xlsx, reassign_reading_view
 
 
 class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
@@ -55,6 +56,13 @@ urlpatterns = [
     # Prepared multi-sheet water package: validation only, no database writes.
     # admin_view keeps the same staff/OTP protection as the rest of /admin/.
     path('admin/water/package-dry-run/', admin.site.admin_view(package_dry_run), name='water_package_dry_run'),
+    # Readings audit/export and explicit superuser-approved correction workflow.
+    path('admin/water/readings/export-xlsx/', admin.site.admin_view(export_readings_xlsx), name='water_readings_xlsx'),
+    path(
+        'admin/water/readings/<int:reading_id>/reassign/',
+        admin.site.admin_view(reassign_reading_view),
+        name='water_reading_reassign',
+    ),
     # Keep every staff authentication page below /admin/: production Nginx
     # proxies that prefix to Django while the public root stays static.
     path('admin/', include(two_factor_urls)),
