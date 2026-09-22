@@ -50,7 +50,7 @@ class ResidentConversationTests(TestCase):
             self.assertEqual(response.status_code, 302)
             attachment = ResidentAppealAttachment.objects.get()
             self.assertEqual(attachment.uploaded_by, self.resident)
-            self.assertFalse(attachment.document.url if hasattr(attachment.document, 'url') else False)
+            self.assertTrue(attachment.document.name.startswith('appeal-attachments/'))
 
             url = f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/attachment/{attachment.pk}/'
             response = self.client.get(url)
@@ -99,6 +99,10 @@ class ResidentConversationTests(TestCase):
         )
         self.assertGreaterEqual(second.created_at, first.created_at)
         self.assertContains(self.client.get(list_url), 'Новый ответ')
+
+        second.body = 'Попытка переписать отправленный ответ.'
+        with self.assertRaises(Exception):
+            second.save()
 
     def test_board_workspace_sends_message_and_private_attachment(self):
         call_command('setup_roles')
