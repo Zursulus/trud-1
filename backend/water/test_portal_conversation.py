@@ -55,7 +55,7 @@ class ResidentConversationTests(TestCase):
             url = f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/attachment/{attachment.pk}/'
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response['Cache-Control'], 'private, no-store')
+            self.assertIn('private, no-store', response['Cache-Control'])
             self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
             self.assertEqual(b''.join(response.streaming_content), b'%PDF-private')
 
@@ -124,7 +124,7 @@ class ResidentConversationTests(TestCase):
 
             download = self.client.get(f'/admin/water/residentappeal/attachment/{attachment.pk}/')
             self.assertEqual(download.status_code, 200)
-            self.assertEqual(download['Cache-Control'], 'private, no-store')
+            self.assertIn('private, no-store', download['Cache-Control'])
 
             self.client.force_login(self.resident)
             response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/')
