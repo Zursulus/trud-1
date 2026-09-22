@@ -4,6 +4,7 @@ This module deliberately performs no writes to the working registry. It is the
 first gate for the staged import package prepared from the legacy water file.
 """
 from collections import Counter
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import io
 import re
@@ -26,6 +27,9 @@ SHEETS = {
     'Показания': ('meter_id', 'date', 'value_m3', 'notes', 'source_sheet', 'source_row'),
 }
 
+TECHNICAL_DATE_MARKER = 'техническая дата по согласованной схеме 5/20'
+TECHNICAL_MONTHS = {'июнь': 6, 'июль': 7, 'август': 8}
+
 
 def _looks_like_phone_number(value):
     """Reject contact numbers accidentally mapped into the reading column."""
@@ -37,6 +41,48 @@ def _note_says_exact_date_unknown(value):
     """Detect source notes that explicitly say the exact reading date is unknown."""
     note = _text(value).casefold()
     return 'дата неизвестна' in note or ('точн' in note and 'дат' in note and 'неизвест' in note)
+
+
+def _parse_date_text(value):
+    """Parse an XLSX-normalized date value for validation only."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = _text(value)
+    if not text:
+        return None
+    for parser in (
+        lambda s: date.fromisoformat(s[:10]),
+        lambda s: datetime.strptime(s, '%d.%m.%Y').date(),
+    ):
+        try:
+            return parser(text)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _technical_date_matches_note(value, note_value):
+    """Allow only the explicitly agreed synthetic 5th/20th date scheme."""
+    note = _text(note_value).casefold()
+    if TECHNICAL_DATE_MARKER not in note:
+        return False
+    reading_date = _parse_date_text(value)
+    if reading_date is None:
+        return False
+
+    month = next((number for name, number in TECHNICAL_MONTHS.items() if name in note), None)
+    if month is None or reading_date.month != month:
+        return False
+
+    if 'предыдущее' in note or 'начальное' in note:
+        expected_day = 5
+    elif 'текущее' in note:
+        expected_day = 20
+    else:
+        return False
+    return reading_date.day == expected_day
 
 
 def _text(value):
@@ -154,6 +200,7 @@ def inspect_water_package(upload):
 
     reading_keys = set()
     dated_readings = 0
+    technical_dated_readings = 0
     undated_values = 0
     empty_readings = 0
     for number, row in parsed['Показания']:
@@ -185,11 +232,13 @@ def inspect_water_package(upload):
 
         reading_date = row.get('date')
         if reading_date and _note_says_exact_date_unknown(row.get('notes')):
-            blocking_issues.append(
-                f'Показания строка {number}: дата {reading_date} указана, хотя примечание говорит, '
-                'что точная дата неизвестна; нельзя подставлять техническую дату.'
-            )
-            continue
+            if not _technical_date_matches_note(reading_date, row.get('notes')):
+                blocking_issues.append(
+                    f'Показания строка {number}: дата {reading_date} указана при неизвестной точной дате, '
+                    'но не соответствует согласованной технической схеме 5/20.'
+                )
+                continue
+            technical_dated_readings += 1
         if not reading_date:
             if value is not None:
                 undated_values += 1
@@ -220,6 +269,7 @@ def inspect_water_package(upload):
         'structure_ready': not blocking_issues,
         'reading_plan': {
             'dated': dated_readings,
+            'technical_dated': technical_dated_readings,
             'undated_to_meter_notes': undated_values,
             'empty_skipped': empty_readings,
         },
