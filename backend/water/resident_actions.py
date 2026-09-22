@@ -7,7 +7,6 @@ from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
@@ -66,6 +65,16 @@ def _own_appeal(request, account_id, appeal_id):
         pk=appeal_id, account=access.account, author=request.user,
     )
     return access, appeal
+
+
+def _latest_board_event_at(appeal):
+    timestamps = []
+    if appeal.responded_at and appeal.response.strip():
+        timestamps.append(appeal.responded_at)
+    latest_message = appeal.board_messages.order_by('-created_at', '-id').first()
+    if latest_message:
+        timestamps.append(latest_message.created_at)
+    return max(timestamps) if timestamps else None
 
 
 @csrf_protect
@@ -141,36 +150,77 @@ def resident_appeal(request, account_id, appeal_id):
         except ValidationError as error:
             form.add_error(None, error)
 
-    if request.method == 'GET' and appeal.responded_at and appeal.response.strip():
+    latest_board_at = _latest_board_event_at(appeal)
+    if request.method == 'GET' and latest_board_at:
         ResidentAppealViewState.objects.update_or_create(
             user=request.user,
             appeal=appeal,
-            defaults={'last_seen_response_at': appeal.responded_at},
+            defaults={'last_seen_response_at': latest_board_at},
         )
 
     attachments = list(
         ResidentAppealAttachment.objects.filter(appeal=appeal)
-        .select_related('uploaded_by', 'message')
+        .select_related('uploaded_by', 'message', 'board_message')
         .order_by('created_at', 'id')
     )
-    initial_attachments = [item for item in attachments if item.message_id is None and not item.is_board_file]
-    board_attachments = [item for item in attachments if item.is_board_file]
-    message_attachments = {}
+    initial_attachments = [
+        item for item in attachments
+        if not item.message_id and not item.board_message_id and not item.is_board_file
+    ]
+    resident_attachment_map = {}
+    board_attachment_map = {}
+    legacy_board_attachments = []
     for item in attachments:
         if item.message_id:
-            message_attachments.setdefault(item.message_id, []).append(item)
-    resident_messages = list(appeal.resident_messages.all())
-    for message in resident_messages:
-        message.portal_attachments = message_attachments.get(message.pk, [])
+            resident_attachment_map.setdefault(item.message_id, []).append(item)
+        elif item.board_message_id:
+            board_attachment_map.setdefault(item.board_message_id, []).append(item)
+        elif item.is_board_file:
+            legacy_board_attachments.append(item)
+
+    events = [{
+        'kind': 'resident',
+        'body': appeal.message,
+        'created_at': appeal.opened_at,
+        'attachments': initial_attachments,
+    }]
+    for message in appeal.resident_messages.all():
+        events.append({
+            'kind': 'resident',
+            'body': message.body,
+            'created_at': message.created_at,
+            'attachments': resident_attachment_map.get(message.pk, []),
+        })
+    if appeal.response.strip() and appeal.responded_at:
+        events.append({
+            'kind': 'board',
+            'body': appeal.response,
+            'created_at': appeal.responded_at,
+            'attachments': legacy_board_attachments,
+        })
+    elif legacy_board_attachments:
+        events.append({
+            'kind': 'board',
+            'body': '',
+            'created_at': legacy_board_attachments[0].created_at,
+            'attachments': legacy_board_attachments,
+        })
+    for message in appeal.board_messages.select_related('author').all():
+        events.append({
+            'kind': 'board',
+            'body': message.body,
+            'created_at': message.created_at,
+            'attachments': board_attachment_map.get(message.pk, []),
+            'author': message.author,
+        })
+    events.sort(key=lambda item: item['created_at'])
 
     return TemplateResponse(request, 'water/portal/appeal.html', {
         'account': access.account,
         'access': access,
         'appeal': appeal,
         'form': form,
-        'resident_messages': resident_messages,
-        'initial_attachments': initial_attachments,
-        'board_attachments': board_attachments,
+        'events': events,
         'active_section': 'more',
     })
 
