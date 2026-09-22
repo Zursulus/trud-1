@@ -17,6 +17,44 @@ def appeal_attachment_path(instance, filename):
     return f'appeal-attachments/{timezone.localdate():%Y/%m}/{uuid.uuid4().hex}{suffix}'
 
 
+class ResidentAppealBoardMessage(models.Model):
+    """Immutable staff message in a resident conversation."""
+
+    appeal = models.ForeignKey(
+        ResidentAppeal, verbose_name='Обращение', on_delete=models.PROTECT,
+        related_name='board_messages',
+    )
+    author = models.ForeignKey(
+        User, verbose_name='Сотрудник', on_delete=models.PROTECT,
+        related_name='board_appeal_messages',
+    )
+    body = models.TextField('Сообщение правления', max_length=5000)
+    created_at = models.DateTimeField('Отправлено', default=timezone.now, editable=False)
+
+    class Meta:
+        verbose_name = 'Сообщение правления по обращению'
+        verbose_name_plural = 'Сообщения правления по обращениям'
+        ordering = ['created_at', 'id']
+
+    def clean(self):
+        if self.author_id and not self.author.is_staff:
+            raise ValidationError({'author': 'Ответ правления может отправить только сотрудник.'})
+        if self.pk:
+            stored = type(self).objects.get(pk=self.pk)
+            if any(
+                getattr(stored, field) != getattr(self, field)
+                for field in ('appeal_id', 'author_id', 'body')
+            ):
+                raise ValidationError('Отправленное сообщение нельзя переписывать. Добавьте новое сообщение.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.appeal} · {self.created_at:%d.%m.%Y %H:%M}'
+
+
 class ResidentAppealAttachment(models.Model):
     """Private file attached to a resident/board conversation.
 
@@ -30,6 +68,10 @@ class ResidentAppealAttachment(models.Model):
     )
     message = models.ForeignKey(
         ResidentAppealMessage, verbose_name='Сообщение жителя', on_delete=models.PROTECT,
+        related_name='attachments', blank=True, null=True,
+    )
+    board_message = models.ForeignKey(
+        ResidentAppealBoardMessage, verbose_name='Сообщение правления', on_delete=models.PROTECT,
         related_name='attachments', blank=True, null=True,
     )
     uploaded_by = models.ForeignKey(
@@ -49,11 +91,17 @@ class ResidentAppealAttachment(models.Model):
         ordering = ['created_at', 'id']
 
     def clean(self):
+        if self.message_id and self.board_message_id:
+            raise ValidationError('Вложение относится только к одному сообщению.')
         if self.message_id and self.appeal_id and self.message.appeal_id != self.appeal_id:
             raise ValidationError({'message': 'Сообщение относится к другому обращению.'})
+        if self.board_message_id and self.appeal_id and self.board_message.appeal_id != self.appeal_id:
+            raise ValidationError({'board_message': 'Сообщение правления относится к другому обращению.'})
         if self.uploaded_by_id and self.appeal_id:
             if not self.uploaded_by.is_staff and self.appeal.author_id != self.uploaded_by_id:
                 raise ValidationError({'uploaded_by': 'Житель может прикладывать файл только к своему обращению.'})
+            if self.board_message_id and self.uploaded_by_id != self.board_message.author_id:
+                raise ValidationError({'uploaded_by': 'Вложение правления должно принадлежать автору сообщения.'})
         if self.document:
             size = getattr(self.document, 'size', 0)
             if size > APPEAL_ATTACHMENT_MAX_BYTES:
@@ -63,7 +111,7 @@ class ResidentAppealAttachment(models.Model):
                 raise ValidationError({'document': 'Разрешены только PDF, JPG и PNG.'})
         if self.pk:
             stored = type(self).objects.get(pk=self.pk)
-            protected = ('appeal_id', 'message_id', 'uploaded_by_id', 'document')
+            protected = ('appeal_id', 'message_id', 'board_message_id', 'uploaded_by_id', 'document')
             for field in protected:
                 old = getattr(stored, field)
                 new = getattr(self, field)
