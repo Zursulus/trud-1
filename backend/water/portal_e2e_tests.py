@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 from datetime import date
-from decimal import Decimal
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
@@ -55,7 +54,7 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(nav_links.count(), 5)
             self.assertTrue(page.evaluate("[...document.querySelectorAll('.bottom-nav a')].every(a => a.getBoundingClientRect().height >= 44)"))
 
-            page.get_by_role('link', name='Вода', exact=True).last.click()
+            page.locator('.bottom-nav a[href$="/water/"]').click()
             page.wait_for_url('**/water/')
             page.get_by_text('Передать показание', exact=True).first.click()
             page.locator('input[name="value"]').fill('12.345')
@@ -69,7 +68,7 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             page.locator('#id_message').fill('Проверяю удобный сценарий обращения.')
             page.get_by_role('button', name='Отправить обращение', exact=True).click()
             page.wait_for_url('**/appeal/*/')
-            self.assertTrue(page.get_by_text('Правление ТСН «Труд-1»', exact=True).count() == 0)
+            self.assertEqual(page.get_by_text('Правление ТСН «Труд-1»', exact=True).count(), 0)
             self.assertTrue(page.get_by_text('Вопрос по участку', exact=True).is_visible())
             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
             self.assertEqual(page_errors, [])
@@ -80,6 +79,6 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self._login(page)
             self.assertTrue(page.locator('.desktop-nav').is_visible())
             self.assertFalse(page.locator('.bottom-nav').is_visible())
-            self.assertTrue(page.get_by_role('link', name='Платежи', exact=True).is_visible())
+            self.assertTrue(page.locator('.desktop-nav a[href$="/payments/"]').is_visible())
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
