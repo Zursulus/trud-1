@@ -10,6 +10,8 @@
       .review-card strong { display:block; font-size:24px; margin-top:4px; }
       .review-card.alert strong { color:#a15c00; }
       .review-card.critical strong { color:#ba2121; }
+      .review-rules { border:1px solid var(--hairline-color); border-radius:6px; padding:12px 14px; margin:0 0 18px; background:var(--darkened-bg); }
+      .review-rules ul { margin:8px 0 0 20px; }
       .review-table { width:100%; border-collapse:collapse; }
       .review-table th, .review-table td { padding:8px 10px; border-bottom:1px solid var(--hairline-color); vertical-align:top; }
       .review-table th { text-align:left; background:var(--darkened-bg); }
@@ -26,8 +28,20 @@
     <h1>{{ title }}</h1>
     <p>
       Здесь собраны только строки, которые система предлагает перепроверить. Это <strong>не означает, что запись ошибочная</strong>.
-      Для индивидуальных счётчиков текущий порог контроля расхода — {{ threshold }} м³ между соседними показаниями.
+      Для индивидуальных счётчиков текущий порог контроля расхода — <strong>{{ threshold }} м³ и больше</strong> между соседними показаниями.
     </p>
+
+    <div class="review-rules">
+      <strong>Что система проверяет автоматически</strong>
+      <ul>
+        <li>индивидуальный расход {{ threshold }} м³ и больше между соседними показаниями;</li>
+        <li>уменьшение показания относительно предыдущего;</li>
+        <li>показание раньше установки, позже снятия счётчика или будущей датой;</li>
+        <li>совпадают ли у связанной заявки контролёра счётчик, дата и значение;</li>
+        <li>имеет ли связанная заявка статус «Принято»;</li>
+        <li>не привязано ли несколько заявок контролёра к одному показанию.</li>
+      </ul>
+    </div>
 
     <div class="review-actions">
       {% if can_export %}<a href="{% url 'water_readings_xlsx' %}">Скачать удобный XLSX</a>{% endif %}
