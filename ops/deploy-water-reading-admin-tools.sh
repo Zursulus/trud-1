@@ -24,7 +24,7 @@ gitapp cat-file -e "$TARGET^{commit}"
 gitapp merge-base --is-ancestor "$EXPECTED" "$TARGET"
 test "$(gitapp rev-parse origin/feature/water-admin)" = "$TARGET"
 
-ALLOWED='^(backend/config/urls\.py|backend/water/reading_admin_tools\.py|backend/water/test_reading_admin_tools\.py|backend/water/templates/admin/water/reading/change_list\.html|backend/water/templates/admin/water/reading/change_form\.html|backend/water/templates/admin/water/reading/reassign\.html|backend/water/templates/admin/water/reading/review\.html|ops/deploy-water-reading-admin-tools\.sh)$'
+ALLOWED='^(backend/config/urls\.py|backend/water/reading_admin_tools\.py|backend/water/reading_review_config\.py|backend/water/test_reading_admin_tools\.py|backend/water/test_reading_review_config\.py|backend/water/templates/admin/water/reading/change_list\.html|backend/water/templates/admin/water/reading/change_form\.html|backend/water/templates/admin/water/reading/reassign\.html|backend/water/templates/admin/water/reading/review\.html|ops/deploy-water-reading-admin-tools\.sh)$'
 CHANGED_FILES=$(gitapp diff --name-only "$EXPECTED" "$TARGET")
 [ -n "$CHANGED_FILES" ] || { echo 'Нет изменений для установки.'; exit 1; }
 while IFS= read -r path; do
