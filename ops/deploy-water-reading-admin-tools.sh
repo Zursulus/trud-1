@@ -1,5 +1,5 @@
 #!/bin/bash
-# Guarded release: XLSX audit export + explicit reading reassignment workflow.
+# Guarded release: readings review UX + XLSX audit + explicit reassignment workflow.
 # Run as root: bash deploy-water-reading-admin-tools.sh TARGET_SHA EXPECTED_PRODUCTION_SHA
 set -Eeuo pipefail
 umask 077
@@ -24,7 +24,7 @@ gitapp cat-file -e "$TARGET^{commit}"
 gitapp merge-base --is-ancestor "$EXPECTED" "$TARGET"
 test "$(gitapp rev-parse origin/feature/water-admin)" = "$TARGET"
 
-ALLOWED='^(backend/config/urls\.py|backend/water/reading_admin_tools\.py|backend/water/test_reading_admin_tools\.py|backend/water/templates/admin/water/reading/change_list\.html|backend/water/templates/admin/water/reading/change_form\.html|backend/water/templates/admin/water/reading/reassign\.html|ops/deploy-water-reading-admin-tools\.sh)$'
+ALLOWED='^(backend/config/urls\.py|backend/water/reading_admin_tools\.py|backend/water/test_reading_admin_tools\.py|backend/water/templates/admin/water/reading/change_list\.html|backend/water/templates/admin/water/reading/change_form\.html|backend/water/templates/admin/water/reading/reassign\.html|backend/water/templates/admin/water/reading/review\.html|ops/deploy-water-reading-admin-tools\.sh)$'
 CHANGED_FILES=$(gitapp diff --name-only "$EXPECTED" "$TARGET")
 [ -n "$CHANGED_FILES" ] || { echo 'Нет изменений для установки.'; exit 1; }
 while IFS= read -r path; do
@@ -114,4 +114,4 @@ write_status "$TARGET"
 
 trap - EXIT INT TERM
 echo "Установлена версия $TARGET. Копия: $BACKUP"
-echo 'Схема БД не изменялась; добавлены XLSX-аудит показаний и подтверждаемое исправление привязки счётчика.'
+echo 'Схема БД не изменялась; улучшены сверка показаний, XLSX-аудит и подтверждаемое исправление привязки.'
