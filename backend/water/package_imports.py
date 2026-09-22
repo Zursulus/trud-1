@@ -109,6 +109,7 @@ def inspect_water_package(upload):
         return set(found)
 
     plot_ids = unique('Участки', 'plot_id')
+    unique('Участки', 'address')
     person_ids = unique('Люди', 'person_id')
     node_names = unique('Узлы', 'node_name')
     group_names = unique('Группы', 'group_name')
