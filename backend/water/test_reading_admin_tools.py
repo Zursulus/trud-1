@@ -148,7 +148,7 @@ class ReadingAdminToolsTests(TestCase):
         response.render()
         html = response.content.decode('utf-8')
         self.assertIn('976', html)
-        self.assertIn('6.000', html)
+        self.assertIn('6,000', html)
         self.assertIn('Проверка пройдена', html)
 
     def test_review_dashboard_lists_real_anomaly_with_actions(self):
