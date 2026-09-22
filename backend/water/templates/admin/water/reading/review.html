@@ -1,0 +1,96 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <style>
+      .review-actions { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
+      .review-actions a { display:inline-block; padding:8px 12px; border-radius:4px; background:var(--button-bg); color:var(--button-fg); text-decoration:none; }
+      .review-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:0 0 20px; }
+      .review-card { border:1px solid var(--hairline-color); border-radius:6px; padding:14px; background:var(--body-bg); }
+      .review-card strong { display:block; font-size:24px; margin-top:4px; }
+      .review-card.alert strong { color:#a15c00; }
+      .review-card.critical strong { color:#ba2121; }
+      .review-table { width:100%; border-collapse:collapse; }
+      .review-table th, .review-table td { padding:8px 10px; border-bottom:1px solid var(--hairline-color); vertical-align:top; }
+      .review-table th { text-align:left; background:var(--darkened-bg); }
+      .review-row-critical { background:#fff0f0; }
+      .review-row-warning { background:#fff9e6; }
+      .review-chip { display:inline-block; padding:2px 7px; border-radius:12px; font-weight:600; font-size:11px; }
+      .review-chip.warning { background:#ffe9a8; color:#684b00; }
+      .review-chip.critical { background:#ffd6d6; color:#8a0000; }
+      .review-small { color:var(--body-quiet-color); font-size:12px; }
+      .review-links { white-space:nowrap; }
+      .review-links a { margin-right:8px; }
+    </style>
+
+    <h1>{{ title }}</h1>
+    <p>
+      Здесь собраны только строки, которые система предлагает перепроверить. Это <strong>не означает, что запись ошибочная</strong>.
+      Для индивидуальных счётчиков текущий порог контроля расхода — {{ threshold }} м³ между соседними показаниями.
+    </p>
+
+    <div class="review-actions">
+      {% if can_export %}<a href="{% url 'water_readings_xlsx' %}">Скачать удобный XLSX</a>{% endif %}
+      <a href="{% url 'admin:water_reading_changelist' %}">Все показания</a>
+      <a href="{% url 'admin:water_reading_workspace' %}">Рабочее место оператора</a>
+    </div>
+
+    <div class="review-cards">
+      <div class="review-card"><span>Всего показаний</span><strong>{{ total_count }}</strong></div>
+      <div class="review-card alert"><span>Требуют проверки</span><strong>{{ review_count }}</strong></div>
+      <div class="review-card critical"><span>Критичных несоответствий</span><strong>{{ critical_count }}</strong></div>
+      <div class="review-card"><span>Связаны с контролёром</span><strong>{{ controller_count }}</strong></div>
+    </div>
+
+    {% if rows %}
+      <div class="module">
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Участок / счётчик</th>
+              <th>Дата</th>
+              <th>Было → стало</th>
+              <th>Расход</th>
+              <th>Почему проверить</th>
+              <th>Источник</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="{% if row.severity == 'critical' %}review-row-critical{% else %}review-row-warning{% endif %}">
+                <td>
+                  <strong>{{ row.account.plot|default:"Без участка" }}</strong><br>
+                  <span class="review-small">{{ row.import_id|default:row.reading.meter.serial }}</span>
+                </td>
+                <td>{{ row.reading.date|date:"d.m.Y" }}</td>
+                <td>
+                  {% if row.previous %}{{ row.previous.value }}{% else %}—{% endif %}
+                  → <strong>{{ row.reading.value }}</strong> м³
+                </td>
+                <td>
+                  {% if row.consumption != None %}<strong>{{ row.consumption }} м³</strong>{% else %}—{% endif %}
+                </td>
+                <td>
+                  <span class="review-chip {% if row.severity == 'critical' %}critical{% else %}warning{% endif %}">
+                    {% if row.severity == 'critical' %}КРИТИЧНО{% else %}ПРОВЕРИТЬ{% endif %}
+                  </span><br>
+                  {{ row.review_reason }}
+                </td>
+                <td>{{ row.source }}</td>
+                <td class="review-links">
+                  <a href="{{ row.change_url }}">Открыть</a>
+                  {% if can_reassign %}<a href="{{ row.reassign_url }}">Исправить привязку</a>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="module" style="padding:18px;">
+        <strong>Сейчас система не нашла показаний, требующих ручной проверки.</strong>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
