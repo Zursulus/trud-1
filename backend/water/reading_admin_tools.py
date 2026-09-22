@@ -1,5 +1,5 @@
-from io import BytesIO
 from decimal import Decimal
+from io import BytesIO
 
 from django import forms
 from django.contrib import admin, messages
@@ -11,14 +11,24 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils import timezone
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 
 from .models import ControllerReadingSubmission, Meter, Reading
 
 
 REVIEW_THRESHOLD_M3 = Decimal('100')
+
+XLSX_HEADERS = [
+    'Reading ID', 'Import / meter ID', 'Счётчик', 'Назначение',
+    'Лицевой счёт', 'Участок / адрес', 'Группа', 'Узел',
+    'Дата', 'Показание, м³', 'Предыдущее показание, м³', 'Дата предыдущего',
+    'Расход от предыдущего, м³', 'Статус проверки', 'Причина проверки',
+    'Источник', 'Примечание', 'Открыть в админке', 'Исправить привязку',
+]
 
 
 def _import_meter_id(meter):
@@ -38,8 +48,8 @@ def _xlsx_safe(value):
     return value
 
 
-def _reading_source(reading):
-    submissions = list(reading.controller_submissions.all())
+def _reading_source(reading, submissions=None):
+    submissions = list(submissions if submissions is not None else reading.controller_submissions.all())
     if submissions:
         parts = []
         for item in submissions:
@@ -51,78 +61,205 @@ def _reading_source(reading):
     return 'Ручная / административная запись'
 
 
-def export_readings_xlsx(request):
-    if not request.user.has_perm('water.export_reading'):
-        raise PermissionDenied
-
+def _audit_readings():
+    """Build one deterministic, read-only audit snapshot for UI and XLSX."""
     queryset = Reading.objects.select_related(
         'meter', 'meter__account', 'meter__group', 'meter__node',
     ).prefetch_related(
         'controller_submissions__submitted_by',
     ).order_by('meter_id', 'date', 'id')
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = 'Показания'
-    headers = [
-        'Reading ID', 'Import / meter ID', 'Счётчик', 'Назначение',
-        'Лицевой счёт', 'Участок / адрес', 'Группа', 'Узел',
-        'Дата', 'Показание, м³', 'Расход от предыдущего, м³',
-        'Контроль', 'Источник', 'Примечание',
-    ]
-    ws.append(headers)
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-    ws.freeze_panes = 'A2'
-    ws.auto_filter.ref = 'A1:N1'
-
     previous_by_meter = {}
-    count = 0
+    rows = []
     for reading in queryset:
         previous = previous_by_meter.get(reading.meter_id)
         consumption = reading.value - previous.value if previous is not None else None
         previous_by_meter[reading.meter_id] = reading
 
-        review = ''
-        if reading.meter.kind == 'individual' and consumption is not None and consumption > REVIEW_THRESHOLD_M3:
-            review = f'ПРОВЕРИТЬ: расход > {REVIEW_THRESHOLD_M3} м³'
+        submissions = list(reading.controller_submissions.all())
+        reasons = []
+        severity = 'ok'
+
+        if consumption is not None and consumption < 0:
+            reasons.append('Показание меньше предыдущего')
+            severity = 'critical'
+        if (
+            reading.meter.kind == 'individual'
+            and consumption is not None
+            and consumption > REVIEW_THRESHOLD_M3
+        ):
+            reasons.append(f'Расход больше {REVIEW_THRESHOLD_M3} м³')
+            severity = 'review' if severity == 'ok' else severity
+        if reading.meter.commissioned_on and reading.date < reading.meter.commissioned_on:
+            reasons.append('Показание раньше даты установки счётчика')
+            severity = 'critical'
+        if reading.meter.retired_on and reading.date > reading.meter.retired_on:
+            reasons.append('Показание позже даты снятия счётчика')
+            severity = 'critical'
+        if any(item.meter_id != reading.meter_id for item in submissions):
+            reasons.append('Связанная заявка контролёра указывает на другой счётчик')
+            severity = 'critical'
 
         account = reading.meter.account
-        row = [
-            reading.pk,
-            _import_meter_id(reading.meter),
-            reading.meter.serial,
-            reading.meter.get_kind_display(),
-            account.number if account else '',
-            account.plot if account else '',
-            reading.meter.group.name if reading.meter.group else '',
-            reading.meter.node.name,
-            reading.date,
-            reading.value,
-            consumption if consumption is not None else '',
-            review,
-            _reading_source(reading),
-            reading.notes,
-        ]
-        ws.append([_xlsx_safe(value) for value in row])
-        count += 1
+        import_id = _import_meter_id(reading.meter)
+        source = _reading_source(reading, submissions)
+        rows.append({
+            'reading': reading,
+            'previous': previous,
+            'consumption': consumption,
+            'account': account,
+            'import_id': import_id,
+            'source': source,
+            'controller_count': len(submissions),
+            'review': bool(reasons),
+            'severity': severity,
+            'review_reason': '; '.join(reasons),
+            'change_url': reverse('admin:water_reading_change', args=[reading.pk]),
+            'reassign_url': reverse('water_reading_reassign', args=[reading.pk]),
+        })
 
-    for row in ws.iter_rows(min_row=2):
-        row[8].number_format = 'dd.mm.yyyy'
-        row[9].number_format = '0.000'
-        if isinstance(row[10].value, (int, float, Decimal)):
-            row[10].number_format = '0.000'
+    rows.sort(key=lambda row: (
+        (row['account'].plot if row['account'] else '') or '',
+        row['import_id'] or row['reading'].meter.serial,
+        row['reading'].date,
+        row['reading'].pk,
+    ))
+    return rows
 
-    widths = [12, 26, 24, 18, 20, 28, 24, 24, 14, 18, 24, 34, 38, 60]
+
+def _style_data_sheet(ws, table_name):
+    ws.freeze_panes = 'A2'
+    ws.sheet_view.showGridLines = False
+    ws.row_dimensions[1].height = 34
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='305496')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    widths = [
+        12, 27, 24, 18, 20, 28, 24, 22, 14, 18,
+        23, 17, 24, 18, 42, 42, 60, 21, 23,
+    ]
     for index, width in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(index)].width = width
 
-    info = wb.create_sheet('Пояснение')
-    info.append(['Назначение', 'Выгрузка всей таблицы показаний для визуального контроля.'])
-    info.append(['Флаг ПРОВЕРИТЬ', f'Только для индивидуальных счётчиков: расход между соседними показаниями больше {REVIEW_THRESHOLD_M3} м³. Это сигнал для ручной проверки, а не утверждение об ошибке.'])
-    info.append(['Исправления', 'Исправлять привязку счётчика следует через отдельное админское действие с подтверждением и причиной.'])
-    info.column_dimensions['A'].width = 24
-    info.column_dimensions['B'].width = 110
+    for row in ws.iter_rows(min_row=2):
+        row[8].number_format = 'dd.mm.yyyy'
+        row[11].number_format = 'dd.mm.yyyy'
+        row[9].number_format = '0.000'
+        row[10].number_format = '0.000'
+        row[12].number_format = '0.000'
+        for cell in row:
+            cell.alignment = Alignment(vertical='top', wrap_text=cell.column >= 14)
+
+        status = row[13].value
+        if status == 'ПРОВЕРИТЬ':
+            for cell in row:
+                cell.fill = PatternFill('solid', fgColor='FFF2CC')
+        elif status == 'КРИТИЧНО':
+            for cell in row:
+                cell.fill = PatternFill('solid', fgColor='F4CCCC')
+
+    if ws.max_row > 1:
+        table = Table(displayName=table_name, ref=f'A1:{get_column_letter(ws.max_column)}{ws.max_row}')
+        table.tableStyleInfo = TableStyleInfo(
+            name='TableStyleMedium2', showFirstColumn=False, showLastColumn=False,
+            showRowStripes=True, showColumnStripes=False,
+        )
+        ws.add_table(table)
+    else:
+        ws.auto_filter.ref = f'A1:{get_column_letter(ws.max_column)}1'
+
+
+def _append_xlsx_row(ws, row, request):
+    reading = row['reading']
+    previous = row['previous']
+    account = row['account']
+    status = 'КРИТИЧНО' if row['severity'] == 'critical' else 'ПРОВЕРИТЬ' if row['review'] else 'OK'
+    values = [
+        reading.pk,
+        row['import_id'],
+        reading.meter.serial,
+        reading.meter.get_kind_display(),
+        account.number if account else '',
+        account.plot if account else '',
+        reading.meter.group.name if reading.meter.group else '',
+        reading.meter.node.name,
+        reading.date,
+        reading.value,
+        previous.value if previous else '',
+        previous.date if previous else '',
+        row['consumption'] if row['consumption'] is not None else '',
+        status,
+        row['review_reason'],
+        row['source'],
+        reading.notes,
+        'Открыть',
+        'Исправить' if request.user.is_superuser else '',
+    ]
+    ws.append([_xlsx_safe(value) for value in values])
+    current = ws.max_row
+
+    open_cell = ws.cell(current, 18)
+    open_cell.hyperlink = request.build_absolute_uri(row['change_url'])
+    open_cell.style = 'Hyperlink'
+    if request.user.is_superuser:
+        fix_cell = ws.cell(current, 19)
+        fix_cell.hyperlink = request.build_absolute_uri(row['reassign_url'])
+        fix_cell.style = 'Hyperlink'
+
+
+def export_readings_xlsx(request):
+    if not request.user.has_perm('water.export_reading'):
+        raise PermissionDenied
+
+    rows = _audit_readings()
+    flagged = [row for row in rows if row['review']]
+    controller_count = sum(1 for row in rows if row['controller_count'])
+    imported_count = sum(
+        1 for row in rows if row['source'] == 'Исторический импорт с технической датой'
+    )
+
+    wb = Workbook()
+    summary = wb.active
+    summary.title = 'Сводка'
+    summary.sheet_view.showGridLines = False
+    summary.merge_cells('A1:D1')
+    summary['A1'] = 'Проверка показаний ТСН «ТРУД-1»'
+    summary['A1'].font = Font(size=16, bold=True, color='FFFFFF')
+    summary['A1'].fill = PatternFill('solid', fgColor='305496')
+    summary['A1'].alignment = Alignment(vertical='center')
+    summary.row_dimensions[1].height = 30
+    summary.append(['Сформировано', timezone.localtime().strftime('%d.%m.%Y %H:%M'), '', ''])
+    summary.append(['Всего показаний', len(rows), '', ''])
+    summary.append(['Требуют проверки', len(flagged), '', ''])
+    summary.append(['Связаны с контролёром', controller_count, '', ''])
+    summary.append(['Исторический импорт', imported_count, '', ''])
+    summary.append(['Порог контроля для индивидуального счётчика', f'> {REVIEW_THRESHOLD_M3} м³', '', ''])
+    summary.append([])
+    summary.append(['Как работать', 'Сначала откройте лист «Требуют проверки». Строка там не означает ошибку — это сигнал для ручной сверки.', '', ''])
+    summary.append(['Исправление', 'Используйте ссылку «Исправить» в строке или отдельную кнопку в карточке показания. Перед записью система покажет «было → станет».', '', ''])
+    summary.append(['Проверка в браузере', 'Открыть страницу проверки показаний', '', ''])
+    summary['B11'].hyperlink = request.build_absolute_uri(reverse('water_readings_review'))
+    summary['B11'].style = 'Hyperlink'
+    summary.column_dimensions['A'].width = 46
+    summary.column_dimensions['B'].width = 100
+    for row in summary.iter_rows(min_row=2, max_col=2):
+        row[0].font = Font(bold=True)
+        row[0].alignment = Alignment(vertical='top', wrap_text=True)
+        row[1].alignment = Alignment(vertical='top', wrap_text=True)
+
+    review_sheet = wb.create_sheet('Требуют проверки')
+    review_sheet.append(XLSX_HEADERS)
+    for row in flagged:
+        _append_xlsx_row(review_sheet, row, request)
+    _style_data_sheet(review_sheet, 'ReadingsToReview')
+
+    all_sheet = wb.create_sheet('Все показания')
+    all_sheet.append(XLSX_HEADERS)
+    for row in rows:
+        _append_xlsx_row(all_sheet, row, request)
+    _style_data_sheet(all_sheet, 'AllReadings')
 
     stream = BytesIO()
     wb.save(stream)
@@ -132,18 +269,40 @@ def export_readings_xlsx(request):
         user=request.user,
         content_type=ContentType.objects.get_for_model(Reading),
         object_id='',
-        object_repr='Выгрузка всей таблицы показаний XLSX',
+        object_repr='Выгрузка проверки показаний XLSX',
         action_flag=2,
-        change_message=f'Экспорт XLSX: {count} записей',
+        change_message=f'Экспорт XLSX: {len(rows)} записей; требуют проверки: {len(flagged)}',
     )
 
     response = HttpResponse(
         stream.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = 'attachment; filename="trud-water-readings.xlsx"'
+    response['Content-Disposition'] = 'attachment; filename="trud-water-readings-review.xlsx"'
     response['Cache-Control'] = 'no-store'
     return response
+
+
+def reading_review_view(request):
+    if not request.user.has_perm('water.view_reading'):
+        raise PermissionDenied
+
+    rows = _audit_readings()
+    flagged = [row for row in rows if row['review']]
+    context = {
+        **admin.site.each_context(request),
+        'title': 'Проверка показаний счётчиков',
+        'opts': Reading._meta,
+        'rows': flagged,
+        'total_count': len(rows),
+        'review_count': len(flagged),
+        'critical_count': sum(1 for row in flagged if row['severity'] == 'critical'),
+        'controller_count': sum(1 for row in rows if row['controller_count']),
+        'can_export': request.user.has_perm('water.export_reading'),
+        'can_reassign': request.user.is_superuser,
+        'threshold': REVIEW_THRESHOLD_M3,
+    }
+    return TemplateResponse(request, 'admin/water/reading/review.html', context)
 
 
 class MeterChoiceField(forms.ModelChoiceField):
@@ -159,7 +318,7 @@ class ReassignReadingForm(forms.Form):
     destination_meter = MeterChoiceField(label='Правильный счётчик', queryset=Meter.objects.none())
     reason = forms.CharField(
         label='Причина исправления', min_length=3,
-        widget=forms.Textarea(attrs={'rows': 3}),
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Например: контролёр выбрал соседний участок'}),
         help_text='Причина попадёт в историю изменений и журнал администратора.',
     )
     reading_version = forms.IntegerField(widget=forms.HiddenInput())
@@ -265,6 +424,11 @@ def reassign_reading_view(request, reading_id):
     form = ReassignReadingForm(request.POST or None, reading=reading)
     preview = None
 
+    source_previous = Reading.objects.filter(
+        meter=reading.meter, date__lt=reading.date,
+    ).order_by('-date', '-id').first()
+    source_consumption = reading.value - source_previous.value if source_previous else None
+
     if request.method == 'POST' and form.is_valid():
         destination = form.cleaned_data['destination_meter']
         try:
@@ -276,6 +440,8 @@ def reassign_reading_view(request, reading_id):
                 'destination': destination,
                 'previous': previous,
                 'following': following,
+                'previous_consumption': reading.value - previous.value if previous else None,
+                'following_consumption': following.value - reading.value if following else None,
             }
             if request.POST.get('confirm') == 'yes':
                 try:
@@ -315,6 +481,8 @@ def reassign_reading_view(request, reading_id):
         'reading': reading,
         'form': form,
         'preview': preview,
+        'source_previous': source_previous,
+        'source_consumption': source_consumption,
         'linked_submissions': reading.controller_submissions.select_related('submitted_by').all(),
     }
     return TemplateResponse(request, 'admin/water/reading/reassign.html', context)
