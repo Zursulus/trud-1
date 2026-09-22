@@ -20,7 +20,7 @@ from openpyxl.utils import get_column_letter
 from .models import ControllerReadingSubmission, Meter, Reading
 
 
-REVIEW_THRESHOLD_M3 = Decimal('100')
+REVIEW_THRESHOLD_M3 = Decimal('10')
 
 XLSX_HEADERS = [
     'Reading ID', 'Import / meter ID', 'Счётчик', 'Назначение',
@@ -71,6 +71,7 @@ def _audit_readings():
 
     previous_by_meter = {}
     rows = []
+    today = timezone.localdate()
     for reading in queryset:
         previous = previous_by_meter.get(reading.meter_id)
         consumption = reading.value - previous.value if previous is not None else None
@@ -80,15 +81,18 @@ def _audit_readings():
         reasons = []
         severity = 'ok'
 
+        if reading.date > today:
+            reasons.append('Показание датировано будущим числом')
+            severity = 'critical'
         if consumption is not None and consumption < 0:
             reasons.append('Показание меньше предыдущего')
             severity = 'critical'
         if (
             reading.meter.kind == 'individual'
             and consumption is not None
-            and consumption > REVIEW_THRESHOLD_M3
+            and consumption >= REVIEW_THRESHOLD_M3
         ):
-            reasons.append(f'Расход больше {REVIEW_THRESHOLD_M3} м³')
+            reasons.append(f'Расход {REVIEW_THRESHOLD_M3} м³ или больше')
             severity = 'review' if severity == 'ok' else severity
         if reading.meter.commissioned_on and reading.date < reading.meter.commissioned_on:
             reasons.append('Показание раньше даты установки счётчика')
@@ -96,9 +100,23 @@ def _audit_readings():
         if reading.meter.retired_on and reading.date > reading.meter.retired_on:
             reasons.append('Показание позже даты снятия счётчика')
             severity = 'critical'
-        if any(item.meter_id != reading.meter_id for item in submissions):
-            reasons.append('Связанная заявка контролёра указывает на другой счётчик')
-            severity = 'critical'
+
+        if submissions:
+            if any(item.meter_id != reading.meter_id for item in submissions):
+                reasons.append('Связанная заявка контролёра указывает на другой счётчик')
+                severity = 'critical'
+            if any(item.date != reading.date for item in submissions):
+                reasons.append('Дата заявки контролёра не совпадает с датой показания')
+                severity = 'critical'
+            if any(item.value != reading.value for item in submissions):
+                reasons.append('Значение заявки контролёра не совпадает с показанием')
+                severity = 'critical'
+            if any(item.status != 'approved' for item in submissions):
+                reasons.append('К показанию привязана заявка контролёра без статуса «Принято»')
+                severity = 'critical'
+            if len(submissions) > 1:
+                reasons.append('К одному показанию привязано несколько заявок контролёра')
+                severity = 'review' if severity == 'ok' else severity
 
         account = reading.meter.account
         import_id = _import_meter_id(reading.meter)
@@ -235,13 +253,14 @@ def export_readings_xlsx(request):
     summary.append(['Требуют проверки', len(flagged), '', ''])
     summary.append(['Связаны с контролёром', controller_count, '', ''])
     summary.append(['Исторический импорт', imported_count, '', ''])
-    summary.append(['Порог контроля для индивидуального счётчика', f'> {REVIEW_THRESHOLD_M3} м³', '', ''])
+    summary.append(['Порог контроля для индивидуального счётчика', f'≥ {REVIEW_THRESHOLD_M3} м³', '', ''])
     summary.append([])
     summary.append(['Как работать', 'Сначала откройте лист «Требуют проверки». Строка там не означает ошибку — это сигнал для ручной сверки.', '', ''])
+    summary.append(['Что проверяется', 'Скачок индивидуального расхода; уменьшение показания; дата вне срока работы счётчика; будущее число; несоответствие счётчика, даты, значения или статуса связанной заявки контролёра; несколько заявок на одно показание.', '', ''])
     summary.append(['Исправление', 'Используйте ссылку «Исправить» в строке или отдельную кнопку в карточке показания. Перед записью система покажет «было → станет».', '', ''])
     summary.append(['Проверка в браузере', 'Открыть страницу проверки показаний', '', ''])
-    summary['B11'].hyperlink = request.build_absolute_uri(reverse('water_readings_review'))
-    summary['B11'].style = 'Hyperlink'
+    summary['B12'].hyperlink = request.build_absolute_uri(reverse('water_readings_review'))
+    summary['B12'].style = 'Hyperlink'
     summary.column_dimensions['A'].width = 46
     summary.column_dimensions['B'].width = 100
     for row in summary.iter_rows(min_row=2, max_col=2):
@@ -377,7 +396,6 @@ def reassign_reading(*, reading_id, destination_meter_id, reason, actor, expecte
         destination = Meter.objects.select_for_update().get(pk=destination_meter_id)
         source = Meter.objects.select_for_update().get(pk=reading.meter_id)
         validate_reassignment(reading, destination)
-
         old_id = reading.pk
         old_meter_label = str(source)
         destination_label = str(destination)
