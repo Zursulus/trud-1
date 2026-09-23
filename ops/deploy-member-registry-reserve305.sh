@@ -20,9 +20,6 @@ test "$EXPECTED" = "$EXPECTED_RELEASE" || {
     exit 1
 }
 
-exec 9>/run/trud-backup.lock
-flock -n 9 || { echo 'Выполняется бэкап или обновление.'; exit 1; }
-
 gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 manage() {
     systemd-run --quiet --wait --pipe --collect \
@@ -50,6 +47,7 @@ gitapp cat-file -e "$TARGET^{commit}"
 gitapp merge-base --is-ancestor "$BASE_ZUR61" "$TARGET"
 
 # Stage 1: install the already reviewed schema release, including migration 0020.
+# The base script owns /run/trud-backup.lock, so this wrapper must not hold it yet.
 BASE_SCRIPT=$(mktemp /root/trud-zur61-base.XXXXXXXX)
 trap 'rm -f "$BASE_SCRIPT"' EXIT
 gitapp show "$BASE_ZUR61:ops/deploy-member-registry-zur61.sh" > "$BASE_SCRIPT"
@@ -60,6 +58,9 @@ rm -f "$BASE_SCRIPT"
 trap - EXIT
 
 # Stage 2: importer-only follow-up. No database migration here.
+exec 9>/run/trud-backup.lock
+flock -n 9 || { echo 'Выполняется бэкап или обновление.'; exit 1; }
+
 CURRENT=$(gitapp rev-parse HEAD)
 test "$CURRENT" = "$BASE_ZUR61"
 CHANGED=$(gitapp diff --name-only "$BASE_ZUR61" "$TARGET" | sort)
@@ -87,9 +88,10 @@ rollback() {
     set +e
     systemctl stop trud-1-site.service
     gitapp checkout --detach "$BASE_ZUR61"
-    systemctl start trud-1-site.service
-    smoke
     cp -p "$BACKUP/deployment-status.json" "$STATUS"
+    systemctl start trud-1-site.service
+    systemctl is-active --quiet trud-1-site.service
+    smoke
     echo "Follow-up не установлен. Production возвращён на $BASE_ZUR61."
     echo "Диагностика: $BACKUP"
     exit "$rc"
