@@ -76,7 +76,10 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             page.get_by_role('button', name='Передать показание', exact=True).click()
             page.wait_for_url(f'**/account/{self.account.pk}/')
 
-            page.locator('a[href$="/appeal/new/"]').first.click()
+            page.get_by_text('Обращения', exact=True).first.click()
+            page.wait_for_url('**/appeals/')
+            page.get_by_role('link', name='Новое обращение').click()
+            page.wait_for_url('**/appeal/new/')
             page.locator('#id_category').select_option(str(self.category.pk))
             page.locator('#id_subject').fill('Вопрос по участку')
             page.locator('#id_message').fill('Проверяю удобный сценарий обращения.')
