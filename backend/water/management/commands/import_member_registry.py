@@ -11,7 +11,9 @@ from water.resident_numbers import ResidentNumberSlot
 
 
 SHEET_NAME = 'Закрытый реестр'
-EXPECTED_IDS = set(range(1, 301))
+BASE_EXPECTED_IDS = set(range(1, 301))
+OPTIONAL_RESERVED_IDS = set(range(301, 311))
+ALLOWED_IDS = BASE_EXPECTED_IDS | OPTIONAL_RESERVED_IDS
 REQUIRED_COLUMNS = {
     '№ пользователя',
     'Телефон(ы) нормализованные',
@@ -83,15 +85,19 @@ def _read_registry(path):
             'membership_note': _text(values[positions['Источник года/основание']]),
             'status': _text(values[positions['Статус']]),
         })
-    if seen != EXPECTED_IDS:
-        missing_ids = sorted(EXPECTED_IDS - seen)
-        extra_ids = sorted(seen - EXPECTED_IDS)
+
+    missing_ids = sorted(BASE_EXPECTED_IDS - seen)
+    unsupported_ids = sorted(seen - ALLOWED_IDS)
+    if missing_ids or unsupported_ids:
         details = []
         if missing_ids:
-            details.append('нет №: ' + ', '.join(map(str, missing_ids[:20])))
-        if extra_ids:
-            details.append('лишние №: ' + ', '.join(map(str, extra_ids[:20])))
-        raise CommandError('Ожидались ровно №1–300; ' + '; '.join(details))
+            details.append('нет обязательных №: ' + ', '.join(map(str, missing_ids[:20])))
+        if unsupported_ids:
+            details.append('недопустимые №: ' + ', '.join(map(str, unsupported_ids[:20])))
+        raise CommandError(
+            'Ожидались обязательные №1–300; дополнительно разрешены только резервные №301–310; '
+            + '; '.join(details)
+        )
     return sorted(result, key=lambda row: row['resident_number'])
 
 
@@ -106,7 +112,8 @@ def _account_index():
 
 class Command(BaseCommand):
     help = (
-        'Проверяет или импортирует закрытый реестр №1–300 без ФИО. '
+        'Проверяет или импортирует закрытый реестр №1–300 без ФИО; '
+        'при необходимости принимает резервные №301–310. '
         'По умолчанию выполняет только dry-run; запись требует --apply.'
     )
 
@@ -119,13 +126,17 @@ class Command(BaseCommand):
         if not path.is_file():
             raise CommandError('Файл реестра не найден.')
         rows = _read_registry(path)
+        row_ids = {row['resident_number'] for row in rows}
 
         slots = {
             slot.number: slot
-            for slot in ResidentNumberSlot.objects.filter(number__in=EXPECTED_IDS)
+            for slot in ResidentNumberSlot.objects.filter(number__in=row_ids)
         }
-        if set(slots) != EXPECTED_IDS:
-            raise CommandError('Слоты №1–300 подготовлены не полностью. Сначала проверьте миграцию resident numbers.')
+        if set(slots) != row_ids:
+            missing_slots = sorted(row_ids - set(slots))
+            raise CommandError(
+                'Не подготовлены resident slots: ' + ', '.join(map(str, missing_slots))
+            )
         bad_slots = [
             number for number, slot in slots.items()
             if slot.purpose != ResidentNumberSlot.PURPOSE_RESIDENT
@@ -150,7 +161,12 @@ class Command(BaseCommand):
             else:
                 missing_account_ids.append(rid)
 
-        self.stdout.write('Реестр: 300 записей №1–300; ФИО не требуются и не создаются.')
+        extra_ids = sorted(row_ids - BASE_EXPECTED_IDS)
+        self.stdout.write(
+            f'Реестр: {len(rows)} записей; обязательные №1–300 присутствуют; ФИО не требуются и не создаются.'
+        )
+        if extra_ids:
+            self.stdout.write('Дополнительные резервные №: ' + ', '.join(map(str, extra_ids)))
         self.stdout.write(f'Однозначно связать с действующим Account: {len(single_matches)}')
         self.stdout.write(f'Неоднозначный Account по адресу: {len(ambiguous_ids)}')
         self.stdout.write(f'Пока без действующего Account: {len(missing_account_ids)}')

@@ -24,7 +24,7 @@ HEADERS = [
 ]
 
 
-def make_registry(path):
+def make_registry(path, extra_rows=None):
     book = Workbook()
     sheet = book.active
     sheet.title = 'Закрытый реестр'
@@ -42,6 +42,8 @@ def make_registry(path):
             '2020',
             'ГОТОВО',
         ])
+    for row in extra_rows or []:
+        sheet.append(row)
     book.save(path)
 
 
@@ -88,3 +90,32 @@ class ImportMemberRegistryTests(TestCase):
             'import_member_registry', str(self.path), apply=True, stdout=second_run,
         )
         self.assertEqual(MemberRegistryEntry.objects.count(), 300)
+
+    def test_optional_reserved_305_is_accepted_and_linked_without_person(self):
+        reserve_account = Account.objects.create(number='LEGACY-305', plot='Миндальная 20')
+        make_registry(self.path, extra_rows=[[
+            305,
+            '',
+            '',
+            '',
+            '',
+            'Миндальная 20',
+            '',
+            '',
+            'Временный legacy-резерв; Account 348; без переноса ФИО/телефона',
+            'ВРЕМЕННЫЙ РЕЗЕРВ',
+        ]])
+
+        output = StringIO()
+        call_command(
+            'import_member_registry', str(self.path), apply=True, stdout=output,
+        )
+
+        self.assertEqual(MemberRegistryEntry.objects.count(), 301)
+        reserve = MemberRegistryEntry.objects.get(pk=305)
+        self.assertEqual(reserve.account_id, reserve_account.pk)
+        self.assertIsNone(reserve.person_id)
+        self.assertEqual(reserve.phone, '')
+        self.assertEqual(reserve.email, '')
+        self.assertIn('Дополнительные резервные №: 305', output.getvalue())
+        self.assertFalse(MemberRegistryEntry.objects.filter(pk=333).exists())
