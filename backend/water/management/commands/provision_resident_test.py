@@ -39,7 +39,10 @@ class Command(BaseCommand):
                 raise CommandError('Действующий лицевой счёт с таким ID не найден.') from error
 
             try:
-                slot = ResidentNumberSlot.objects.select_for_update().select_related('user').get(
+                # Lock only the slot row. Joining the nullable user relation here
+                # would produce a LEFT JOIN, which PostgreSQL cannot lock with
+                # SELECT ... FOR UPDATE on the nullable side.
+                slot = ResidentNumberSlot.objects.select_for_update().get(
                     pk=TEST_RESIDENT_NUMBER,
                     purpose=ResidentNumberSlot.PURPOSE_TEST,
                 )
@@ -47,7 +50,7 @@ class Command(BaseCommand):
                 raise CommandError('Слот №333 не подготовлен. Сначала примените миграции ZUR-58.') from error
 
             if slot.user_id:
-                user = slot.user
+                user = User.objects.get(pk=slot.user_id)
                 if user.is_staff:
                     raise CommandError('Слот №333 ошибочно связан с сотрудником; автоматическое исправление запрещено.')
                 if options['reset_password']:
