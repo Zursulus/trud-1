@@ -147,19 +147,6 @@ function openArticle(article){
   dialog.showModal();
 }
 
-function maybeOpenFeatured(items){
-  const featured=items.find(item=>item&&item.featured);
-  if(!featured||dialog.open)return;
-  const key=`trud1-featured-news:${featured.id}`;
-  try{
-    if(sessionStorage.getItem(key))return;
-    sessionStorage.setItem(key,'1');
-  }catch(error){
-    console.warn('Не удалось сохранить отметку о показе важного материала.',error);
-  }
-  window.setTimeout(()=>{if(!dialog.open)openArticle(featured);},150);
-}
-
 function wireFallback(){
   document.querySelectorAll('[data-news]').forEach(button=>button.addEventListener('click',()=>openArticle(fallbackArticles[Number(button.dataset.news)])));
 }
@@ -228,16 +215,12 @@ async function loadPublicContent(){
     const payload=await response.json();
     if(Array.isArray(payload.news)&&payload.news.length){
       newsGrid.replaceChildren(...payload.news.map(newsCard));
-      maybeOpenFeatured(payload.news);
-    }else{
-      maybeOpenFeatured(fallbackArticles);
     }
     if(Array.isArray(payload.documents)&&payload.documents.length){
       documentsList.replaceChildren(...payload.documents.map(documentRow));
     }
   }catch(error){
     console.warn('Публичный контент временно недоступен; показан безопасный статический вариант.',error);
-    maybeOpenFeatured(fallbackArticles);
   }
 }
 
