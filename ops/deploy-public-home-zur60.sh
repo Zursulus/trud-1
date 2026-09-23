@@ -93,6 +93,7 @@ systemctl is-active --quiet trud-1-site.service
 ALLOWED=$(cat <<'EOF'
 .github/workflows/backend.yml
 app.js
+backend/public_site/tests.py
 feodosia-letter-2026-08-27.webp
 index.html
 ops/deploy-public-home-zur60.sh
@@ -163,7 +164,7 @@ trap 'exit 143' TERM
 CHANGED_CODE=1
 gitapp checkout --detach "$TARGET"
 
-# Publish only reviewed public assets. Backend code is unchanged in this release.
+# Publish only reviewed public assets. Runtime backend code is unchanged in this release.
 for file in index.html style.css app.js feodosia-letter-2026-08-27.webp; do
     tmp=$(mktemp "$PUBLIC_ROOT/.zur60-${file//\//_}.XXXXXXXX")
     install -o root -g root -m 644 "$APP/$file" "$tmp"
