@@ -14,6 +14,7 @@ SHEET_NAME = 'Закрытый реестр'
 BASE_EXPECTED_IDS = set(range(1, 301))
 OPTIONAL_RESERVED_IDS = set(range(301, 311))
 ALLOWED_IDS = BASE_EXPECTED_IDS | OPTIONAL_RESERVED_IDS
+LEGACY_ACCOUNT_COLUMN = 'Legacy Account ID'
 REQUIRED_COLUMNS = {
     '№ пользователя',
     'Телефон(ы) нормализованные',
@@ -64,6 +65,10 @@ def _read_registry(path):
     if missing:
         raise CommandError('Не хватает колонок: ' + ', '.join(missing))
     positions = {name: headers.index(name) for name in REQUIRED_COLUMNS}
+    legacy_account_position = (
+        headers.index(LEGACY_ACCOUNT_COLUMN)
+        if LEGACY_ACCOUNT_COLUMN in headers else None
+    )
 
     result = []
     seen = set()
@@ -76,6 +81,9 @@ def _read_registry(path):
         if rid in seen:
             raise CommandError(f'Повторяется № пользователя {rid}.')
         seen.add(rid)
+        legacy_account_id = None
+        if legacy_account_position is not None and legacy_account_position < len(values):
+            legacy_account_id = _int_or_none(values[legacy_account_position])
         result.append({
             'resident_number': rid,
             'phone': _text(values[positions['Телефон(ы) нормализованные']]),
@@ -84,6 +92,7 @@ def _read_registry(path):
             'joined_year': _int_or_none(values[positions['Год вступления (точный)']]),
             'membership_note': _text(values[positions['Источник года/основание']]),
             'status': _text(values[positions['Статус']]),
+            'legacy_account_id': legacy_account_id,
         })
 
     missing_ids = sorted(BASE_EXPECTED_IDS - seen)
@@ -101,19 +110,22 @@ def _read_registry(path):
     return sorted(result, key=lambda row: row['resident_number'])
 
 
-def _account_index():
-    index = defaultdict(list)
+def _account_indexes():
+    by_address = defaultdict(list)
+    by_id = {}
     for account in Account.objects.filter(archived=False).only('id', 'number', 'plot'):
+        by_id[account.id] = account
         key = _norm_address(account.plot)
         if key:
-            index[key].append(account)
-    return index
+            by_address[key].append(account)
+    return by_address, by_id
 
 
 class Command(BaseCommand):
     help = (
         'Проверяет или импортирует закрытый реестр №1–300 без ФИО; '
         'при необходимости принимает резервные №301–310. '
+        'Неоднозначные legacy-связи можно явно задать колонкой Legacy Account ID. '
         'По умолчанию выполняет только dry-run; запись требует --apply.'
     )
 
@@ -144,8 +156,9 @@ class Command(BaseCommand):
         if bad_slots:
             raise CommandError('Некорректное назначение resident slots: ' + ', '.join(map(str, bad_slots)))
 
-        accounts = _account_index()
+        accounts_by_address, accounts_by_id = _account_indexes()
         single_matches = {}
+        explicit_match_ids = []
         ambiguous_ids = []
         missing_account_ids = []
         manual_source_ids = []
@@ -153,7 +166,22 @@ class Command(BaseCommand):
             rid = row['resident_number']
             if row['status'] != 'ГОТОВО':
                 manual_source_ids.append(rid)
-            candidates = accounts.get(_norm_address(row['address']), []) if row['address'] else []
+
+            explicit_account_id = row['legacy_account_id']
+            if explicit_account_id is not None:
+                account = accounts_by_id.get(explicit_account_id)
+                if account is None:
+                    raise CommandError(
+                        f'№{rid}: Legacy Account ID {explicit_account_id} не найден среди действующих Account.'
+                    )
+                single_matches[rid] = account
+                explicit_match_ids.append(rid)
+                continue
+
+            candidates = (
+                accounts_by_address.get(_norm_address(row['address']), [])
+                if row['address'] else []
+            )
             if len(candidates) == 1:
                 single_matches[rid] = candidates[0]
             elif len(candidates) > 1:
@@ -168,6 +196,7 @@ class Command(BaseCommand):
         if extra_ids:
             self.stdout.write('Дополнительные резервные №: ' + ', '.join(map(str, extra_ids)))
         self.stdout.write(f'Однозначно связать с действующим Account: {len(single_matches)}')
+        self.stdout.write(f'Из них явных Legacy Account ID: {len(explicit_match_ids)}')
         self.stdout.write(f'Неоднозначный Account по адресу: {len(ambiguous_ids)}')
         self.stdout.write(f'Пока без действующего Account: {len(missing_account_ids)}')
         self.stdout.write(f'Строки источника для ручной проверки: {len(manual_source_ids)}')
