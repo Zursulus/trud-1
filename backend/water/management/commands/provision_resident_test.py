@@ -53,6 +53,11 @@ class Command(BaseCommand):
                 user = User.objects.get(pk=slot.user_id)
                 if user.is_staff:
                     raise CommandError('Слот №333 ошибочно связан с сотрудником; автоматическое исправление запрещено.')
+                if user.first_name or user.last_name:
+                    raise CommandError(
+                        'У существующей тестовой учётки заполнены имя/фамилия. '
+                        'Автоматически стирать их нельзя: сначала проверьте, что это действительно синтетическая запись.'
+                    )
                 if options['reset_password']:
                     temporary_password = secrets.token_urlsafe(18)
                     user.set_password(temporary_password)
@@ -64,8 +69,9 @@ class Command(BaseCommand):
                 user = User.objects.create_user(
                     username=username,
                     password=temporary_password,
-                    first_name='Тестовый',
-                    last_name='пользователь №333',
+                    first_name='',
+                    last_name='',
+                    email='',
                     is_staff=False,
                     is_superuser=False,
                     is_active=True,
