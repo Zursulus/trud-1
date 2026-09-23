@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from .models import Person
+from .models import Account, Person
 from .resident_numbers import (
     RESIDENT_NUMBER_FIRST,
     RESIDENT_NUMBER_LAST,
@@ -10,11 +10,12 @@ from .resident_numbers import (
 
 
 class MemberRegistryEntry(models.Model):
-    """Closed mapping between a human-facing resident number and a real person.
+    """Closed record keyed by the stable human-facing resident number.
 
-    The working portal must use ResidentNumberSlot.number and must not need this
-    table. This table is deliberately small: personal/contact/legal details stay
-    on Person and PlotRelation behind the same private-registry permission.
+    The ordinary portal works with ResidentNumberSlot.number and Account. Personal
+    contacts live here behind the explicit private-registry permission. A Person
+    link is optional legacy/legal metadata: new records do not need an FIO merely
+    to exist in the registry.
     """
 
     resident_number = models.OneToOneField(
@@ -26,15 +27,29 @@ class MemberRegistryEntry(models.Model):
     )
     person = models.OneToOneField(
         Person,
-        verbose_name='Человек',
+        verbose_name='Человек / ФИО (если юридически необходимо)',
         related_name='member_registry_entry',
         on_delete=models.PROTECT,
+        blank=True,
+        null=True,
     )
+    account = models.ForeignKey(
+        Account,
+        verbose_name='Рабочий лицевой счёт',
+        related_name='member_registry_entries',
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+    )
+    phone = models.CharField('Телефон', max_length=160, blank=True)
+    email = models.EmailField('Электронная почта', blank=True)
+    joined_year = models.PositiveSmallIntegerField('Год вступления', blank=True, null=True)
+    membership_note = models.CharField('Основание / исходная пометка', max_length=500, blank=True)
     created_at = models.DateTimeField('Связь создана', auto_now_add=True, editable=False)
 
     class Meta:
-        verbose_name = 'Связь № пользователя с человеком'
-        verbose_name_plural = 'Закрытый реестр · номера и люди'
+        verbose_name = 'Запись закрытого реестра'
+        verbose_name_plural = 'Закрытый реестр · номера и контакты'
         ordering = ['resident_number_id']
         permissions = [
             ('access_private_registry', 'Может работать с закрытым реестром членов ТСН'),
@@ -47,15 +62,24 @@ class MemberRegistryEntry(models.Model):
         if not (RESIDENT_NUMBER_FIRST <= slot.number <= RESIDENT_NUMBER_LAST):
             raise ValidationError({'resident_number': 'Закрытый реестр использует только номера 1–310.'})
         if slot.purpose != ResidentNumberSlot.PURPOSE_RESIDENT:
-            raise ValidationError({'resident_number': 'Тестовый номер нельзя связывать с реальным человеком.'})
+            raise ValidationError({'resident_number': 'Тестовый номер нельзя помещать в реестр реальных членов.'})
         if self.person_id and self.person.archived:
             raise ValidationError({'person': 'Нельзя создавать новую связь с архивной карточкой человека.'})
+        if self.account_id and self.account.archived:
+            raise ValidationError({'account': 'Нельзя связывать реестр с архивным лицевым счётом.'})
+        if self.joined_year is not None and not (1900 <= self.joined_year <= 2100):
+            raise ValidationError({'joined_year': 'Проверьте год вступления.'})
         if not self._state.adding:
             stored = type(self).objects.get(pk=self.pk)
-            if stored.person_id != self.person_id:
-                raise ValidationError('Связь № пользователя с человеком нельзя переписывать. Проведите отдельную проверяемую операцию.')
+            if stored.person_id and stored.person_id != self.person_id:
+                raise ValidationError('Связь с человеком нельзя переписывать автоматически.')
+            if stored.account_id and stored.account_id != self.account_id:
+                raise ValidationError('Связь № пользователя с лицевым счётом нельзя переписывать автоматически.')
 
     def save(self, *args, **kwargs):
+        self.phone = ' '.join((self.phone or '').split())
+        self.email = (self.email or '').strip().lower()
+        self.membership_note = ' '.join((self.membership_note or '').split())
         self.full_clean()
         return super().save(*args, **kwargs)
 
