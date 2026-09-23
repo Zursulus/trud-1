@@ -1,0 +1,66 @@
+/* ZUR-63 round 2: screenshot-driven visual polish only. */
+
+/* Login: use one visual identity, not a duplicated header + hero. */
+body.portal-login .site-header{display:none}
+body.portal-login .main-content{
+  min-height:100svh;
+  padding:clamp(24px,5vh,56px) 16px 34px;
+  display:flex;
+  align-items:center;
+  background:linear-gradient(180deg,rgba(12,39,30,.18),rgba(12,39,30,.36));
+}
+body.portal-login .content-wrap{width:100%;max-width:none}
+body.portal-login .login-shell{margin:0 auto;width:min(100%,500px)}
+body.portal-login .login-brand{margin-bottom:18px}
+body.portal-login .login-brand .brand-mark{width:64px;height:64px;border-radius:21px}
+body.portal-login .login-card{margin:0;padding:24px}
+body.portal-login .login-privacy{margin-top:14px}
+
+/* Keep long mobile pages clear of the floating app navigation. */
+@media(max-width:979px){
+  .main-content{padding-bottom:calc(156px + env(safe-area-inset-bottom))}
+  .bottom-nav{bottom:max(12px,env(safe-area-inset-bottom));min-height:68px}
+  .bottom-nav a{font-size:.68rem}
+  body.portal-login .main-content{padding-bottom:34px}
+}
+
+/* File fields should belong to the design system too. */
+input[type=file]{
+  width:100%;
+  padding:10px;
+  border:1px dashed var(--line-strong);
+  border-radius:15px;
+  background:#fbfdfc;
+  color:var(--muted);
+}
+input[type=file]::file-selector-button{
+  border:0;
+  border-radius:11px;
+  padding:9px 12px;
+  margin-right:10px;
+  background:var(--green-soft);
+  color:var(--green-dark);
+  font-weight:760;
+  cursor:pointer;
+}
+
+/* Desktop should feel intentional rather than like a narrow mobile column. */
+@media(min-width:980px){
+  .app-shell{
+    max-width:1260px;
+    grid-template-columns:210px minmax(0,960px);
+    justify-content:center;
+  }
+  .desktop-nav{padding:34px 14px}
+  .main-content{padding:44px 32px 72px}
+  .content-wrap{max-width:960px;width:100%}
+  .plot-switch{max-width:640px}
+  .grid.two{gap:16px}
+  .quick-grid{gap:14px}
+  .card{padding:24px}
+}
+
+@media(min-width:1280px){
+  .app-shell{grid-template-columns:220px minmax(0,1000px)}
+  .content-wrap{max-width:1000px}
+}
