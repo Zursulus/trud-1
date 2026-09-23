@@ -1,4 +1,4 @@
-/* ZUR-63 round 2: screenshot-driven visual polish only. */
+/* ZUR-63: screenshot-driven visual polish. */
 
 /* Login: use one visual identity, not a duplicated header + hero. */
 body.portal-login .site-header{display:none}
@@ -7,7 +7,7 @@ body.portal-login .main-content{
   padding:clamp(24px,5vh,56px) 16px 34px;
   display:flex;
   align-items:center;
-  background:linear-gradient(180deg,rgba(12,39,30,.18),rgba(12,39,30,.36));
+  background:linear-gradient(180deg,rgba(12,39,30,.24),rgba(12,39,30,.46));
 }
 body.portal-login .content-wrap{width:100%;max-width:none}
 body.portal-login .login-shell{margin:0 auto;width:min(100%,500px)}
@@ -15,6 +15,31 @@ body.portal-login .login-brand{margin-bottom:18px}
 body.portal-login .login-brand .brand-mark{width:64px;height:64px;border-radius:21px}
 body.portal-login .login-card{margin:0;padding:24px}
 body.portal-login .login-privacy{margin-top:14px}
+
+/* Approved v0.9 dashboard photo: intentionally compact, not a dominant hero. */
+.dashboard-photo{
+  position:relative;
+  min-height:156px;
+  margin:0 0 18px;
+  overflow:hidden;
+  border-radius:24px;
+  background:
+    linear-gradient(90deg,rgba(12,39,30,.62),rgba(12,39,30,.08)),
+    url('/ordzhonikidze-sunset.webp') center 52%/cover no-repeat;
+  box-shadow:var(--shadow);
+}
+.dashboard-photo-copy{
+  position:absolute;
+  left:20px;
+  right:20px;
+  bottom:18px;
+  display:grid;
+  gap:4px;
+  color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,.28);
+}
+.dashboard-photo-copy span{font-size:.7rem;letter-spacing:.13em;font-weight:760}
+.dashboard-photo-copy strong{font-size:1.18rem;line-height:1.18;letter-spacing:-.02em}
 
 /* Keep long mobile pages clear of the floating app navigation. */
 @media(max-width:979px){
@@ -45,6 +70,9 @@ input[type=file]::file-selector-button{
 }
 
 /* Desktop should feel intentional rather than like a narrow mobile column. */
+@media(min-width:760px){
+  .dashboard-photo{min-height:172px}
+}
 @media(min-width:980px){
   .app-shell{
     max-width:1260px;
@@ -58,6 +86,7 @@ input[type=file]::file-selector-button{
   .grid.two{gap:16px}
   .quick-grid{gap:14px}
   .card{padding:24px}
+  .dashboard-photo{min-height:184px;max-width:760px}
 }
 
 @media(min-width:1280px){
