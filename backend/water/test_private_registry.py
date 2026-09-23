@@ -56,22 +56,38 @@ class PrivateRegistryBoundaryTests(TestCase):
         self.assertNotIn('change_payment', codenames)
         self.assertNotIn('add_reading', codenames)
 
-    def test_member_registry_maps_only_real_resident_numbers(self):
-        person = Person.objects.create(full_name='Тест Реестра')
-        slot = ResidentNumberSlot.objects.get(pk=1)
-        entry = MemberRegistryEntry.objects.create(resident_number=slot, person=person)
+    def test_member_registry_can_exist_without_person_or_fio(self):
+        account = Account.objects.create(number='R-1', plot='Лесная 1')
+        entry = MemberRegistryEntry.objects.create(
+            resident_number=ResidentNumberSlot.objects.get(pk=1),
+            account=account,
+            phone='+7 900 000-00-01',
+            email='TEST@example.com',
+            joined_year=2020,
+        )
+        self.assertIsNone(entry.person_id)
         self.assertEqual(entry.resident_number_id, 1)
+        self.assertEqual(entry.email, 'test@example.com')
 
-        test_person = Person.objects.create(full_name='Нельзя Связать')
+    def test_test_number_333_cannot_enter_real_member_registry(self):
         test_slot = ResidentNumberSlot.objects.get(pk=333)
         with self.assertRaises(ValidationError):
-            MemberRegistryEntry.objects.create(resident_number=test_slot, person=test_person)
+            MemberRegistryEntry.objects.create(resident_number=test_slot)
 
     def test_private_mapping_cannot_be_silently_reassigned(self):
+        first_account = Account.objects.create(number='A-1', plot='Лесная 1')
+        second_account = Account.objects.create(number='A-2', plot='Лесная 2')
+        entry = MemberRegistryEntry.objects.create(
+            resident_number=ResidentNumberSlot.objects.get(pk=2), account=first_account,
+        )
+        entry.account = second_account
+        with self.assertRaisesMessage(ValidationError, 'нельзя переписывать'):
+            entry.save()
+
         first = Person.objects.create(full_name='Первый Человек')
         second = Person.objects.create(full_name='Второй Человек')
         entry = MemberRegistryEntry.objects.create(
-            resident_number=ResidentNumberSlot.objects.get(pk=2), person=first,
+            resident_number=ResidentNumberSlot.objects.get(pk=3), person=first,
         )
         entry.person = second
         with self.assertRaisesMessage(ValidationError, 'нельзя переписывать'):
