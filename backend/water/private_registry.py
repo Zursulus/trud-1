@@ -50,7 +50,7 @@ class MemberRegistryEntry(models.Model):
             raise ValidationError({'resident_number': 'Тестовый номер нельзя связывать с реальным человеком.'})
         if self.person_id and self.person.archived:
             raise ValidationError({'person': 'Нельзя создавать новую связь с архивной карточкой человека.'})
-        if self.pk:
+        if not self._state.adding:
             stored = type(self).objects.get(pk=self.pk)
             if stored.person_id != self.person_id:
                 raise ValidationError('Связь № пользователя с человеком нельзя переписывать. Проведите отдельную проверяемую операцию.')
