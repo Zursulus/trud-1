@@ -35,9 +35,17 @@ jobs:
       - run: python backend/manage.py migrate --noinput
       - run: python backend/manage.py test water config public_site
       - run: python -m unittest discover -s ops/tests -v
+      - name: Validate public homepage invariants
+        run: |
+          test -s feodosia-letter-2026-08-27.webp
+          grep -q 'Оформление прав на земельные участки' index.html
+          grep -q 'feodosia-letter-2026-08-27.webp' index.html
+          ! grep -q 'ordzhonikidze-sunset.webp' index.html
+          ! grep -q 'Вечер в Орджоникидзе' index.html
+          ! grep -q 'maybeOpenFeatured' app.js
       - name: Validate operations scripts and backup units
         run: |
-          bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/deploy-public-content.sh ops/deploy-resident-portal.sh ops/deploy-resident-numbers.sh ops/deploy-private-registry.sh ops/backup-trud-site.sh
+          bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/deploy-public-content.sh ops/deploy-resident-portal.sh ops/deploy-resident-numbers.sh ops/deploy-private-registry.sh ops/deploy-public-home-zur60.sh ops/backup-trud-site.sh
           sudo install -m 700 ops/backup-trud-site.sh /usr/local/sbin/trud-1-backup
           sudo install -m 644 ops/trud-1-backup.service /etc/systemd/system/trud-1-backup.service
           sudo install -m 644 ops/trud-1-backup.timer /etc/systemd/system/trud-1-backup.timer
