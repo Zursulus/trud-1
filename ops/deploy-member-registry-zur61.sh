@@ -19,6 +19,7 @@ test "$EXPECTED" = "$EXPECTED_RELEASE" || {
     exit 1
 }
 
+EXPECTED_WORKFLOW_BLOB=cd265bb8cfaf878be34bd7fea263604ea9cb492f
 EXPECTED_PRIVATE_MODEL_BLOB=def822095f25977aa9f27c4f57f5ed6b26ad7062
 EXPECTED_MIGRATION_BLOB=95613966b81c5b61af0663975d8921b3830706f0
 EXPECTED_IMPORT_BLOB=fb56519f290974f59253d4bf2fad3d438cfbba61
@@ -69,6 +70,7 @@ PY
 systemctl is-active --quiet trud-1-site.service
 
 ALLOWED=$(cat <<'EOF'
+.github/workflows/backend.yml
 backend/water/management/commands/import_member_registry.py
 backend/water/management/commands/provision_resident_test.py
 backend/water/migrations/0020_member_registry_without_fio.py
@@ -87,6 +89,7 @@ test "$CHANGED" = "$(printf '%s\n' "$ALLOWED" | sort)" || {
     exit 1
 }
 
+test "$(gitapp rev-parse "$TARGET:.github/workflows/backend.yml")" = "$EXPECTED_WORKFLOW_BLOB"
 test "$(gitapp rev-parse "$TARGET:backend/water/private_registry.py")" = "$EXPECTED_PRIVATE_MODEL_BLOB"
 test "$(gitapp rev-parse "$TARGET:backend/water/migrations/0020_member_registry_without_fio.py")" = "$EXPECTED_MIGRATION_BLOB"
 test "$(gitapp rev-parse "$TARGET:backend/water/management/commands/import_member_registry.py")" = "$EXPECTED_IMPORT_BLOB"
