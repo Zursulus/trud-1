@@ -68,8 +68,6 @@ AXES_RESET_ON_SUCCESS = True
 AXES_ENABLE_ACCESS_FAILURE_LOG = False
 SIMPLE_HISTORY_REVERT_DISABLED = True
 SIMPLE_HISTORY_ENFORCE_HISTORY_MODEL_PERMISSIONS = True
-# The admin is patched by django-two-factor-auth and denies any staff member
-# who has not completed the second factor. A browser is never remembered.
 LOGIN_URL = 'two_factor:login'
 LOGIN_REDIRECT_URL = '/admin/'
 LOGOUT_REDIRECT_URL = 'two_factor:login'
@@ -84,20 +82,21 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/admin-static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Private uploads are never exposed by the web server. Django streams a file
-# only after checking the resident's current access or explicit public-publish gate.
 MEDIA_ROOT = BASE_DIR.parent / 'private-data'
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_AGE = 8 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SECURE_SSL_REDIRECT = not DEBUG
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
-# Set only behind a trusted proxy which overwrites this header.
 if os.environ.get('DJANGO_TRUST_PROXY') == '1':
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
