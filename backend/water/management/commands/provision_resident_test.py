@@ -8,24 +8,29 @@ from water.models import Account, ResidentAccess, User
 from water.resident_numbers import ResidentNumberSlot, TEST_RESIDENT_NUMBER
 
 
+TEST_ACCOUNT_NUMBER = 'TEST-333'
+TEST_ACCOUNT_PLOT = 'Тестовый участок №333'
+TEST_ACCOUNT_NOTE = 'Синтетический лицевой счёт для проверки личного кабинета пользователя №333'
+
+
 class Command(BaseCommand):
-    help = 'Создаёт/проверяет тестовую учётку жителя №333 и выдаёт ей явный доступ к одному лицевому счёту.'
+    help = 'Создаёт/проверяет синтетическую тестовую учётку жителя №333 без ФИО и без доступа к реальному участку.'
 
     def add_arguments(self, parser):
-        parser.add_argument('--account-id', type=int, help='ID лицевого счёта, к которому разрешён тестовый доступ')
+        parser.add_argument('--account-id', type=int, help='ID уже существующего синтетического счёта TEST-333')
+        parser.add_argument(
+            '--ensure-synthetic-account', action='store_true',
+            help='Создать или проверить отдельный синтетический лицевой счёт TEST-333',
+        )
         parser.add_argument('--username', default='test333', help='Логин тестового пользователя (по умолчанию test333)')
         parser.add_argument('--reset-password', action='store_true', help='Сгенерировать новый временный пароль для уже созданной учётки')
-        parser.add_argument('--list-accounts', action='store_true', help='Показать только ID/номер/участок доступных лицевых счетов и ничего не менять')
+        parser.add_argument('--list-accounts', action='store_true', help='Показать только пригодный синтетический счёт TEST-333 и ничего не менять')
 
     def handle(self, *args, **options):
         if options['list_accounts']:
-            for account in Account.objects.filter(archived=False).order_by('id'):
-                self.stdout.write(f'{account.pk}\t{account.number or "—"}\t{account.plot or "—"}')
+            for account in Account.objects.filter(archived=False, number=TEST_ACCOUNT_NUMBER).order_by('id'):
+                self.stdout.write(f'{account.pk}\t{account.number}\t{account.plot or "—"}')
             return
-
-        account_id = options.get('account_id')
-        if not account_id:
-            raise CommandError('Укажите --account-id. Тестовую учётку нельзя привязывать к чужому счёту наугад.')
 
         username = options['username'].strip()
         if not username:
@@ -33,15 +38,9 @@ class Command(BaseCommand):
 
         temporary_password = None
         with transaction.atomic():
-            try:
-                account = Account.objects.select_for_update().get(pk=account_id, archived=False)
-            except Account.DoesNotExist as error:
-                raise CommandError('Действующий лицевой счёт с таким ID не найден.') from error
+            account = self._resolve_test_account(options)
 
             try:
-                # Lock only the slot row. Joining the nullable user relation here
-                # would produce a LEFT JOIN, which PostgreSQL cannot lock with
-                # SELECT ... FOR UPDATE on the nullable side.
                 slot = ResidentNumberSlot.objects.select_for_update().get(
                     pk=TEST_RESIDENT_NUMBER,
                     purpose=ResidentNumberSlot.PURPOSE_TEST,
@@ -53,10 +52,10 @@ class Command(BaseCommand):
                 user = User.objects.get(pk=slot.user_id)
                 if user.is_staff:
                     raise CommandError('Слот №333 ошибочно связан с сотрудником; автоматическое исправление запрещено.')
-                if user.first_name or user.last_name:
+                if user.first_name or user.last_name or user.email:
                     raise CommandError(
-                        'У существующей тестовой учётки заполнены имя/фамилия. '
-                        'Автоматически стирать их нельзя: сначала проверьте, что это действительно синтетическая запись.'
+                        'У существующей тестовой учётки заполнены ФИО/email. '
+                        'Автоматически стирать их нельзя: сначала проверьте синтетическую запись.'
                     )
                 if options['reset_password']:
                     temporary_password = secrets.token_urlsafe(18)
@@ -99,13 +98,54 @@ class Command(BaseCommand):
                 access.save()
 
         self.stdout.write(self.style.SUCCESS(
-            f'Готово: пользователь №333, логин {user.username}, доступ к счёту ID {account.pk} ({account.number or "без номера"}).'
+            f'Готово: пользователь №333, логин {user.username}, доступ только к {TEST_ACCOUNT_NUMBER} (Account ID {account.pk}).'
         ))
         if temporary_password:
             self.stdout.write(f'Временный пароль: {temporary_password}')
             self.stdout.write('Сохраните пароль сейчас: команда не записывает его в файлы или GitHub.')
         else:
             self.stdout.write('Пароль не менялся. Для нового временного пароля повторите с --reset-password.')
+
+    def _resolve_test_account(self, options):
+        account_id = options.get('account_id')
+        ensure = options.get('ensure_synthetic_account')
+        if not account_id and not ensure:
+            raise CommandError(
+                'Укажите --ensure-synthetic-account. №333 нельзя привязывать к реальному лицевому счёту.'
+            )
+
+        if ensure:
+            account, _created = Account.objects.select_for_update().get_or_create(
+                number=TEST_ACCOUNT_NUMBER,
+                defaults={
+                    'plot': TEST_ACCOUNT_PLOT,
+                    'contact_name': '',
+                    'phone': '',
+                    'notes': TEST_ACCOUNT_NOTE,
+                    'archived': False,
+                },
+            )
+        else:
+            try:
+                account = Account.objects.select_for_update().get(pk=account_id, archived=False)
+            except Account.DoesNotExist as error:
+                raise CommandError('Действующий лицевой счёт с таким ID не найден.') from error
+
+        if account.number != TEST_ACCOUNT_NUMBER:
+            raise CommandError('№333 разрешено привязывать только к синтетическому счёту TEST-333.')
+        if account.archived:
+            raise CommandError('Синтетический счёт TEST-333 архивирован.')
+        if account.contact_name or account.phone:
+            raise CommandError('В TEST-333 обнаружены ФИО/телефон. Использовать его как синтетический счёт нельзя.')
+        if account.plot and account.plot != TEST_ACCOUNT_PLOT:
+            raise CommandError('TEST-333 имеет неожиданное обозначение участка; автоматическое исправление запрещено.')
+        if not account.plot:
+            account.plot = TEST_ACCOUNT_PLOT
+            account.notes = account.notes or TEST_ACCOUNT_NOTE
+            account.save(update_fields=['plot', 'notes'])
+        if account_id and account.pk != account_id:
+            raise CommandError('--account-id не совпадает с синтетическим счётом TEST-333.')
+        return account
 
 
 def models_q_active(today):

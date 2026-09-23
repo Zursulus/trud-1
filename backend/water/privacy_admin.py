@@ -90,8 +90,6 @@ class PrivacyAccountAdmin(AccountAdminBase):
             object_id='',
             object_repr='Выгрузка карточек без ПД',
             action_flag=2,
-            # Preserve the stable audit message used by existing journal checks;
-            # the exported columns themselves are deliberately PII-free.
             change_message=f'Экспорт CSV: {queryset.count()} записей',
         )
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -155,14 +153,19 @@ class PrivateImportRowAdmin(PrivateRegistryPermissionMixin, ImportRowAdminBase):
 
 @admin.register(MemberRegistryEntry)
 class MemberRegistryEntryAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmin):
-    list_display = ('resident_number', 'person', 'created_at')
-    search_fields = ('=resident_number__number', 'person__full_name', 'person__phone', 'person__email')
-    autocomplete_fields = ('person',)
+    list_display = (
+        'resident_number', 'account', 'phone', 'email', 'joined_year', 'person', 'created_at',
+    )
+    search_fields = (
+        '=resident_number__number', 'account__number', 'account__plot', 'phone', 'email',
+        'person__full_name',
+    )
+    autocomplete_fields = ('account', 'person')
     readonly_fields = ('created_at',)
-    list_select_related = ('resident_number', 'person')
+    list_select_related = ('resident_number', 'account', 'person')
 
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj))
         if obj:
-            return tuple(dict.fromkeys((*fields, 'resident_number', 'person')))
+            return tuple(dict.fromkeys((*fields, 'resident_number')))
         return fields
