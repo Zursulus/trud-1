@@ -11,6 +11,7 @@ from .billing import account_totals
 from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
 from .portal import active_accesses, resident_guard
 from .resident_models import ResidentAppealViewState
+from .resident_numbers import ResidentNumberSlot
 
 
 def _accesses(user):
@@ -22,6 +23,10 @@ def _access_or_404(user, account_id):
     return get_object_or_404(active_accesses(user), account_id=account_id)
 
 
+def _resident_number(user):
+    return ResidentNumberSlot.objects.filter(user=user).values_list('number', flat=True).first()
+
+
 def _common(request, access=None, section='home'):
     accesses = _accesses(request.user)
     account = access.account if access else None
@@ -30,6 +35,7 @@ def _common(request, access=None, section='home'):
         'access': access,
         'account': account,
         'active_section': section,
+        'resident_number': _resident_number(request.user),
     }
 
 

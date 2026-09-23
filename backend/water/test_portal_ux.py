@@ -7,6 +7,7 @@ from .models import (
     Account, AppealCategory, BillingPeriod, Charge, Meter, Reading, ResidentAccess,
     SupplyNode, User,
 )
+from .resident_numbers import ResidentNumberSlot
 
 
 class ResidentPortalUXTests(TestCase):
@@ -18,6 +19,9 @@ class ResidentPortalUXTests(TestCase):
         self.user = User.objects.create_user(
             username='ux-resident@example.test', email='ux-resident@example.test', password=self.password,
         )
+        slot = ResidentNumberSlot.objects.get(pk=127)
+        slot.user = self.user
+        slot.save()
         ResidentAccess.objects.create(user=self.user, account=self.account, role='owner', starts=date(2026, 1, 1))
         self.node = SupplyNode.objects.create(name='UX узел')
         self.meter = Meter.objects.create(serial='UX-METER', kind='individual', node=self.node, account=self.account)
@@ -38,6 +42,17 @@ class ResidentPortalUXTests(TestCase):
         self.assertContains(response, '184,600')
         self.assertContains(response, 'Садовая, 42')
         self.assertNotContains(response, 'Центральная, 58')
+
+    def test_profile_uses_resident_number_not_legacy_full_name(self):
+        self.user.first_name = 'Иван'
+        self.user.last_name = 'Иванов'
+        self.user.save(update_fields=['first_name', 'last_name'])
+        self.login()
+        response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/profile/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Пользователь №127')
+        self.assertNotContains(response, 'Иван Иванов')
+        self.assertNotContains(response, 'Иванов Иван')
 
     def test_all_primary_mobile_routes_require_matching_access(self):
         self.login()

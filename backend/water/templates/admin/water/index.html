@@ -130,10 +130,10 @@
       </a>
     {% endif %}
 
-    {% if perms.water.view_person %}
-      <a class="trud-card" href="{% url 'admin:water_person_changelist' %}">
-        <strong>Жители</strong>
-        <span>Люди и их связи с участками.</span>
+    {% if perms.water.access_private_registry %}
+      <a class="trud-card" href="{% url 'admin:water_memberregistryentry_changelist' %}">
+        <strong>Закрытый реестр членов</strong>
+        <span>Связь № пользователя с человеком. Доступ только уполномоченным.</span>
       </a>
     {% endif %}
 

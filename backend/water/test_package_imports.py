@@ -170,14 +170,17 @@ class WaterPackageWriterTests(TestCase):
 
 
 class WaterPackageImportViewTests(TestCase):
-    def test_manager_can_confirm_and_import_verified_package(self):
+    def test_authorized_private_registry_user_can_confirm_and_import_verified_package(self):
         from django.contrib.auth.models import Group
         from io import StringIO
         from .models import User
 
         call_command('setup_roles', stdout=StringIO())
         manager = User.objects.create_user(username='package-manager', is_staff=True)
-        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        manager.groups.add(
+            Group.objects.get(name='Администратор ТСН'),
+            Group.objects.get(name='Закрытый реестр членов ТСН'),
+        )
         self.client.force_login(manager)
 
         response = self.client.post('/admin/water/package-dry-run/', {
