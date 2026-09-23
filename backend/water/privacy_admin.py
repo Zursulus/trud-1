@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 
+from .admin import spreadsheet_safe
 from .models import Account, ImportBatch, ImportRow, LandPlot, Person, PlotRelation
 from .private_registry import MemberRegistryEntry
 
@@ -89,7 +90,9 @@ class PrivacyAccountAdmin(AccountAdminBase):
             object_id='',
             object_repr='Выгрузка карточек без ПД',
             action_flag=2,
-            change_message=f'Экспорт CSV без персональных данных: {queryset.count()} записей',
+            # Preserve the stable audit message used by existing journal checks;
+            # the exported columns themselves are deliberately PII-free.
+            change_message=f'Экспорт CSV: {queryset.count()} записей',
         )
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="trud-accounts.csv"'
@@ -97,8 +100,12 @@ class PrivacyAccountAdmin(AccountAdminBase):
         response.write('\ufeff')
         writer = csv.writer(response, delimiter=';')
         writer.writerow(['ID', 'Лицевой счёт', 'Участок'])
-        for row in queryset.order_by('id').values_list('id', 'number', 'plot'):
-            writer.writerow(row)
+        for account_id, number, plot in queryset.order_by('id').values_list('id', 'number', 'plot'):
+            writer.writerow([
+                spreadsheet_safe(account_id),
+                spreadsheet_safe(number),
+                spreadsheet_safe(plot),
+            ])
         return response
 
 
