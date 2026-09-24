@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
                 'verbose_name': 'Аудит предварительного опроса',
                 'verbose_name_plural': 'Аудит предварительных опросов',
                 'ordering': ['-created_at', '-id'],
-                'indexes': [models.Index(fields=['target_type', 'target_id', '-created_at'], name='water_board_target__c00140_idx')],
+                'indexes': [models.Index(fields=['target_type', 'target_id', '-created_at'], name='water_board_target__357fc3_idx')],
             },
         ),
         migrations.CreateModel(
