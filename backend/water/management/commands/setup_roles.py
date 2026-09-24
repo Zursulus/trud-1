@@ -11,6 +11,11 @@ PRIVATE_RECORDED = ('person', 'plotrelation', 'importbatch', 'importrow')
 PRIVATE_MODELS = (*PRIVATE_RECORDED, 'memberregistryentry')
 FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'charge', 'payment', 'paymentallocation')
 PUBLIC_SITE = ('publicnews', 'publicdocumentcategory', 'publicdocument')
+BOARD_VIEW = (
+    'boardmembership', 'boardpoll', 'boardquestion', 'boardvote',
+    'boarddiscussioncomment', 'boardprotocol', 'boardauditevent',
+)
+BOARD_MANAGE = ('boardmembership', 'boardpoll', 'boardquestion')
 ADMIN = 'Администратор ТСН'
 LEGACY_ADMIN = 'Администратор СНТ'
 OPERATOR = 'Оператор воды'
@@ -70,6 +75,9 @@ class Command(BaseCommand):
             'view_historicalcontrollerlineaccess',
         })
         administrator.update({'export_account', 'export_reading', 'view_chargeobligation'})
+        administrator.update({f'view_{name}' for name in BOARD_VIEW})
+        administrator.update({f'{action}_{name}' for name in BOARD_MANAGE for action in ('add', 'change')})
+        administrator.add('add_boardprotocol')
 
         role_codes = (
             (ADMIN, administrator),
