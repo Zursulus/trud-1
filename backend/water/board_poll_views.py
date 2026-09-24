@@ -1,5 +1,4 @@
 from collections import Counter
-from datetime import date
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -34,20 +33,20 @@ def _guard(request):
 
 
 def _portal_context(request, section='board'):
-    access = None
-    if not request.user.is_staff:
-        access = resolved_accesses(request.user, CAP_VIEW_ACCOUNT).first()
+    accesses = [] if request.user.is_staff else resolved_accesses(request.user, CAP_VIEW_ACCOUNT)
+    access = accesses[0] if accesses else None
     return {
         'access': access,
-        'accesses': resolved_accesses(request.user, CAP_VIEW_ACCOUNT) if not request.user.is_staff else [],
+        'accesses': accesses,
         'account': access.account if access else None,
         'active_section': section,
         'board_member': active_board_membership(request.user),
     }
 
 
-def _poll_open(poll):
-    return poll.is_open
+def models_q_active(on):
+    from django.db.models import Q
+    return Q(ends__isnull=True) | Q(ends__gt=on)
 
 
 def _eligible_users(poll):
@@ -56,11 +55,6 @@ def _eligible_users(poll):
         models_q_active(opening_date), user__is_active=True,
     ).select_related('user').order_by('user__last_name', 'user__first_name', 'user__username')
     return [membership.user for membership in memberships]
-
-
-def models_q_active(on):
-    from django.db.models import Q
-    return Q(ends__isnull=True) | Q(ends__gt=on)
 
 
 def _user_label(user):
@@ -85,12 +79,28 @@ def _question_context(question, current_user, eligible_users):
     }
 
 
+def _detail_context(request, poll, error=''):
+    questions = list(poll.questions.prefetch_related('votes__user', 'discussion_comments__author').order_by('order', 'id'))
+    eligible = _eligible_users(poll)
+    context = _portal_context(request)
+    context.update({
+        'poll': poll,
+        'is_open': poll.is_open,
+        'question_rows': [_question_context(question, request.user, eligible) for question in questions],
+        'eligible_count': len(eligible),
+        'eligible_names': [_user_label(user) for user in eligible],
+        'choices': BoardVote.CHOICES,
+        'protocol': BoardProtocol.objects.filter(poll=poll).first(),
+        'form_error': error,
+    })
+    return context
+
+
 @never_cache
 def board_home(request):
     denied = _guard(request)
     if denied:
         return denied
-    now = timezone.now()
     polls = list(BoardPoll.objects.prefetch_related('questions').order_by('-opens_at', '-id')[:50])
     rows = []
     for poll in polls:
@@ -98,12 +108,12 @@ def board_home(request):
         answered = BoardVote.objects.filter(question_id__in=question_ids, user=request.user).count() if question_ids else 0
         rows.append({
             'poll': poll,
-            'is_open': _poll_open(poll),
+            'is_open': poll.is_open,
             'question_count': len(question_ids),
             'unanswered': max(0, len(question_ids) - answered),
         })
     context = _portal_context(request)
-    context.update({'poll_rows': rows, 'now': now})
+    context['poll_rows'] = rows
     return TemplateResponse(request, 'water/portal/board_home.html', context)
 
 
@@ -116,66 +126,59 @@ def board_poll_detail(request, poll_id):
     poll = get_object_or_404(BoardPoll, pk=poll_id)
 
     if request.method == 'POST':
-        action = request.POST.get('action', '')
         if active_board_membership(request.user) is None:
             raise PermissionDenied
-        if action == 'vote':
-            try:
-                question_id = int(request.POST.get('question_id', ''))
-            except (TypeError, ValueError) as error:
-                raise Http404 from error
-            choice = request.POST.get('choice', '')
-            comment = request.POST.get('comment', '').strip()
-            if choice not in dict(BoardVote.CHOICES) or len(comment) > 2000:
-                raise Http404
-            with transaction.atomic():
-                locked_poll = BoardPoll.objects.select_for_update().get(pk=poll.pk)
-                if not locked_poll.is_open:
-                    raise ValidationError('Опрос уже закрыт или срок ответа истёк.')
-                question = get_object_or_404(BoardQuestion.objects.select_for_update(), pk=question_id, poll=locked_poll)
-                vote = BoardVote.objects.select_for_update().filter(question=question, user=request.user).first()
-                if vote is None:
-                    vote = BoardVote(question=question, user=request.user, choice=choice, comment=comment)
-                    reason = 'Первичный голос'
-                else:
-                    vote.choice = choice
-                    vote.comment = comment
-                    reason = 'Изменение голоса до закрытия'
-                vote._audit_actor = request.user
-                vote._audit_reason = reason
-                vote.save()
-            return HttpResponseRedirect(reverse('board_poll_detail', args=[poll.pk]))
+        action = request.POST.get('action', '')
+        try:
+            if action == 'vote':
+                try:
+                    question_id = int(request.POST.get('question_id', ''))
+                except (TypeError, ValueError) as error:
+                    raise Http404 from error
+                choice = request.POST.get('choice', '')
+                comment = request.POST.get('comment', '').strip()
+                if choice not in dict(BoardVote.CHOICES) or len(comment) > 2000:
+                    raise Http404
+                with transaction.atomic():
+                    locked_poll = BoardPoll.objects.select_for_update().get(pk=poll.pk)
+                    if not locked_poll.is_open:
+                        raise ValidationError('Опрос уже закрыт или срок ответа истёк.')
+                    question = get_object_or_404(BoardQuestion.objects.select_for_update(), pk=question_id, poll=locked_poll)
+                    vote = BoardVote.objects.select_for_update().filter(question=question, user=request.user).first()
+                    if vote is None:
+                        vote = BoardVote(question=question, user=request.user, choice=choice, comment=comment)
+                        reason = 'Первичный голос'
+                    else:
+                        vote.choice = choice
+                        vote.comment = comment
+                        reason = 'Изменение голоса до закрытия'
+                    vote._audit_actor = request.user
+                    vote._audit_reason = reason
+                    vote.save()
+                return HttpResponseRedirect(reverse('board_poll_detail', args=[poll.pk]))
 
-        if action == 'comment':
-            try:
-                question_id = int(request.POST.get('question_id', ''))
-            except (TypeError, ValueError) as error:
-                raise Http404 from error
-            body = request.POST.get('body', '').strip()
-            if not body or len(body) > 3000:
-                raise Http404
-            with transaction.atomic():
-                locked_poll = BoardPoll.objects.select_for_update().get(pk=poll.pk)
-                if not locked_poll.is_open:
-                    raise ValidationError('Обсуждение закрытого опроса завершено.')
-                question = get_object_or_404(BoardQuestion.objects.select_for_update(), pk=question_id, poll=locked_poll)
-                BoardDiscussionComment.objects.create(question=question, author=request.user, body=body)
-            return HttpResponseRedirect(reverse('board_poll_detail', args=[poll.pk]))
-        raise Http404
+            if action == 'comment':
+                try:
+                    question_id = int(request.POST.get('question_id', ''))
+                except (TypeError, ValueError) as error:
+                    raise Http404 from error
+                body = request.POST.get('body', '').strip()
+                if not body or len(body) > 3000:
+                    raise Http404
+                with transaction.atomic():
+                    locked_poll = BoardPoll.objects.select_for_update().get(pk=poll.pk)
+                    if not locked_poll.is_open:
+                        raise ValidationError('Обсуждение закрытого опроса завершено.')
+                    question = get_object_or_404(BoardQuestion.objects.select_for_update(), pk=question_id, poll=locked_poll)
+                    BoardDiscussionComment.objects.create(question=question, author=request.user, body=body)
+                return HttpResponseRedirect(reverse('board_poll_detail', args=[poll.pk]))
+            raise Http404
+        except ValidationError as error:
+            poll.refresh_from_db()
+            message = '; '.join(error.messages) if error.messages else 'Не удалось сохранить ответ.'
+            return TemplateResponse(request, 'water/portal/board_poll.html', _detail_context(request, poll, message), status=400)
 
-    questions = list(poll.questions.prefetch_related('votes__user', 'discussion_comments__author').order_by('order', 'id'))
-    eligible = _eligible_users(poll)
-    context = _portal_context(request)
-    context.update({
-        'poll': poll,
-        'is_open': poll.is_open,
-        'question_rows': [_question_context(question, request.user, eligible) for question in questions],
-        'eligible_count': len(eligible),
-        'eligible_names': [_user_label(user) for user in eligible],
-        'choices': BoardVote.CHOICES,
-        'protocol': BoardProtocol.objects.filter(poll=poll).first(),
-    })
-    return TemplateResponse(request, 'water/portal/board_poll.html', context)
+    return TemplateResponse(request, 'water/portal/board_poll.html', _detail_context(request, poll))
 
 
 @never_cache
