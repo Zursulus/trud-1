@@ -100,25 +100,25 @@ class ChargeObligation(RecordedModel):
             models.CheckConstraint(
                 condition=(
                     models.Q(
-                        payer_scope=PAYER_ACCOUNT,
+                        payer_scope='account',
                         plot__isnull=True,
                         person__isnull=True,
                         membership__isnull=True,
                     )
                     | models.Q(
-                        payer_scope=PAYER_PLOT,
+                        payer_scope='plot',
                         plot__isnull=False,
                         person__isnull=True,
                         membership__isnull=True,
                     )
                     | models.Q(
-                        payer_scope=PAYER_PERSON,
+                        payer_scope='person',
                         plot__isnull=True,
                         person__isnull=False,
                         membership__isnull=True,
                     )
                     | models.Q(
-                        payer_scope=PAYER_MEMBERSHIP,
+                        payer_scope='membership',
                         plot__isnull=True,
                         person__isnull=True,
                         membership__isnull=False,
