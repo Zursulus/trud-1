@@ -1,0 +1,14 @@
+:root{
+  --green:#0b7b39;
+  --green-dark:#086b35;
+  --blue:#0b6fae;
+  --red:#bf3038;
+  --orange:#9a570b;
+  --muted:#657082;
+  --muted-2:#657082;
+}
+.login-slogan,.login-divider{color:#5f6b7d}
+.login-form label{color:#657082}
+.attention-row small,.shortcut small{color:#59666c}
+.bottom-nav a:not(.active){color:#657082}
+.desktop-logout button{color:#5f6b7d}
