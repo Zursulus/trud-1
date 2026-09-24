@@ -62,22 +62,25 @@ class ChargeObligationAdmin(RecordedAdmin):
         period = obj.charge.period
         return f'{period.starts:%d.%m.%Y} — {period.ends:%d.%m.%Y}'
 
+    def _plot_suffix(self, obj):
+        return f' · участок {obj.plot.label}' if obj.plot_id else ''
+
     @admin.display(description='Плательщик')
     def payer_safe(self, obj):
         if obj.payer_scope == ChargeObligation.PAYER_PLOT:
             return f'Участок {obj.plot.label}'
         if obj.payer_scope == ChargeObligation.PAYER_PERSON:
-            return 'Конкретное лицо (скрыто)'
+            return f'Конкретное лицо (скрыто){self._plot_suffix(obj)}'
         if obj.payer_scope == ChargeObligation.PAYER_MEMBERSHIP:
-            return 'Член ТСН (скрыто)'
+            return f'Член ТСН (скрыто){self._plot_suffix(obj)}'
         return 'Лицевой счёт'
 
     @admin.display(description='Плательщик')
     def payer_private(self, obj):
         if obj.payer_scope == ChargeObligation.PAYER_PERSON:
-            return obj.person.full_name
+            return f'{obj.person.full_name}{self._plot_suffix(obj)}'
         if obj.payer_scope == ChargeObligation.PAYER_MEMBERSHIP:
-            return obj.membership.person.full_name
+            return f'{obj.membership.person.full_name}{self._plot_suffix(obj)}'
         return self.payer_safe(obj)
 
     @admin.display(description='Плательщик / основание')
