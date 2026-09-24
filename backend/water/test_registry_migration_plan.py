@@ -1,7 +1,7 @@
 from io import StringIO
 from datetime import timedelta
 
-from django.core.management import call_command
+from django.core.management import call_command, CommandError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -170,7 +170,7 @@ class RegistryMigrationPlanTests(TestCase):
                 self.assertNotIn(TEST_RESIDENT_NUMBER, ids)
 
     def test_command_rejects_apply_mode(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CommandError):
             call_command('analyze_member_registry_migration', '--apply')
 
     def test_command_is_read_only_and_never_prints_pii(self):
