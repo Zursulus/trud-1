@@ -11,7 +11,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
 from .models import AppealCategory, ResidentAppeal, ResidentAppealMessage
-from .portal import active_accesses, resident_guard
+from .portal import resident_guard
+from .portal_permissions import CAP_APPEALS, resolved_access
 from .resident_models import (
     APPEAL_ATTACHMENT_EXTENSIONS,
     APPEAL_ATTACHMENT_MAX_BYTES,
@@ -55,7 +56,10 @@ class ResidentAppealReplyForm(forms.Form):
 
 
 def _access(request, account_id):
-    return get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = resolved_access(request.user, account_id, CAP_APPEALS)
+    if access is None:
+        raise Http404
+    return access
 
 
 def _own_appeal(request, account_id, appeal_id):
