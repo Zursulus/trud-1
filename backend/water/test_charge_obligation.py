@@ -121,6 +121,57 @@ class ChargeObligationTests(TestCase):
         self.assertEqual(member_obligation.membership_id, membership.pk)
         self.assertIsNone(member_obligation.person_id)
 
+    def test_person_scope_can_name_explicit_plot_context(self):
+        plot = LandPlot.objects.create(label='FIN-PLOT-PERSON', account=self.account)
+        first_person = Person.objects.create(full_name='Синтетический Плательщик Один')
+        second_person = Person.objects.create(full_name='Синтетический Плательщик Два')
+
+        first = self.obligation(
+            payer_scope=ChargeObligation.PAYER_PERSON,
+            person=first_person,
+            plot=plot,
+        )
+        second_charge = Charge.objects.create(
+            account=self.account,
+            period=self.period,
+            kind='service',
+            amount=Decimal('250.00'),
+        )
+        second = ChargeObligation.objects.create(
+            charge=second_charge,
+            category=ChargeObligation.CATEGORY_TARGET,
+            payer_scope=ChargeObligation.PAYER_PERSON,
+            person=second_person,
+            plot=plot,
+            due_on=date(2026, 10, 1),
+            base_amount=Decimal('250.00'),
+            basis='Второе синтетическое обязательство по тому же участку',
+        )
+
+        self.assertEqual(first.person_id, first_person.pk)
+        self.assertEqual(first.plot_id, plot.pk)
+        self.assertEqual(second.person_id, second_person.pk)
+        self.assertEqual(second.plot_id, plot.pk)
+
+    def test_membership_scope_can_name_explicit_plot_context(self):
+        plot = LandPlot.objects.create(label='FIN-PLOT-MEMBER', account=self.account)
+        person = Person.objects.create(full_name='Синтетический Член С Участком')
+        membership = TsnMembership.objects.create(
+            person=person,
+            application_on=date(2025, 12, 1),
+            starts=date(2026, 1, 1),
+            decision_ref='Синтетическое решение о членстве',
+        )
+        obligation = self.obligation(
+            payer_scope=ChargeObligation.PAYER_MEMBERSHIP,
+            membership=membership,
+            plot=plot,
+        )
+
+        self.assertEqual(obligation.membership_id, membership.pk)
+        self.assertEqual(obligation.plot_id, plot.pk)
+        self.assertIsNone(obligation.person_id)
+
     def test_scope_rejects_mixed_subjects(self):
         person = Person.objects.create(full_name='Синтетический Смешанный')
         plot = LandPlot.objects.create(label='FIN-PLOT-MIX', account=self.account)
