@@ -37,7 +37,14 @@ class Command(BaseCommand):
         registry = {f'{action}_{name}' for name in REGISTRY for action in ('view', 'add', 'change')}
         registry |= {f'view_historical{name}' for name in REGISTRY}
         operator = water_view | {'add_reading', 'add_groupconsumption'}
-        controller = {'use_controller_workspace'}
+        # Preserve the legacy generic-controller capture for existing users.
+        # Once a ControllerLineAccess assignment exists, a server-side guard
+        # redirects that user to the scoped workspace instead of the global list.
+        controller = {
+            'view_controllerreadingsubmission',
+            'add_controllerreadingsubmission',
+            'use_controller_workspace',
+        }
         finance = {f'{action}_{name}' for name in FINANCE for action in ('view', 'add', 'change')}
         finance |= {f'view_historical{name}' for name in FINANCE}
         public_site = {f'{action}_{name}' for name in PUBLIC_SITE for action in ('view', 'add', 'change')}

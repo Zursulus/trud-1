@@ -129,10 +129,12 @@ class ControllerWorkspaceTests(TestCase):
         )
         self.url = f'/admin/water/controller-workspace/?date={self.today.isoformat()}'
 
-    def test_controller_role_uses_scoped_workspace_not_global_capture_permission(self):
+    def test_controller_role_keeps_legacy_permission_but_assignment_forces_scoped_workspace(self):
         self.assertTrue(self.controller.has_perm('water.use_controller_workspace'))
-        self.assertFalse(self.controller.has_perm('water.add_controllerreadingsubmission'))
-        self.assertFalse(self.controller.has_perm('water.view_controllerreadingsubmission'))
+        self.assertTrue(self.controller.has_perm('water.add_controllerreadingsubmission'))
+        self.client.force_login(self.controller)
+        response = self.client.get('/admin/water/controllerreadingsubmission/add/')
+        self.assertRedirects(response, '/admin/water/controller-workspace/', fetch_redirect_response=False)
 
     def test_controller_sees_only_assigned_line_and_never_main_meter(self):
         self.client.force_login(self.controller)
@@ -181,9 +183,9 @@ class ControllerWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
         response = self.client.get(self.url)
-        self.assertContains(response, '100.000')
-        self.assertContains(response, '80.000')
-        self.assertContains(response, '20.000')
+        self.assertContains(response, '100,000')
+        self.assertContains(response, '80,000')
+        self.assertContains(response, '20,000')
         self.assertContains(response, 'Предварительный итог')
 
     def test_line_access_is_exclusive_for_overlapping_dates(self):
