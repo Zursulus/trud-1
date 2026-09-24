@@ -26,6 +26,7 @@ from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from playwright.sync_api import sync_playwright
 
+from .controller_scope import ControllerLineAccess
 from .models import (
     Account, ControllerReadingSubmission, Membership, Meter, Reading, SupplyNode, User, WaterGroup,
 )
@@ -41,7 +42,7 @@ class QuietStaticHandler(SimpleHTTPRequestHandler):
 
 
 class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
-    """Protect the controller Add -> capture flow, moderation UI and balance report."""
+    """Protect scoped senior input, legacy capture, moderation UI and balance report."""
 
     def setUp(self):
         call_command("setup_roles", stdout=StringIO())
@@ -102,31 +103,46 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
                 context.close()
                 browser.close()
 
-    def test_admin_add_link_opens_capture_and_runs_identity_javascript(self):
+    def test_admin_primary_link_opens_scoped_line_workspace(self):
+        today = timezone.localdate()
+        group = WaterGroup.objects.create(name="Линия старшего E2E", node=self.node, source="meter")
+        Membership.objects.create(
+            account=self.account,
+            group=group,
+            starts=today - timedelta(days=365),
+        )
+        line_meter = Meter.objects.create(
+            serial="LINE-E2E-1", kind="line", node=self.node, group=group,
+        )
+        ControllerLineAccess.objects.create(
+            user=self.controller,
+            group=group,
+            starts=today - timedelta(days=365),
+        )
+
         with self._browser_page({"width": 1280, "height": 900}) as (page, page_errors, console_errors):
             response = page.goto(f"{self.live_server_url}/admin/")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
 
-            add_link = page.locator(
-                'a[href="/admin/water/controllerreadingsubmission/capture/"]'
+            workspace_link = page.locator(
+                'a[href="/admin/water/controller-workspace/"]'
             ).first
-            self.assertTrue(add_link.is_visible())
-            add_link.click()
-            page.wait_for_url("**/admin/water/controllerreadingsubmission/capture/")
+            self.assertTrue(workspace_link.is_visible())
+            self.assertIn("Внести показание по моей линии", workspace_link.inner_text())
+            workspace_link.click()
+            page.wait_for_url("**/admin/water/controller-workspace/")
 
-            self.assertTrue(page.get_by_role("button", name="Отправить на проверку").is_visible())
-            select = page.locator("#id_meter")
-            select.select_option(str(self.meter.pk))
-
-            option_text = page.locator(
-                f'#id_meter option[value="{self.meter.pk}"]'
-            ).inner_text()
-            self.assertEqual(option_text.strip(), "Лесная 7")
-            self.assertTrue(page.locator("#identity").is_visible())
-            self.assertEqual(page.locator("#address").inner_text().strip(), "Лесная 7")
-            self.assertEqual(page.locator("#account-id").count(), 0)
-            self.assertEqual(page.locator("#serial").count(), 0)
+            self.assertTrue(page.get_by_role("heading", name="Показания моей линии").first.is_visible())
+            self.assertTrue(page.get_by_text("Линия старшего E2E", exact=True).is_visible())
+            self.assertTrue(page.get_by_text("Контрольный счётчик линии · LINE-E2E-1", exact=True).is_visible())
+            self.assertTrue(page.get_by_text("Лесная 7 · CTRL-E2E-1", exact=True).is_visible())
+            self.assertEqual(page.locator(f'input[name="value_{line_meter.pk}"]').count(), 1)
+            self.assertEqual(page.locator(f'input[name="value_{self.meter.pk}"]').count(), 1)
+            self.assertTrue(page.get_by_role(
+                "button", name="Отправить введённые показания на проверку", exact=True,
+            ).is_visible())
+            self.assertEqual(page.locator('text=MAIN').count(), 0)
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
 

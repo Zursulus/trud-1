@@ -1,0 +1,201 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .controller-workspace { max-width: 920px; margin: 0 auto; }
+    .controller-intro { color: #475569; line-height: 1.5; margin-bottom: 18px; }
+    .controller-date {
+      display: flex; gap: 10px; align-items: end; flex-wrap: wrap;
+      padding: 14px; margin-bottom: 16px; border: 1px solid #cbd5e1;
+      border-radius: 12px; background: #fff;
+    }
+    .controller-date p { margin: 0; }
+    .controller-date label { display: block; font-weight: 700; margin-bottom: 5px; }
+    .controller-date input { min-height: 44px; font-size: 17px; padding: 7px 10px; }
+    .controller-date button, .controller-submit {
+      min-height: 46px; padding: 9px 16px; border: 0; border-radius: 8px;
+      background: var(--button-bg); color: var(--button-fg); font-weight: 700; cursor: pointer;
+    }
+    .line-card {
+      margin: 0 0 18px; overflow: hidden; border: 1px solid #cbd5e1;
+      border-radius: 12px; background: #fff;
+    }
+    .line-head { padding: 16px; background: #eef2f7; }
+    .line-head h2 { margin: 0 0 4px; font-size: 21px; }
+    .line-head p { margin: 0; color: #475569; }
+    .meter-row {
+      display: grid; grid-template-columns: minmax(0, 1fr) 170px;
+      gap: 12px; align-items: center; padding: 14px 16px; border-top: 1px solid #e2e8f0;
+    }
+    .meter-row.line-meter { background: #f8fafc; }
+    .meter-title { font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+    .meter-meta { margin-top: 5px; color: #64748b; font-size: 13px; line-height: 1.35; }
+    .meter-input input {
+      box-sizing: border-box; width: 100%; min-height: 46px; padding: 8px 10px;
+      font-size: 18px; text-align: right;
+    }
+    .meter-status { font-weight: 700; text-align: right; }
+    .meter-status.pending { color: #92400e; }
+    .meter-status.approved { color: #166534; }
+    .meter-error { grid-column: 1 / -1; color: #b91c1c; font-weight: 700; }
+    .line-summary {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px; padding: 14px 16px; border-top: 1px solid #cbd5e1; background: #f8fafc;
+    }
+    .summary-item { padding: 10px; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; }
+    .summary-item span { display: block; color: #64748b; font-size: 12px; margin-bottom: 4px; }
+    .summary-item strong { display: block; font-size: 18px; }
+    .summary-note { grid-column: 1 / -1; margin: 0; color: #64748b; }
+    .controller-submit { width: 100%; min-height: 54px; font-size: 18px; margin: 4px 0 22px; }
+    .empty-lines {
+      padding: 18px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff;
+    }
+    @media (max-width: 680px) {
+      #content { padding: 14px !important; }
+      .meter-row { grid-template-columns: 1fr; gap: 8px; }
+      .meter-status { text-align: left; }
+      .line-summary { grid-template-columns: 1fr; }
+      .summary-note { grid-column: 1; }
+      .controller-date { display: block; }
+      .controller-date button { width: 100%; margin-top: 10px; }
+      .controller-date input { width: 100%; box-sizing: border-box; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .controller-intro, .line-head p, .meter-meta, .summary-note { color: #cbd5e1; }
+      .controller-date, .line-card, .summary-item, .empty-lines { background: #1f2937; border-color: #475569; }
+      .line-head, .line-summary, .meter-row.line-meter { background: #334155; }
+      .meter-row, .line-summary { border-color: #475569; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="controller-workspace">
+  <h1>Показания моей линии</h1>
+  <p class="controller-intro">
+    Здесь доступны только закреплённые за вами линии, их контрольные счётчики и участки.
+    Общие счётчики верхнего уровня сюда не входят. Отправленные значения сначала проходят проверку.
+  </p>
+
+  <form method="get" class="controller-date">
+    <p>
+      <label for="{{ date_form.date.id_for_label }}">{{ date_form.date.label }}</label>
+      {{ date_form.date }}
+      {% if date_form.date.help_text %}<small>{{ date_form.date.help_text }}</small>{% endif %}
+      {{ date_form.date.errors }}
+    </p>
+    <button type="submit">Показать</button>
+  </form>
+
+  {% if has_groups %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+
+      {% for item in groups %}
+        <section class="line-card">
+          <div class="line-head">
+            <h2>{{ item.group.name }}</h2>
+            <p>{{ item.group.node.name }} · дата {{ selected_date|date:"d.m.Y" }}</p>
+          </div>
+
+          {% if item.rows %}
+            {% for row in item.rows %}
+              <div class="meter-row{% if row.is_line %} line-meter{% endif %}">
+                <div>
+                  <div class="meter-title">{{ row.label }}</div>
+                  <div class="meter-meta">
+                    {% if row.previous %}
+                      Предыдущее: {{ row.previous.value|floatformat:3 }} м³ · {{ row.previous.date|date:"d.m.Y" }}
+                    {% else %}
+                      Предыдущего показания ещё нет — это будет начальное значение.
+                    {% endif %}
+                    {% if row.consumption is not None %}
+                      · расход {{ row.consumption|floatformat:3 }} м³
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="meter-input">
+                  {% if row.approved %}
+                    <div class="meter-status approved">
+                      Принято: {{ row.approved.value|floatformat:3 }} м³
+                    </div>
+                  {% else %}
+                    <input
+                      type="number"
+                      inputmode="decimal"
+                      min="0"
+                      step="0.001"
+                      name="value_{{ row.meter.pk }}"
+                      value="{{ row.input_value }}"
+                      aria-label="{{ row.label }}"
+                      placeholder="0.000"
+                    >
+                    {% if row.pending %}
+                      <div class="meter-status pending">На проверке</div>
+                    {% endif %}
+                  {% endif %}
+                </div>
+
+                {% if row.error %}
+                  <div class="meter-error">{{ row.error }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="meter-row">
+              Для этой линии пока не найдено доступных счётчиков на выбранную дату.
+            </div>
+          {% endif %}
+
+          <div class="line-summary">
+            <div class="summary-item">
+              <span>Контрольный расход линии</span>
+              <strong>
+                {% if item.summary.line_volume is not None %}
+                  {{ item.summary.line_volume|floatformat:3 }} м³
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+            <div class="summary-item">
+              <span>Сумма участков</span>
+              <strong>
+                {% if item.summary.individual_volume is not None %}
+                  {{ item.summary.individual_volume|floatformat:3 }} м³
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+            <div class="summary-item">
+              <span>Разница / потери</span>
+              <strong>
+                {% if item.summary.difference is not None %}
+                  {{ item.summary.difference|floatformat:3 }} м³
+                  {% if item.summary.difference_percent is not None %}
+                    · {{ item.summary.difference_percent|floatformat:2 }}%
+                  {% endif %}
+                {% else %}—{% endif %}
+              </strong>
+            </div>
+            <p class="summary-note">
+              {% if item.summary.complete %}
+                Предварительный итог по принятым и вашим ожидающим проверки значениям.
+              {% else %}
+                Для расчёта нужны контрольный счётчик линии, участки и по два последовательных показания каждого прибора.
+                {% if item.summary.missing_count %} Не хватает данных: {{ item.summary.missing_count }}.{% endif %}
+              {% endif %}
+            </p>
+          </div>
+        </section>
+      {% endfor %}
+
+      <button type="submit" class="controller-submit">Отправить введённые показания на проверку</button>
+    </form>
+  {% else %}
+    <div class="empty-lines">
+      На выбранную дату за вами не закреплено ни одной линии. Назначение выполняет администратор.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
