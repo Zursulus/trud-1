@@ -6,7 +6,7 @@ from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
-from water import appeal_admin_tools, portal, portal_ui, resident_actions
+from water import access_request_views, appeal_admin_tools, portal, portal_ui, resident_actions
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
@@ -38,6 +38,8 @@ urlpatterns = [
     ), name='resident_login'),
     path('admin/cabinet/logout/', auth_views.LogoutView.as_view(next_page='resident_login'), name='resident_logout'),
     path('admin/cabinet/help/', portal_ui.access_help, name='resident_access_help'),
+    path('admin/cabinet/request-access/', access_request_views.request_access, name='resident_access_request'),
+    path('admin/cabinet/request-access/sent/', access_request_views.request_access_sent, name='resident_access_request_sent'),
     path('admin/cabinet/invite/<str:token>/', portal.register_invite, name='resident_invite'),
     path('admin/cabinet/reset/<str:token>/', portal.reset_password, name='resident_password_reset'),
     path('admin/cabinet/password/', portal.change_password, name='resident_password_change'),
