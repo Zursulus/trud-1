@@ -104,7 +104,7 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
 
         form = AccessRequestApproveForm(request.POST or None, initial={
             'email': obj.email,
-            'role': ResidentAccess.OWNER,
+            'role': 'owner',
         })
         invite_url = None
         if request.method == 'POST' and form.is_valid():
