@@ -169,6 +169,10 @@ class RegistryMigrationPlanTests(TestCase):
             if category != 'excluded_nonresident':
                 self.assertNotIn(TEST_RESIDENT_NUMBER, ids)
 
+    def test_command_rejects_apply_mode(self):
+        with self.assertRaises(TypeError):
+            call_command('analyze_member_registry_migration', '--apply')
+
     def test_command_is_read_only_and_never_prints_pii(self):
         user = User.objects.create_user(username='registry-output-user')
         person = Person.objects.create(full_name='Секретное Имя Теста')
