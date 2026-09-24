@@ -56,7 +56,7 @@ class Command(BaseCommand):
             f'{action}_{name}' for name in WATER for action in ('add', 'change')
         }
         administrator.update({f'{action}_controllerreadingsubmission' for action in ('view', 'add', 'change')})
-        administrator.update({'export_account', 'export_reading'})
+        administrator.update({'export_account', 'export_reading', 'view_chargeobligation'})
 
         role_codes = (
             (ADMIN, administrator),
