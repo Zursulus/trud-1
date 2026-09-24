@@ -12,6 +12,8 @@ class WaterConfig(AppConfig):
         from . import resident_numbers  # noqa: F401
         from . import private_registry  # noqa: F401
         from . import access_requests  # noqa: F401
+        from . import portal_permissions
+        portal_permissions.install_model_permission_validators()
         # Рабочая админка должна показывать сначала несколько понятных сценариев,
         # а не полный технический список моделей. Полная структура остаётся
         # доступной в сворачиваемом служебном блоке на нашей index-странице.
@@ -25,3 +27,4 @@ class WaterConfig(AppConfig):
         # original ModelAdmin classes have been registered.
         from . import privacy_admin  # noqa: F401
         from . import access_request_admin  # noqa: F401
+        from . import portal_permissions_admin  # noqa: F401

@@ -1,0 +1,3 @@
+.bottom-nav{
+  grid-template-columns:repeat(auto-fit,minmax(0,1fr));
+}

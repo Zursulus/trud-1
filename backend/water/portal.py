@@ -22,6 +22,16 @@ from .models import (
     ResidentAccess, ResidentAppeal, ResidentAppealMessage, ResidentInvite,
     ResidentPasswordReset, User,
 )
+from .portal_permissions import (
+    CAP_APPEALS,
+    CAP_DOCUMENTS,
+    CAP_FINANCE,
+    CAP_SUBMIT_WATER,
+    CAP_VIEW_ACCOUNT,
+    has_any_portal_access,
+    resolved_access,
+    resolved_accesses,
+)
 
 
 class ResidentAuthenticationForm(AuthenticationForm):
@@ -29,8 +39,7 @@ class ResidentAuthenticationForm(AuthenticationForm):
         super().confirm_login_allowed(user)
         if user.is_staff:
             raise forms.ValidationError('Сотрудники входят через защищённую административную форму.', code='staff_portal')
-        today = timezone.localdate()
-        if not user.resident_accesses.filter(starts__lte=today, account__archived=False).filter(models_q_active(today)).exists():
+        if not has_any_portal_access(user):
             raise forms.ValidationError('Нет действующего доступа к лицевому счёту.', code='no_access')
 
 
@@ -112,8 +121,7 @@ def issue_invite(account, email, role, *, actor=None):
 def issue_password_reset(user, *, actor=None):
     if user.is_staff or not user.is_active:
         raise ValidationError('Восстановление доступно только действующему кабинету жителя.')
-    today = timezone.localdate()
-    if not user.resident_accesses.filter(starts__lte=today, account__archived=False).filter(models_q_active(today)).exists():
+    if not has_any_portal_access(user):
         raise ValidationError('У жителя нет действующего доступа к лицевому счёту.')
     for previous in ResidentPasswordReset.objects.select_for_update().filter(
         user=user, used_at__isnull=True, revoked=False,
@@ -133,6 +141,7 @@ def issue_password_reset(user, *, actor=None):
 
 
 def active_accesses(user):
+    """Legacy ResidentAccess queryset kept only for transitional invite logic/tests."""
     today = timezone.localdate()
     return user.resident_accesses.filter(starts__lte=today).filter(
         models_q_active(today), account__archived=False,
@@ -150,6 +159,13 @@ def resident_guard(request):
     if request.user.is_staff:
         raise PermissionDenied
     return None
+
+
+def _resolved_or_404(user, account_id, capability=CAP_VIEW_ACCOUNT):
+    access = resolved_access(user, account_id, capability)
+    if access is None:
+        raise Http404
+    return access
 
 
 @never_cache
@@ -240,10 +256,7 @@ def reset_password(request, token):
     except UnicodeEncodeError as error:
         raise Http404 from error
     reset = get_object_or_404(ResidentPasswordReset.objects.select_related('user'), token_hash=digest)
-    today = timezone.localdate()
-    has_access = reset.user.resident_accesses.filter(
-        starts__lte=today, account__archived=False,
-    ).filter(models_q_active(today)).exists()
+    has_access = has_any_portal_access(reset.user)
     if (
         reset.revoked or reset.used_at or reset.expires_at <= timezone.now()
         or reset.user.is_staff or not reset.user.is_active or not has_access
@@ -256,12 +269,7 @@ def reset_password(request, token):
             if locked.revoked or locked.used_at or locked.expires_at <= timezone.now():
                 return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
             user = User.objects.select_for_update().get(pk=locked.user_id)
-            if user.is_staff or not user.is_active:
-                return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
-            today = timezone.localdate()
-            if not user.resident_accesses.filter(
-                starts__lte=today, account__archived=False,
-            ).filter(models_q_active(today)).exists():
+            if user.is_staff or not user.is_active or not has_any_portal_access(user):
                 return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
             user.set_password(form.cleaned_data['password1'])
             user.save(update_fields=['password'])
@@ -293,7 +301,12 @@ def dashboard(request):
     denied = resident_guard(request)
     if denied:
         return denied
-    rows = [{'access': access, 'totals': account_totals(access.account)} for access in active_accesses(request.user)]
+    rows = []
+    for access in resolved_accesses(request.user, CAP_VIEW_ACCOUNT):
+        rows.append({
+            'access': access,
+            'totals': account_totals(access.account) if access.can_view_finance else None,
+        })
     return TemplateResponse(request, 'water/portal/dashboard.html', {'rows': rows})
 
 
@@ -302,17 +315,19 @@ def resident_account(request, account_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = _resolved_or_404(request.user, account_id)
     account = access.account
     context = {
-        'account': account, 'access': access, 'totals': account_totals(account),
-        'charges': Charge.objects.filter(account=account, status='approved').select_related('period').order_by('-period__starts', '-id'),
-        'payments': Payment.objects.filter(account=account, status='confirmed').order_by('-paid_on', '-id'),
+        'account': account,
+        'access': access,
+        'totals': account_totals(account) if access.can_view_finance else None,
+        'charges': Charge.objects.filter(account=account, status='approved').select_related('period').order_by('-period__starts', '-id') if access.can_view_finance else Charge.objects.none(),
+        'payments': Payment.objects.filter(account=account, status='confirmed').order_by('-paid_on', '-id') if access.can_view_finance else Payment.objects.none(),
         'meters': Meter.objects.filter(account=account, kind='individual').order_by('serial'),
-        'appeals': ResidentAppeal.objects.filter(account=account, author=request.user).select_related('category'),
+        'appeals': ResidentAppeal.objects.filter(account=account, author=request.user).select_related('category') if access.can_use_appeals else ResidentAppeal.objects.none(),
         'documents': AccountDocument.objects.filter(
             account=account, visible_to_residents=True, published_at__lte=timezone.now(),
-        ).select_related('category'),
+        ).select_related('category') if access.can_view_documents else AccountDocument.objects.none(),
     }
     return TemplateResponse(request, 'water/portal/account.html', context)
 
@@ -323,7 +338,7 @@ def submit_reading(request, account_id, meter_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = _resolved_or_404(request.user, account_id, CAP_SUBMIT_WATER)
     meter = get_object_or_404(Meter, pk=meter_id, account=access.account, kind='individual')
     if request.method != 'POST':
         raise Http404
@@ -341,7 +356,7 @@ def submit_reading(request, account_id, meter_id):
             form.add_error(None, error)
         else:
             return HttpResponseRedirect(reverse('resident_account', args=[account_id]))
-    context = {'account': access.account, 'meter': meter, 'form': form}
+    context = {'account': access.account, 'access': access, 'meter': meter, 'form': form}
     return TemplateResponse(request, 'water/portal/reading.html', context, status=400)
 
 
@@ -351,7 +366,7 @@ def create_appeal(request, account_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = _resolved_or_404(request.user, account_id, CAP_APPEALS)
     form = ResidentAppealForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         appeal = ResidentAppeal(
@@ -362,7 +377,9 @@ def create_appeal(request, account_id):
         appeal._change_reason = 'Обращение создано жителем через личный кабинет'
         appeal.save()
         return HttpResponseRedirect(reverse('resident_appeal', args=[account_id, appeal.pk]))
-    return TemplateResponse(request, 'water/portal/appeal_form.html', {'account': access.account, 'form': form})
+    return TemplateResponse(request, 'water/portal/appeal_form.html', {
+        'account': access.account, 'access': access, 'form': form,
+    })
 
 
 @never_cache
@@ -370,7 +387,7 @@ def resident_appeal(request, account_id, appeal_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = _resolved_or_404(request.user, account_id, CAP_APPEALS)
     appeal = get_object_or_404(
         ResidentAppeal.objects.select_related('category'), pk=appeal_id,
         account=access.account, author=request.user,
@@ -395,7 +412,7 @@ def resident_appeal(request, account_id, appeal_id):
                     locked.save()
                 return HttpResponseRedirect(reverse('resident_appeal', args=[account_id, appeal.pk]))
     context = {
-        'account': access.account, 'appeal': appeal, 'form': form,
+        'account': access.account, 'access': access, 'appeal': appeal, 'form': form,
         'resident_messages': appeal.resident_messages.all(),
     }
     return TemplateResponse(request, 'water/portal/appeal.html', context)
@@ -406,7 +423,7 @@ def download_document(request, account_id, document_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = get_object_or_404(active_accesses(request.user), account_id=account_id)
+    access = _resolved_or_404(request.user, account_id, CAP_DOCUMENTS)
     document = get_object_or_404(
         AccountDocument, pk=document_id, account=access.account,
         visible_to_residents=True, published_at__lte=timezone.now(),
