@@ -5,11 +5,120 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from .models import ResidentAppeal, ResidentAppealMessage, User
+from .models import Person, RecordedModel, ResidentAppeal, ResidentAppealMessage, User
 
 
 APPEAL_ATTACHMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png'}
 APPEAL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+
+class ResidentIdentity(RecordedModel):
+    """Verified link between one resident login and one real person.
+
+    This model is deliberately separate from ResidentAccess: identifying who a
+    login belongs to must not by itself grant access to any plot or account.
+    """
+
+    user = models.OneToOneField(
+        User, verbose_name='Кабинет', on_delete=models.PROTECT,
+        related_name='resident_identity',
+    )
+    person = models.OneToOneField(
+        Person, verbose_name='Человек', on_delete=models.PROTECT,
+        related_name='resident_identity',
+    )
+    verified_at = models.DateTimeField('Личность подтверждена', default=timezone.now, editable=False)
+    verified_by = models.ForeignKey(
+        User, verbose_name='Кто подтвердил', on_delete=models.PROTECT,
+        related_name='verified_resident_identities', blank=True, null=True,
+    )
+    basis = models.CharField('Основание подтверждения', max_length=300, blank=True)
+    notes = models.TextField('Примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Идентичность кабинета жителя'
+        verbose_name_plural = 'Идентичности кабинетов жителей'
+        ordering = ['person', 'id']
+
+    def clean(self):
+        if self.user_id and self.user.is_staff:
+            raise ValidationError({'user': 'Сотрудника нельзя связывать с кабинетом жителя.'})
+        if self.verified_by_id and not self.verified_by.is_staff:
+            raise ValidationError({'verified_by': 'Подтвердить личность может только сотрудник.'})
+
+    def __str__(self):
+        return f'{self.user} ↔ {self.person}'
+
+
+class TsnMembership(RecordedModel):
+    """Time-bounded TSN membership, independent of plot ownership and portal access."""
+
+    END_VOLUNTARY = 'voluntary'
+    END_RIGHT_ENDED = 'right_ended'
+    END_DEATH = 'death'
+    END_EXCLUSION = 'exclusion'
+    END_REASON_CHOICES = [
+        (END_VOLUNTARY, 'Добровольный выход'),
+        (END_RIGHT_ENDED, 'Прекращение права на участок'),
+        (END_DEATH, 'Смерть'),
+        (END_EXCLUSION, 'Исключение'),
+    ]
+
+    person = models.ForeignKey(
+        Person, verbose_name='Член ТСН', on_delete=models.PROTECT,
+        related_name='tsn_memberships',
+    )
+    application_on = models.DateField('Дата заявления')
+    starts = models.DateField('Членство с')
+    decision_ref = models.CharField('Решение правления / основание приёма', max_length=300)
+    member_document = models.CharField('Документ о членстве', max_length=300, blank=True)
+    ends = models.DateField('Членство прекращено (дата)', blank=True, null=True)
+    end_reason = models.CharField(
+        'Основание прекращения', max_length=20,
+        choices=END_REASON_CHOICES, blank=True,
+    )
+    end_document = models.CharField('Документ о прекращении', max_length=300, blank=True)
+    notes = models.TextField('Примечание', blank=True)
+
+    class Meta:
+        verbose_name = 'Членство в ТСН'
+        verbose_name_plural = 'Членство в ТСН'
+        ordering = ['person', '-starts', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ends__isnull=True) | models.Q(ends__gt=models.F('starts')),
+                name='tsn_membership_dates',
+            ),
+            models.UniqueConstraint(
+                fields=['person'], condition=models.Q(ends__isnull=True),
+                name='one_active_tsn_membership_per_person',
+            ),
+        ]
+
+    def clean(self):
+        if not self.person_id or not self.application_on or not self.starts:
+            return
+        if self.starts < self.application_on:
+            raise ValidationError({'starts': 'Дата начала членства не может быть раньше заявления.'})
+        if self.ends and not self.end_reason:
+            raise ValidationError({'end_reason': 'Для прекращённого членства укажите основание.'})
+        if not self.ends and self.end_reason:
+            raise ValidationError({'end_reason': 'Основание прекращения указывают вместе с датой прекращения.'})
+        overlaps = TsnMembership.objects.filter(person_id=self.person_id).filter(
+            models.Q(ends__isnull=True) | models.Q(ends__gt=self.starts),
+        ).exclude(pk=self.pk)
+        if self.ends:
+            overlaps = overlaps.filter(starts__lt=self.ends)
+        if overlaps.exists():
+            raise ValidationError('У человека уже есть членство ТСН на пересекающиеся даты.')
+
+    @property
+    def is_active(self):
+        today = timezone.localdate()
+        return self.starts <= today and (self.ends is None or self.ends > today)
+
+    def __str__(self):
+        return f'{self.person} · с {self.starts:%d.%m.%Y}'
 
 
 def appeal_attachment_path(instance, filename):
