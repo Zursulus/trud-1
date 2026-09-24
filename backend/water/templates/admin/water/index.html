@@ -74,10 +74,15 @@
   <p class="trud-lead">Здесь оставлены основные рабочие действия. Полная техническая структура базы спрятана ниже в разделе «Настройки / служебное».</p>
 
   <div class="trud-grid" aria-label="Основные рабочие разделы">
-    {% if perms.water.add_controllerreadingsubmission %}
+    {% if perms.water.use_controller_workspace %}
+      <a class="trud-card trud-primary" href="{% url 'water_controller_workspace' %}">
+        <strong>Показания моей линии</strong>
+        <span>Только закреплённые линии и участки; сайт сам покажет предварительную разницу и потери.</span>
+      </a>
+    {% elif perms.water.add_controllerreadingsubmission %}
       <a class="trud-card trud-primary" href="{% url 'admin:water_controllerreading_capture' %}">
         <strong>Внести показание</strong>
-        <span>Форма для контролёра: адрес, дата и текущее значение.</span>
+        <span>Административная форма ввода отдельного показания.</span>
       </a>
     {% endif %}
 

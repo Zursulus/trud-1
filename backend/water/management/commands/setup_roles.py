@@ -37,7 +37,7 @@ class Command(BaseCommand):
         registry = {f'{action}_{name}' for name in REGISTRY for action in ('view', 'add', 'change')}
         registry |= {f'view_historical{name}' for name in REGISTRY}
         operator = water_view | {'add_reading', 'add_groupconsumption'}
-        controller = {'view_controllerreadingsubmission', 'add_controllerreadingsubmission'}
+        controller = {'use_controller_workspace'}
         finance = {f'{action}_{name}' for name in FINANCE for action in ('view', 'add', 'change')}
         finance |= {f'view_historical{name}' for name in FINANCE}
         public_site = {f'{action}_{name}' for name in PUBLIC_SITE for action in ('view', 'add', 'change')}
@@ -56,6 +56,12 @@ class Command(BaseCommand):
             f'{action}_{name}' for name in WATER for action in ('add', 'change')
         }
         administrator.update({f'{action}_controllerreadingsubmission' for action in ('view', 'add', 'change')})
+        administrator.update({
+            'view_controllerlineaccess',
+            'add_controllerlineaccess',
+            'change_controllerlineaccess',
+            'view_historicalcontrollerlineaccess',
+        })
         administrator.update({'export_account', 'export_reading', 'view_chargeobligation'})
 
         role_codes = (
