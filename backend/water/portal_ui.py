@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.http import Http404
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -9,18 +10,28 @@ from public_site.models import PublicDocument, PublicNews
 
 from .billing import account_totals
 from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
-from .portal import active_accesses, resident_guard
+from .portal import resident_guard
+from .portal_permissions import (
+    CAP_APPEALS,
+    CAP_DOCUMENTS,
+    CAP_FINANCE,
+    CAP_VIEW_ACCOUNT,
+    resolved_access,
+    resolved_accesses,
+)
 from .resident_models import ResidentAppealViewState
 from .resident_numbers import ResidentNumberSlot
 
 
 def _accesses(user):
-    return list(active_accesses(user).order_by('account__plot', 'account__number', 'account_id'))
+    return resolved_accesses(user, CAP_VIEW_ACCOUNT)
 
 
-def _access_or_404(user, account_id):
-    from django.shortcuts import get_object_or_404
-    return get_object_or_404(active_accesses(user), account_id=account_id)
+def _access_or_404(user, account_id, capability=CAP_VIEW_ACCOUNT):
+    access = resolved_access(user, account_id, capability)
+    if access is None:
+        raise Http404
+    return access
 
 
 def _resident_number(user):
@@ -72,27 +83,33 @@ def _appeals_with_unread(user, account):
 
 def _home_context(request, access):
     account = access.account
-    totals = account_totals(account)
+    totals = account_totals(account) if access.can_view_finance else None
     latest_reading = _latest_reading(account)
-    latest_charge = Charge.objects.filter(
-        account=account, status='approved',
-    ).select_related('period').order_by('-period__starts', '-id').first()
-    appeals = _appeals_with_unread(request.user, account)
+    latest_charge = None
+    if access.can_view_finance:
+        latest_charge = Charge.objects.filter(
+            account=account, status='approved',
+        ).select_related('period').order_by('-period__starts', '-id').first()
+
+    appeals = _appeals_with_unread(request.user, account) if access.can_use_appeals else []
     latest_appeal = appeals[0] if appeals else None
     unread_appeal = next((item for item in appeals if item.portal_unread), None)
-    latest_document = AccountDocument.objects.filter(
-        account=account, visible_to_residents=True, published_at__lte=timezone.now(),
-    ).select_related('category').order_by('-published_at', '-id').first()
-    latest_news = PublicNews.objects.filter(
-        is_published=True, public_checked=True, published_on__lte=timezone.localdate(),
-    ).order_by('-is_featured', '-published_on', '-id').first()
+
+    latest_document = None
+    latest_news = None
+    if access.can_view_documents:
+        latest_document = AccountDocument.objects.filter(
+            account=account, visible_to_residents=True, published_at__lte=timezone.now(),
+        ).select_related('category').order_by('-published_at', '-id').first()
+        latest_news = PublicNews.objects.filter(
+            is_published=True, public_checked=True, published_on__lte=timezone.localdate(),
+        ).order_by('-is_featured', '-published_on', '-id').first()
 
     attention = []
-    balance = totals['balance']
-    if balance > 0:
+    if totals is not None and totals['balance'] > 0:
         attention.append({
             'kind': 'money',
-            'title': f'К оплате {balance} ₽',
+            'title': f'К оплате {totals["balance"]} ₽',
             'text': 'Откройте платежи, чтобы посмотреть начисления и историю оплат.',
             'url': reverse('resident_payments', args=[account.pk]),
         })
@@ -168,7 +185,7 @@ def plots(request):
     for access in _accesses(request.user):
         rows.append({
             'access': access,
-            'totals': account_totals(access.account),
+            'totals': account_totals(access.account) if access.can_view_finance else None,
             'latest_reading': _latest_reading(access.account),
         })
     context = _common(request, rows[0]['access'] if rows else None, 'plots')
@@ -181,7 +198,7 @@ def payments(request, account_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = _access_or_404(request.user, account_id)
+    access = _access_or_404(request.user, account_id, CAP_FINANCE)
     account = access.account
     context = _common(request, access, 'payments')
     context.update({
@@ -214,7 +231,7 @@ def appeals(request, account_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = _access_or_404(request.user, account_id)
+    access = _access_or_404(request.user, account_id, CAP_APPEALS)
     context = _common(request, access, 'more')
     context['appeals'] = _appeals_with_unread(request.user, access.account)
     return TemplateResponse(request, 'water/portal/appeals.html', context)
@@ -225,7 +242,7 @@ def documents(request, account_id):
     denied = resident_guard(request)
     if denied:
         return denied
-    access = _access_or_404(request.user, account_id)
+    access = _access_or_404(request.user, account_id, CAP_DOCUMENTS)
     today = timezone.localdate()
     context = _common(request, access, 'more')
     context.update({
