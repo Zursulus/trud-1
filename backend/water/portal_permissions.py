@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -80,7 +81,7 @@ class PortalGrant(RecordedModel):
         overlaps = PortalGrant.objects.filter(
             person_id=self.person_id,
             account_id=self.account_id,
-            starts__lt=self.ends or timezone.datetime.max.date(),
+            starts__lt=self.ends or date.max,
         ).filter(Q(ends__isnull=True) | Q(ends__gt=self.starts)).exclude(pk=self.pk)
         if overlaps.exists():
             raise ValidationError('Для человека уже есть явное право на этот лицевой счёт в пересекающийся период.')
