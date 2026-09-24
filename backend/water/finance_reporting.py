@@ -61,9 +61,7 @@ def explicit_person_id(obligation):
 
 def explicit_plot_id(obligation):
     """Never derive a plot from Account; return only an explicitly selected plot."""
-    if obligation.payer_scope == ChargeObligation.PAYER_PLOT:
-        return obligation.plot_id
-    return None
+    return obligation.plot_id
 
 
 def account_charge_rows(account, *, on_date=None):
@@ -114,12 +112,13 @@ def account_charge_rows(account, *, on_date=None):
 
         payer_hint = ''
         if obligation:
+            plot_suffix = f' · участок {obligation.plot.label}' if obligation.plot_id else ''
             if obligation.payer_scope == ChargeObligation.PAYER_PLOT and obligation.plot_id:
                 payer_hint = f'Участок {obligation.plot.label}'
             elif obligation.payer_scope == ChargeObligation.PAYER_PERSON:
-                payer_hint = 'Персональное обязательство'
+                payer_hint = f'Персональное обязательство{plot_suffix}'
             elif obligation.payer_scope == ChargeObligation.PAYER_MEMBERSHIP:
-                payer_hint = 'Обязательство члена ТСН'
+                payer_hint = f'Обязательство члена ТСН{plot_suffix}'
             else:
                 payer_hint = 'Лицевой счёт'
 
