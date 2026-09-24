@@ -24,3 +24,4 @@ class WaterConfig(AppConfig):
         # configured application order. Apply the PII boundary only after the
         # original ModelAdmin classes have been registered.
         from . import privacy_admin  # noqa: F401
+        from . import access_request_admin  # noqa: F401
