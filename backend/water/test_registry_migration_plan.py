@@ -19,11 +19,11 @@ class RegistryMigrationPlanTests(TestCase):
         self.staff = User.objects.create_user(username='registry-plan-verifier', is_staff=True)
 
     def _entry(self, number, *, person=None, account=None, user=None, phone='', email=''):
-        slot = ResidentNumberSlot.objects.create(
-            number=number,
-            purpose=ResidentNumberSlot.PURPOSE_RESIDENT,
-            user=user,
-        )
+        slot = ResidentNumberSlot.objects.get(number=number)
+        self.assertEqual(slot.purpose, ResidentNumberSlot.PURPOSE_RESIDENT)
+        if user:
+            slot.user = user
+            slot.save()
         return MemberRegistryEntry.objects.create(
             resident_number=slot,
             person=person,
@@ -148,11 +148,10 @@ class RegistryMigrationPlanTests(TestCase):
 
     def test_test_number_333_is_excluded_even_if_invalid_row_bypasses_validation(self):
         test_user = User.objects.create_user(username='registry-test-333')
-        slot = ResidentNumberSlot.objects.create(
-            number=TEST_RESIDENT_NUMBER,
-            purpose=ResidentNumberSlot.PURPOSE_TEST,
-            user=test_user,
-        )
+        slot = ResidentNumberSlot.objects.get(number=TEST_RESIDENT_NUMBER)
+        self.assertEqual(slot.purpose, ResidentNumberSlot.PURPOSE_TEST)
+        slot.user = test_user
+        slot.save()
         MemberRegistryEntry.objects.bulk_create([
             MemberRegistryEntry(
                 resident_number=slot,
