@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Account, Person, RecordedModel, ResidentAccess, User
+from .models import Account, Person, RecordedModel, ResidentAccess, ResidentAppeal, User
 from .resident_models import ResidentIdentity
 
 
@@ -210,3 +210,27 @@ def resolved_access(user, account_id, capability=CAP_VIEW_ACCOUNT):
 
 def has_any_portal_access(user):
     return bool(resolved_accesses(user, CAP_VIEW_ACCOUNT))
+
+
+def _resident_appeal_clean_with_resolver(self):
+    """Keep ResidentAppeal's business validation on the shared resolver.
+
+    ResidentAppeal is still declared in the legacy monolithic models.py, while
+    PortalGrant lives in this module to avoid enlarging that file. Installing
+    this validator from AppConfig.ready() avoids an import cycle back from
+    models.py and, importantly, makes admin/board saves obey the same access
+    model as resident views.
+    """
+    if self.author_id and self.author.is_staff:
+        raise ValidationError({'author': 'Автором обращения должен быть житель.'})
+    if self.author_id and self.account_id:
+        access = resolved_access(self.author, self.account_id, CAP_APPEALS)
+        if access is None:
+            raise ValidationError('У автора нет доступа к этому лицевому счёту на дату обращения.')
+    if self.status in ('resolved', 'closed') and not self.response.strip():
+        raise ValidationError({'response': 'Для решённого или закрытого обращения укажите ответ.'})
+
+
+def install_model_permission_validators():
+    """Install runtime validators only; no database writes or schema changes."""
+    ResidentAppeal.clean = _resident_appeal_clean_with_resolver
