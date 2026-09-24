@@ -9,6 +9,7 @@ from public_site import views as public_views
 from water import (
     access_request_views,
     appeal_admin_tools,
+    board_poll_views,
     controller_workspace,
     portal,
     portal_ui,
@@ -50,6 +51,13 @@ urlpatterns = [
     path('admin/cabinet/invite/<str:token>/', portal.register_invite, name='resident_invite'),
     path('admin/cabinet/reset/<str:token>/', portal.reset_password, name='resident_password_reset'),
     path('admin/cabinet/password/', portal.change_password, name='resident_password_change'),
+    path('admin/cabinet/board/', board_poll_views.board_home, name='board_poll_home'),
+    path('admin/cabinet/board/poll/<int:poll_id>/', board_poll_views.board_poll_detail, name='board_poll_detail'),
+    path(
+        'admin/cabinet/board/poll/<int:poll_id>/protocol/',
+        board_poll_views.board_protocol_download,
+        name='board_poll_protocol',
+    ),
     path('admin/cabinet/', portal_ui.dashboard, name='resident_dashboard'),
     path('admin/cabinet/plots/', portal_ui.plots, name='resident_plots'),
     path('admin/cabinet/account/<int:account_id>/', portal_ui.account_home, name='resident_account'),
