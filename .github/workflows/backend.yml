@@ -88,8 +88,8 @@ jobs:
       - run: pip install -r backend/requirements.txt -r backend/requirements-e2e.txt
       - name: Install Chromium for Playwright
         run: python -m playwright install --with-deps chromium
-      - name: Run critical browser regressions
-        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests -v 2
+      - name: Run critical browser and accessibility regressions
+        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.accessibility_e2e_tests -v 2
       - name: Upload browser trace on failure
         if: failure()
         uses: actions/upload-artifact@v4
