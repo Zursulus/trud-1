@@ -29,3 +29,4 @@ class WaterConfig(AppConfig):
         from . import privacy_admin  # noqa: F401
         from . import access_request_admin  # noqa: F401
         from . import portal_permissions_admin  # noqa: F401
+        from . import finance_admin  # noqa: F401
