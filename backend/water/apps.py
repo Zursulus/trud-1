@@ -12,6 +12,7 @@ class WaterConfig(AppConfig):
         from . import resident_numbers  # noqa: F401
         from . import private_registry  # noqa: F401
         from . import access_requests  # noqa: F401
+        from . import finance_models  # noqa: F401
         from . import portal_permissions
         portal_permissions.install_model_permission_validators()
         # Рабочая админка должна показывать сначала несколько понятных сценариев,
