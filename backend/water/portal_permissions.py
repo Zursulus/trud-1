@@ -123,8 +123,8 @@ class ResolvedPortalAccess:
         return bool(mapping.get(capability, False))
 
 
-def _active_period_filter(today):
-    return Q(ends__isnull=True) | Q(ends__gt=today)
+def _active_period_filter(on_date):
+    return Q(ends__isnull=True) | Q(ends__gt=on_date)
 
 
 def _from_grant(grant):
@@ -159,26 +159,19 @@ def _from_legacy(access):
     )
 
 
-def resolved_accesses(user, capability=None):
-    """Resolve portal rights without unioning legacy and new authorities.
-
-    If an explicit PortalGrant exists for a person/account, it fully replaces
-    legacy ResidentAccess for that account. This prevents a broad legacy role
-    from silently re-adding a capability that was deliberately removed in the
-    new model.
-    """
+def resolved_accesses_at(user, on_date, capability=None):
+    """Resolve portal authority at an exact date without unioning sources."""
     if not getattr(user, 'is_authenticated', False) or not user.is_active or user.is_staff:
         return []
 
-    today = timezone.localdate()
     resolved = {}
     identity = ResidentIdentity.objects.filter(user=user).select_related('person').first()
     if identity:
         grants = PortalGrant.objects.filter(
             person=identity.person,
             account__archived=False,
-            starts__lte=today,
-        ).filter(_active_period_filter(today)).select_related('account').order_by('account_id', '-starts', '-id')
+            starts__lte=on_date,
+        ).filter(_active_period_filter(on_date)).select_related('account').order_by('account_id', '-starts', '-id')
         for grant in grants:
             if grant.account_id not in resolved:
                 resolved[grant.account_id] = _from_grant(grant)
@@ -186,8 +179,8 @@ def resolved_accesses(user, capability=None):
     legacy = ResidentAccess.objects.filter(
         user=user,
         account__archived=False,
-        starts__lte=today,
-    ).filter(_active_period_filter(today)).select_related('account').order_by('account_id', '-starts', '-id')
+        starts__lte=on_date,
+    ).filter(_active_period_filter(on_date)).select_related('account').order_by('account_id', '-starts', '-id')
     for access in legacy:
         if access.account_id not in resolved:
             resolved[access.account_id] = _from_legacy(access)
@@ -201,11 +194,21 @@ def resolved_accesses(user, capability=None):
     return rows
 
 
-def resolved_access(user, account_id, capability=CAP_VIEW_ACCOUNT):
-    for access in resolved_accesses(user):
+def resolved_accesses(user, capability=None):
+    """Resolve current portal rights, explicit grants first and legacy as fallback."""
+    return resolved_accesses_at(user, timezone.localdate(), capability)
+
+
+def resolved_access_at(user, account_id, capability=CAP_VIEW_ACCOUNT, on_date=None):
+    on_date = on_date or timezone.localdate()
+    for access in resolved_accesses_at(user, on_date):
         if access.account_id == account_id and access.allows(capability):
             return access
     return None
+
+
+def resolved_access(user, account_id, capability=CAP_VIEW_ACCOUNT):
+    return resolved_access_at(user, account_id, capability, timezone.localdate())
 
 
 def has_any_portal_access(user):
@@ -224,7 +227,8 @@ def _resident_appeal_clean_with_resolver(self):
     if self.author_id and self.author.is_staff:
         raise ValidationError({'author': 'Автором обращения должен быть житель.'})
     if self.author_id and self.account_id:
-        access = resolved_access(self.author, self.account_id, CAP_APPEALS)
+        opened_on = self.opened_at.date() if self.opened_at else timezone.localdate()
+        access = resolved_access_at(self.author, self.account_id, CAP_APPEALS, opened_on)
         if access is None:
             raise ValidationError('У автора нет доступа к этому лицевому счёту на дату обращения.')
     if self.status in ('resolved', 'closed') and not self.response.strip():
