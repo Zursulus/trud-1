@@ -1,2 +1,3 @@
-# Browser-only test dependency. Keep out of production/runtime requirements.
+# Browser-only test dependencies. Keep out of production/runtime requirements.
 playwright==1.63.0
+axe-playwright-python==0.1.8
