@@ -133,7 +133,7 @@ class ControllerBrowserRegressionTests(StaticLiveServerTestCase):
             workspace_link.click()
             page.wait_for_url("**/admin/water/controller-workspace/")
 
-            self.assertTrue(page.get_by_role("heading", name="Показания моей линии").is_visible())
+            self.assertTrue(page.get_by_role("heading", name="Показания моей линии").first.is_visible())
             self.assertTrue(page.get_by_text("Линия старшего E2E", exact=True).is_visible())
             self.assertTrue(page.get_by_text("Контрольный счётчик линии · LINE-E2E-1", exact=True).is_visible())
             self.assertTrue(page.get_by_text("Лесная 7 · CTRL-E2E-1", exact=True).is_visible())
