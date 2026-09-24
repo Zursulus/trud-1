@@ -48,7 +48,7 @@ class ChargeObligation(RecordedModel):
     payer_scope = models.CharField('Кто обязан платить', max_length=20, choices=PAYER_CHOICES)
     plot = models.ForeignKey(
         LandPlot,
-        verbose_name='Участок-плательщик',
+        verbose_name='Участок обязательства',
         on_delete=models.PROTECT,
         related_name='charge_obligations',
         blank=True,
@@ -113,13 +113,11 @@ class ChargeObligation(RecordedModel):
                     )
                     | models.Q(
                         payer_scope='person',
-                        plot__isnull=True,
                         person__isnull=False,
                         membership__isnull=True,
                     )
                     | models.Q(
                         payer_scope='membership',
-                        plot__isnull=True,
                         person__isnull=True,
                         membership__isnull=False,
                     )
@@ -131,16 +129,20 @@ class ChargeObligation(RecordedModel):
     def clean(self):
         errors = {}
 
-        selected = {
-            self.PAYER_ACCOUNT: (),
-            self.PAYER_PLOT: ('plot',),
-            self.PAYER_PERSON: ('person',),
-            self.PAYER_MEMBERSHIP: ('membership',),
-        }.get(self.payer_scope)
-        if selected is not None:
-            fields = ('plot', 'person', 'membership')
-            wrong = [field for field in fields if bool(getattr(self, f'{field}_id')) != (field in selected)]
-            if wrong:
+        rules = {
+            self.PAYER_ACCOUNT: (set(), set()),
+            self.PAYER_PLOT: ({'plot'}, {'plot'}),
+            self.PAYER_PERSON: ({'person'}, {'person', 'plot'}),
+            self.PAYER_MEMBERSHIP: ({'membership'}, {'membership', 'plot'}),
+        }
+        rule = rules.get(self.payer_scope)
+        if rule is not None:
+            required, allowed = rule
+            present = {
+                field for field in ('plot', 'person', 'membership')
+                if bool(getattr(self, f'{field}_id'))
+            }
+            if not required.issubset(present) or not present.issubset(allowed):
                 errors['payer_scope'] = 'Для выбранного плательщика заполнена неверная комбинация связей.'
 
         if self.plot_id and self.charge_id:
