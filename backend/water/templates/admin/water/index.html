@@ -76,7 +76,7 @@
   <div class="trud-grid" aria-label="Основные рабочие разделы">
     {% if perms.water.use_controller_workspace %}
       <a class="trud-card trud-primary" href="{% url 'water_controller_workspace' %}">
-        <strong>Показания моей линии</strong>
+        <strong>Внести показание по моей линии</strong>
         <span>Только закреплённые линии и участки; сайт сам покажет предварительную разницу и потери.</span>
       </a>
     {% elif perms.water.add_controllerreadingsubmission %}
