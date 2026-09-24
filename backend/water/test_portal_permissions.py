@@ -7,7 +7,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
-    Account, LandPlot, Meter, Person, PlotRelation, Reading, ResidentAccess, SupplyNode, User,
+    Account, AppealCategory, LandPlot, Meter, Person, PlotRelation, Reading,
+    ResidentAccess, ResidentAppeal, SupplyNode, User,
 )
 from .portal import has_any_portal_access, issue_password_reset
 from .portal_permissions import (
@@ -235,6 +236,24 @@ class PortalPermissionRouteTests(TestCase):
         )
         self.assertEqual(submit.status_code, 302)
         self.assertEqual(Reading.objects.filter(meter=self.meter).count(), 2)
+
+    def test_explicit_appeal_grant_works_without_legacy_access(self):
+        self._grant(can_view_account=True, can_use_appeals=True)
+        category = AppealCategory.objects.create(name='Тестовая тема ZUR-70')
+
+        response = self.client.post(
+            reverse('resident_appeal_new', args=[self.account.pk]),
+            {
+                'category': category.pk,
+                'subject': 'Синтетическое обращение',
+                'message': 'Проверка explicit-only доступа без ResidentAccess.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ResidentAccess.objects.filter(user=self.user).count(), 0)
+        appeal = ResidentAppeal.objects.get(author=self.user, account=self.account)
+        self.assertEqual(appeal.subject, 'Синтетическое обращение')
 
     def test_legacy_user_routes_remain_available(self):
         legacy_user = User.objects.create_user(username='legacy-route@example.test')
