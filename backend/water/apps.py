@@ -11,6 +11,7 @@ class WaterConfig(AppConfig):
         from . import resident_models  # noqa: F401
         from . import resident_numbers  # noqa: F401
         from . import private_registry  # noqa: F401
+        from . import access_requests  # noqa: F401
         # Рабочая админка должна показывать сначала несколько понятных сценариев,
         # а не полный технический список моделей. Полная структура остаётся
         # доступной в сворачиваемом служебном блоке на нашей index-странице.
