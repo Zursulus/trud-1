@@ -116,7 +116,7 @@ class AccessRequestReviewTests(TestCase):
             reverse('admin:water_residentaccessrequest_approve', args=[self.request_obj.pk]),
             {
                 'account': self.account.pk,
-                'role': ResidentAccess.OWNER,
+                'role': 'owner',
                 'email': self.request_obj.email,
                 'decision_note': 'Основание проверено на синтетических данных',
             },
@@ -127,7 +127,7 @@ class AccessRequestReviewTests(TestCase):
         self.request_obj.refresh_from_db()
         self.assertEqual(self.request_obj.status, ResidentAccessRequest.STATUS_APPROVED)
         self.assertEqual(self.request_obj.matched_account_id, self.account.pk)
-        self.assertEqual(self.request_obj.approved_role, ResidentAccess.OWNER)
+        self.assertEqual(self.request_obj.approved_role, 'owner')
         self.assertEqual(self.request_obj.decided_by_id, self.staff.pk)
         self.assertIsNotNone(self.request_obj.decided_at)
         self.assertIsNotNone(self.request_obj.invite_id)
@@ -140,7 +140,7 @@ class AccessRequestReviewTests(TestCase):
             reverse('admin:water_residentaccessrequest_approve', args=[self.request_obj.pk]),
             {
                 'account': self.account.pk,
-                'role': ResidentAccess.OWNER,
+                'role': 'owner',
                 'email': self.request_obj.email,
                 'decision_note': 'Повторное решение не должно сработать',
             },
