@@ -65,6 +65,16 @@ class FinanceReportingTests(TestCase):
         self.assertIsNone(explicit_plot_id(row))
         self.assertEqual(plot.account_id, self.account.pk)
 
+    def test_reporting_can_expose_explicit_person_and_plot_pair(self):
+        plot = LandPlot.objects.create(label='REPORT-PERSON-PLOT', account=self.account)
+        self.obligation.plot = plot
+        self.obligation.save()
+
+        row = obligation_report_queryset().get(pk=self.obligation.pk)
+
+        self.assertEqual(explicit_person_id(row), self.person.pk)
+        self.assertEqual(explicit_plot_id(row), plot.pk)
+
     def test_membership_scope_resolves_only_explicit_membership_person(self):
         membership = TsnMembership.objects.create(
             person=self.person,
@@ -99,6 +109,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
         self.account = Account.objects.create(number='ADMIN-REPORT-1')
         self.period = BillingPeriod.objects.create(starts=date(2026, 1, 1), ends=date(2027, 1, 1))
         self.person = Person.objects.create(full_name='Секретное Имя Финансового Отчёта')
+        self.plot = LandPlot.objects.create(label='ADMIN-REPORT-PLOT', account=self.account)
         charge = Charge.objects.create(
             account=self.account,
             period=self.period,
@@ -111,6 +122,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
             category=ChargeObligation.CATEGORY_OTHER,
             payer_scope=ChargeObligation.PAYER_PERSON,
             person=self.person,
+            plot=self.plot,
             due_on=date(2026, 9, 1),
             base_amount=Decimal('500.00'),
             basis='Синтетическое основание',
@@ -135,10 +147,12 @@ class FinanceReportAdminPrivacyTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Конкретное лицо (скрыто)')
+        self.assertContains(response, self.plot.label)
         self.assertNotContains(response, self.person.full_name)
 
         detail = self.client.get(reverse('admin:water_chargeobligation_change', args=[self.obligation.pk]))
         self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, self.plot.label)
         self.assertNotContains(detail, self.person.full_name)
 
     def test_private_registry_permission_reveals_explicit_person_only(self):
@@ -147,6 +161,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.person.full_name)
+        self.assertContains(response, self.plot.label)
 
     def test_report_is_read_only_even_for_administrator(self):
         self.client.force_login(self.admin_user)
