@@ -31,10 +31,12 @@ class PerformanceBaselineTests(TestCase):
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get('/admin/cabinet/')
 
+        query_count = len(queries)
+        print(f'PERF resident_dashboard_12_accounts queries={query_count}')
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(
-            len(queries), 40,
-            f'Кабинет выполнил слишком много SQL-запросов: {len(queries)}',
+            query_count, 40,
+            f'Кабинет выполнил слишком много SQL-запросов: {query_count}',
         )
 
     def test_reading_audit_query_budget_does_not_grow_per_row(self):
@@ -56,8 +58,10 @@ class PerformanceBaselineTests(TestCase):
         with CaptureQueriesContext(connection) as queries:
             rows = _audit_readings()
 
+        query_count = len(queries)
+        print(f'PERF reading_audit_250_rows queries={query_count}')
         self.assertEqual(len(rows), 250)
         self.assertLessEqual(
-            len(queries), 4,
-            f'Аудит показаний выполнил слишком много SQL-запросов: {len(queries)}',
+            query_count, 4,
+            f'Аудит показаний выполнил слишком много SQL-запросов: {query_count}',
         )
