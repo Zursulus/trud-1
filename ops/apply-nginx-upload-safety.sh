@@ -84,8 +84,8 @@ mv -f "$TMP" "$CONF"
 nginx -t
 systemctl reload nginx
 systemctl is-active --quiet nginx
-nginx -T 2>/dev/null | grep -q 'client_max_body_size 12m;'
-nginx -T 2>/dev/null | grep -q 'ZUR-112 portal upload safety'
+grep -Fq 'client_max_body_size 12m;' "$CONF"
+grep -Fq 'ZUR-112 portal upload safety' "$CONF"
 [ "$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/)" = 200 ]
 [ "$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/admin/cabinet/login/)" = 200 ]
 
