@@ -35,7 +35,7 @@ class PerformanceBaselineTests(TestCase):
         print(f'PERF resident_dashboard_12_accounts queries={query_count}')
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(
-            query_count, 40,
+            query_count, 20,
             f'Кабинет выполнил слишком много SQL-запросов: {query_count}',
         )
 
