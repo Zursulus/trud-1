@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from .models import Account, AppealCategory, ResidentAccess, ResidentAppeal, User
 from .resident_models import (
+    APPEAL_ATTACHMENT_MAX_BYTES,
     ResidentAppealAttachment,
     ResidentAppealBoardMessage,
     ResidentAppealViewState,
@@ -74,6 +75,24 @@ class ResidentConversationTests(TestCase):
             )
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, 'Разрешены только PDF, JPG и PNG')
+            self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
+
+    def test_oversized_attachment_is_rejected_with_form_error(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.client.force_login(self.resident)
+            response = self.client.post(
+                f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/',
+                {
+                    'body': 'Слишком большой файл.',
+                    'attachment': SimpleUploadedFile(
+                        'large.pdf',
+                        b'x' * (APPEAL_ATTACHMENT_MAX_BYTES + 1),
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'Файл должен быть не больше 10 МБ.')
             self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
 
     def test_board_messages_are_immutable_unread_until_opened_and_can_repeat(self):
