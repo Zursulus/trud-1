@@ -5,7 +5,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
 from playwright.sync_api import sync_playwright
 
-from .models import Account, AppealCategory, Meter, ResidentAccess, SupplyNode, User
+from .models import Account, AppealCategory, Meter, ResidentAccess, ResidentAppeal, SupplyNode, User
 
 
 class ResidentPortalBrowserTests(StaticLiveServerTestCase):
@@ -99,5 +99,40 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertTrue(page.locator('.desktop-brand img').is_visible())
             self.assertTrue(page.locator('.desktop-nav a[href$="/payments/"]').is_visible())
             self.assertGreater(page.locator('.home-hero-image').evaluate('(el) => el.getBoundingClientRect().height'), 200)
+            self.assertEqual(page_errors, [])
+            self.assertEqual(console_errors, [])
+
+    def test_all_portal_sections_render_without_browser_errors(self):
+        appeal = ResidentAppeal.objects.create(
+            account=self.account,
+            author=self.user,
+            category=self.category,
+            subject='Проверка маршрута',
+            message='Тестовый диалог для browser-smoke.',
+        )
+        with self.browser_page({'width': 390, 'height': 844}) as (page, page_errors, console_errors):
+            self._login(page)
+            account_base = f'/admin/cabinet/account/{self.account.pk}'
+            routes = [
+                '/admin/cabinet/plots/',
+                f'{account_base}/',
+                f'{account_base}/payments/',
+                f'{account_base}/water/',
+                f'{account_base}/appeals/',
+                f'{account_base}/appeal/new/',
+                f'{account_base}/appeal/{appeal.pk}/',
+                f'{account_base}/documents/',
+                f'{account_base}/notifications/',
+                f'{account_base}/more/',
+                f'{account_base}/profile/',
+                f'{account_base}/security/',
+                '/admin/cabinet/password/',
+            ]
+            for route in routes:
+                response = page.goto(f'{self.live_server_url}{route}', wait_until='networkidle')
+                self.assertIsNotNone(response, route)
+                self.assertEqual(response.status, 200, route)
+                self.assertTrue(page.locator('body').is_visible(), route)
+                self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'), route)
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])

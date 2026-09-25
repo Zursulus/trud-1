@@ -47,7 +47,7 @@ jobs:
           ! grep -q 'maybeOpenFeatured' app.js
       - name: Validate operations scripts and backup units
         run: |
-          bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/deploy-public-content.sh ops/deploy-resident-portal.sh ops/deploy-resident-numbers.sh ops/deploy-private-registry.sh ops/deploy-public-home-zur60.sh ops/deploy-public-home-zur60b.sh ops/deploy-member-registry-zur61.sh ops/deploy-member-registry-reserve305.sh ops/deploy-cumulative-zur96.sh ops/deploy-zur53-board-polls.sh ops/backup-trud-site.sh
+          bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/deploy-public-content.sh ops/deploy-resident-portal.sh ops/deploy-resident-numbers.sh ops/deploy-private-registry.sh ops/deploy-public-home-zur60.sh ops/deploy-public-home-zur60b.sh ops/deploy-member-registry-zur61.sh ops/deploy-member-registry-reserve305.sh ops/deploy-cumulative-zur96.sh ops/deploy-zur53-board-polls.sh ops/apply-nginx-upload-safety.sh ops/backup-trud-site.sh
           sudo install -m 700 ops/backup-trud-site.sh /usr/local/sbin/trud-1-backup
           sudo install -m 644 ops/trud-1-backup.service /etc/systemd/system/trud-1-backup.service
           sudo install -m 644 ops/trud-1-backup.timer /etc/systemd/system/trud-1-backup.timer
