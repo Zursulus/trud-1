@@ -26,8 +26,10 @@ manage() {
 
 test -z "$(gitapp status --porcelain)"
 test "$(gitapp rev-parse HEAD)" = "$EXPECTED"
+gitapp fetch origin feature/water-admin
 gitapp cat-file -e "$TARGET^{commit}"
 gitapp merge-base --is-ancestor "$EXPECTED" "$TARGET"
+gitapp merge-base --is-ancestor "$TARGET" origin/feature/water-admin
 
 ALLOWED='^(backend/water/test_performance_baseline.py|backend/water/management/commands/audit_business_integrity.py|backend/water/test_business_integrity_audit.py|ops/deploy-zur136-business-audit.sh|ops/tests/test_zur136_deploy.py)$'
 UNEXPECTED=$(gitapp diff --name-only "$EXPECTED" "$TARGET" | grep -Ev "$ALLOWED" || true)
@@ -87,7 +89,7 @@ systemctl is-active --quiet trud-1-site.service
 for url in https://trud-1.ru/ https://trud-1.ru/admin/cabinet/login/; do
     code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' "$url")
     test "$code" = 200
- done
+done
 code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/admin/)
 test "$code" = 302
 
@@ -96,6 +98,9 @@ printf '{"project":"trud-1","commit":"%s","deployed_at":"%s"}\n' "$TARGET" "$(da
 chown root:trudsite "$status_tmp"
 chmod 640 "$status_tmp"
 mv -f "$status_tmp" "$STATUS"
+status_commit=$(curl --connect-timeout 3 --max-time 10 -fsS https://trud-1.ru/admin/deployment-status/ \
+    | /usr/bin/python3 -c 'import json, sys; print(json.load(sys.stdin)["commit"])')
+test "$status_commit" = "$TARGET"
 
 trap - EXIT INT TERM
 echo "ZUR-136 установлен: $TARGET; backup: $BACKUP"
