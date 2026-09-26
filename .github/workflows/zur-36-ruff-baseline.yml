@@ -1,0 +1,40 @@
+name: ZUR-36 Ruff baseline
+
+on:
+  push:
+    branches:
+      - chore/zur-36-ruff-baseline
+  pull_request:
+    branches:
+      - feature/water-admin
+
+permissions:
+  contents: read
+
+jobs:
+  ruff-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff
+        run: python -m pip install ruff
+      - name: Report Ruff findings without blocking
+        shell: bash
+        run: |
+          set +e
+          ruff --version
+          ruff check backend ops --output-format=concise 2>&1 | tee /tmp/ruff-baseline.txt
+          rc=${PIPESTATUS[0]}
+          count=$(grep -Ec '^[^ ]+:[0-9]+:[0-9]+:' /tmp/ruff-baseline.txt || true)
+          echo "ruff_exit=$rc"
+          echo "ruff_findings=$count"
+          {
+            echo "### ZUR-36 Ruff baseline"
+            echo "- Ruff exit code: $rc"
+            echo "- Findings: $count"
+            echo "- Mode: report-only; this job always succeeds"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
