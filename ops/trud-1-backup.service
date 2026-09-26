@@ -1,0 +1,18 @@
+[Unit]
+Description=Verified backup of Trud-1 database and private documents
+After=postgresql.service
+ConditionPathIsDirectory=/opt/trud-1-site
+
+[Service]
+Type=oneshot
+Environment=TRUD_BACKUP_ROOT=/var/backups/trud-1-daily
+Environment=TRUD_BACKUP_RETENTION_DAYS=30
+EnvironmentFile=-/etc/trud-1-backup.env
+ExecStart=/usr/local/sbin/trud-1-backup
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full

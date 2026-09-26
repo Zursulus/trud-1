@@ -1,0 +1,15 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div style="margin:0 0 18px;padding:14px 16px;border:1px solid #b9c6d2;border-radius:8px;background:#f7fafc;color:#1f2933;font-size:15px;line-height:1.45;">
+    <strong>Как проверить показание:</strong> откройте строку со статусом «На проверке». В карточке сверху будет сравнение с предыдущим утверждённым значением и крупные кнопки «Принять показание» / «Отклонить».
+  </div>
+  {{ block.super }}
+{% endblock %}
+
+{% block object-tools-items %}
+  {% if has_add_permission %}
+    <li><a href="{% url 'admin:water_controllerreading_capture' %}" class="addlink">Внести показание</a></li>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  {% if original and request.user.is_superuser %}
+    <li><a href="{% url 'water_reading_reassign' original.pk %}">Исправить привязку счётчика</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

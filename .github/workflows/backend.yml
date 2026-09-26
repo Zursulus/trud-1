@@ -1,0 +1,100 @@
+name: Water admin
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: trud_site
+          POSTGRES_USER: trud_site
+          POSTGRES_PASSWORD: ci-test-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_DEBUG: '1'
+      PGDATABASE: trud_site
+      PGUSER: trud_site
+      PGPASSWORD: ci-test-password
+      PGHOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/manage.py check
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py migrate --noinput
+      - run: python backend/manage.py test water config public_site
+      - run: python -m unittest discover -s ops/tests -v
+      - name: Validate public homepage invariants
+        run: |
+          test -s feodosia-letter-2026-08-27.html
+          grep -q 'Оформление прав на земельные участки' index.html
+          grep -q 'feodosia-letter-2026-08-27.html' index.html
+          ! grep -q 'feodosia-letter-2026-08-27.webp' index.html
+          grep -q '№ 2-47-10604' feodosia-letter-2026-08-27.html
+          grep -q 'Администрация города Феодосии' feodosia-letter-2026-08-27.html
+          ! grep -q 'ordzhonikidze-sunset.webp' index.html
+          ! grep -q 'Вечер в Орджоникидзе' index.html
+          ! grep -q 'maybeOpenFeatured' app.js
+      - name: Validate operations scripts and backup units
+        run: |
+          bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/deploy-public-content.sh ops/deploy-resident-portal.sh ops/deploy-resident-numbers.sh ops/deploy-private-registry.sh ops/deploy-public-home-zur60.sh ops/deploy-public-home-zur60b.sh ops/deploy-member-registry-zur61.sh ops/deploy-member-registry-reserve305.sh ops/deploy-cumulative-zur96.sh ops/deploy-zur53-board-polls.sh ops/apply-nginx-upload-safety.sh ops/backup-trud-site.sh
+          sudo install -m 700 ops/backup-trud-site.sh /usr/local/sbin/trud-1-backup
+          sudo install -m 644 ops/trud-1-backup.service /etc/systemd/system/trud-1-backup.service
+          sudo install -m 644 ops/trud-1-backup.timer /etc/systemd/system/trud-1-backup.timer
+          output=$(sudo systemd-analyze verify /etc/systemd/system/trud-1-backup.service /etc/systemd/system/trud-1-backup.timer 2>&1) || {
+            output=${output//$'\n'/'%0A'}
+            echo "::error file=ops/trud-1-backup.timer::$output"
+            exit 1
+          }
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: trud_site
+          POSTGRES_USER: trud_site
+          POSTGRES_PASSWORD: ci-test-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_DEBUG: '1'
+      PGDATABASE: trud_site
+      PGUSER: trud_site
+      PGPASSWORD: ci-test-password
+      PGHOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-e2e.txt
+      - run: pip install -r backend/requirements.txt -r backend/requirements-e2e.txt
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+      - name: Run critical browser and accessibility regressions
+        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.accessibility_e2e_tests -v 2
+      - name: Upload browser trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-e2e-trace
+          path: backend/test-artifacts/*.zip
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,135 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <style>
+      .review-actions { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
+      .review-actions a { display:inline-block; padding:8px 12px; border-radius:4px; background:var(--button-bg); color:var(--button-fg); text-decoration:none; }
+      .review-threshold { border:1px solid var(--hairline-color); border-radius:6px; padding:14px; margin:0 0 18px; background:var(--body-bg); }
+      .review-threshold form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+      .review-threshold label { display:block; font-weight:600; margin-bottom:5px; }
+      .review-threshold input { width:130px; min-height:38px; padding:6px 9px; font-size:16px; }
+      .review-threshold button { min-height:38px; padding:7px 14px; border:0; border-radius:4px; background:var(--button-bg); color:var(--button-fg); cursor:pointer; }
+      .review-threshold .hint { flex-basis:100%; color:var(--body-quiet-color); font-size:12px; }
+      .review-threshold .error { flex-basis:100%; color:var(--error-fg); font-weight:600; }
+      .review-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:0 0 20px; }
+      .review-card { border:1px solid var(--hairline-color); border-radius:6px; padding:14px; background:var(--body-bg); }
+      .review-card strong { display:block; font-size:24px; margin-top:4px; }
+      .review-card.alert strong { color:#a15c00; }
+      .review-card.critical strong { color:#ba2121; }
+      .review-rules { border:1px solid var(--hairline-color); border-radius:6px; padding:12px 14px; margin:0 0 18px; background:var(--darkened-bg); }
+      .review-rules ul { margin:8px 0 0 20px; }
+      .review-table { width:100%; border-collapse:collapse; }
+      .review-table th, .review-table td { padding:8px 10px; border-bottom:1px solid var(--hairline-color); vertical-align:top; }
+      .review-table th { text-align:left; background:var(--darkened-bg); }
+      .review-row-critical { background:#fff0f0; }
+      .review-row-warning { background:#fff9e6; }
+      .review-chip { display:inline-block; padding:2px 7px; border-radius:12px; font-weight:600; font-size:11px; }
+      .review-chip.warning { background:#ffe9a8; color:#684b00; }
+      .review-chip.critical { background:#ffd6d6; color:#8a0000; }
+      .review-small { color:var(--body-quiet-color); font-size:12px; }
+      .review-links { white-space:nowrap; }
+      .review-links a { margin-right:8px; }
+      @media (max-width: 767px) {
+        .review-threshold form > div { width:100%; }
+        .review-threshold input, .review-threshold button { width:100%; box-sizing:border-box; }
+        .review-table { min-width:900px; }
+        .module { overflow-x:auto; }
+      }
+    </style>
+
+    <h1>{{ title }}</h1>
+    <p>
+      Здесь собраны только строки, которые система предлагает перепроверить. Это <strong>не означает, что запись ошибочная</strong>.
+      Для индивидуальных счётчиков текущий порог контроля расхода — <strong>{{ threshold }} м³ и больше</strong> между соседними показаниями.
+    </p>
+
+    <div class="review-threshold">
+      <form method="get">
+        <div>
+          <label for="id_threshold">Порог индивидуального расхода, м³</label>
+          <input id="id_threshold" name="threshold" type="number" inputmode="decimal" min="0.001" max="100000" step="0.001" value="{{ threshold_query|default:threshold }}">
+        </div>
+        <button type="submit">Применить</button>
+        {% if threshold_error %}<div class="error">{{ threshold_error }} Использован порог по умолчанию {{ default_threshold }} м³.</div>{% endif %}
+        <div class="hint">Меняется только чувствительность списка «ПРОВЕРИТЬ». Критические проверки дат, последовательности и заявок контролёра работают всегда.</div>
+      </form>
+    </div>
+
+    <div class="review-rules">
+      <strong>Что система проверяет автоматически</strong>
+      <ul>
+        <li>индивидуальный расход {{ threshold }} м³ и больше между соседними показаниями;</li>
+        <li>уменьшение показания относительно предыдущего;</li>
+        <li>показание раньше установки, позже снятия счётчика или будущей датой;</li>
+        <li>совпадают ли у связанной заявки контролёра счётчик, дата и значение;</li>
+        <li>имеет ли связанная заявка статус «Принято»;</li>
+        <li>не привязано ли несколько заявок контролёра к одному показанию.</li>
+      </ul>
+    </div>
+
+    <div class="review-actions">
+      {% if can_export %}<a href="{% url 'water_readings_xlsx' %}?threshold={{ threshold_query|default:threshold }}">Скачать удобный XLSX с этим порогом</a>{% endif %}
+      <a href="{% url 'admin:water_reading_changelist' %}">Все показания</a>
+      <a href="{% url 'admin:water_reading_workspace' %}">Рабочее место оператора</a>
+    </div>
+
+    <div class="review-cards">
+      <div class="review-card"><span>Всего показаний</span><strong>{{ total_count }}</strong></div>
+      <div class="review-card alert"><span>Требуют проверки</span><strong>{{ review_count }}</strong></div>
+      <div class="review-card critical"><span>Критичных несоответствий</span><strong>{{ critical_count }}</strong></div>
+      <div class="review-card"><span>Связаны с контролёром</span><strong>{{ controller_count }}</strong></div>
+    </div>
+
+    {% if rows %}
+      <div class="module">
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Участок / счётчик</th>
+              <th>Дата</th>
+              <th>Было → стало</th>
+              <th>Расход</th>
+              <th>Почему проверить</th>
+              <th>Источник</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="{% if row.severity == 'critical' %}review-row-critical{% else %}review-row-warning{% endif %}">
+                <td>
+                  <strong>{{ row.account.plot|default:"Без участка" }}</strong><br>
+                  <span class="review-small">{{ row.import_id|default:row.reading.meter.serial }}</span>
+                </td>
+                <td>{{ row.reading.date|date:"d.m.Y" }}</td>
+                <td>
+                  {% if row.previous %}{{ row.previous.value }}{% else %}—{% endif %}
+                  → <strong>{{ row.reading.value }}</strong> м³
+                </td>
+                <td>
+                  {% if row.consumption != None %}<strong>{{ row.consumption }} м³</strong>{% else %}—{% endif %}
+                </td>
+                <td>
+                  <span class="review-chip {% if row.severity == 'critical' %}critical{% else %}warning{% endif %}">
+                    {% if row.severity == 'critical' %}КРИТИЧНО{% else %}ПРОВЕРИТЬ{% endif %}
+                  </span><br>
+                  {{ row.review_reason }}
+                </td>
+                <td>{{ row.source }}</td>
+                <td class="review-links">
+                  <a href="{{ row.change_url }}">Открыть</a>
+                  {% if can_reassign %}<a href="{{ row.reassign_url }}">Исправить привязку</a>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="module" style="padding:18px;">
+        <strong>Сейчас система не нашла показаний, требующих ручной проверки.</strong>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

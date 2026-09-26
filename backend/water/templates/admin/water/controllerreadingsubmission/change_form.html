@@ -1,0 +1,195 @@
+{% extends "admin/change_form.html" %}
+{% load water_admin %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .moderation-panel {
+      margin: 0 0 24px;
+      padding: 20px;
+      border: 2px solid #417690;
+      border-radius: 10px;
+      background: #fff;
+      color: #1f2933;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+    }
+    .moderation-panel h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      color: #1f2933;
+    }
+    .moderation-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 12px 24px;
+      margin-bottom: 16px;
+    }
+    .moderation-item {
+      padding: 12px;
+      border-radius: 8px;
+      background: #f6f7f8;
+    }
+    .moderation-item span {
+      display: block;
+      margin-bottom: 4px;
+      color: #52616b;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+    .moderation-item strong {
+      display: block;
+      color: #111827;
+      font-size: 22px;
+      line-height: 1.25;
+    }
+    .moderation-new {
+      background: #e8f5e9;
+      border: 1px solid #9ccc9f;
+    }
+    .moderation-warning {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .moderation-warning.warning {
+      background: #fff4cc;
+      border: 1px solid #e0b300;
+      color: #5f4700;
+    }
+    .moderation-warning.danger {
+      background: #fde8e8;
+      border: 1px solid #c62828;
+      color: #7f1d1d;
+    }
+    .moderation-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      margin-top: 18px;
+    }
+    .moderation-comment {
+      flex: 1 1 320px;
+    }
+    .moderation-comment label {
+      display: block;
+      margin-bottom: 6px;
+      color: #1f2933;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .moderation-comment input {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border: 1px solid #6b7280 !important;
+      border-radius: 6px;
+      background: #fff !important;
+      color: #111 !important;
+      font-size: 17px;
+    }
+    .moderation-action-button {
+      min-height: 50px;
+      padding: 0 22px !important;
+      border: 0 !important;
+      border-radius: 7px !important;
+      color: #fff !important;
+      font-size: 17px !important;
+      font-weight: 700 !important;
+      cursor: pointer;
+    }
+    .moderation-approve { background: #1b5e20 !important; }
+    .moderation-reject { background: #b3261e !important; }
+    .moderation-done {
+      margin-bottom: 22px;
+      padding: 16px 18px;
+      border: 1px solid #8bc49a;
+      border-radius: 8px;
+      background: #edf8f0;
+      color: #174d24;
+      font-size: 17px;
+    }
+    .moderation-done a {
+      margin-left: 10px;
+      font-weight: 700;
+    }
+    @media (max-width: 700px) {
+      .moderation-grid { grid-template-columns: 1fr; }
+      .moderation-actions { align-items: stretch; }
+      .moderation-action-button { width: 100%; }
+      .moderation-panel { padding: 15px; }
+    }
+  </style>
+{% endblock %}
+
+{% block form_top %}
+  {{ block.super }}
+  {% if original.status == 'pending' and perms.water.change_controllerreadingsubmission %}
+    {% controller_moderation_context original as moderation %}
+    <section class="moderation-panel" aria-label="Проверка показания контролёра">
+      <h2>Проверка показания</h2>
+      <div class="moderation-grid">
+        <div class="moderation-item">
+          <span>Адрес</span>
+          <strong>{{ moderation.address }}</strong>
+        </div>
+        <div class="moderation-item moderation-new">
+          <span>Новое показание</span>
+          <strong>{{ original.value }} м³ · {{ original.date|date:"d.m.Y" }}</strong>
+        </div>
+        <div class="moderation-item">
+          <span>Предыдущее утверждённое</span>
+          <strong>
+            {% if moderation.previous %}
+              {{ moderation.previous.value }} м³ · {{ moderation.previous.date|date:"d.m.Y" }}
+            {% else %}
+              Нет предыдущего показания
+            {% endif %}
+          </strong>
+        </div>
+        <div class="moderation-item">
+          <span>Разница</span>
+          <strong>
+            {% if moderation.has_delta %}
+              {{ moderation.delta }} м³
+            {% else %}
+              Нет базы для сравнения
+            {% endif %}
+          </strong>
+        </div>
+        {% if moderation.same_date %}
+          <div class="moderation-item">
+            <span>Уже принято за эту дату</span>
+            <strong>{{ moderation.same_date.value }} м³</strong>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if moderation.warning %}
+        <div class="moderation-warning {{ moderation.warning_level }}">{{ moderation.warning }}</div>
+      {% endif %}
+
+      <div class="moderation-actions">
+        <button type="submit" class="moderation-action-button moderation-approve" formaction="{% url 'admin:water_controllerreading_approve' original.pk %}">Принять показание</button>
+        <div class="moderation-comment">
+          <label for="review-comment">Комментарий при отклонении (необязательно)</label>
+          <input id="review-comment" type="text" name="review_comment" maxlength="500" placeholder="Например: уточнить показание или дату">
+        </div>
+        <button type="submit" class="moderation-action-button moderation-reject" formaction="{% url 'admin:water_controllerreading_reject' original.pk %}">Отклонить</button>
+      </div>
+    </section>
+  {% elif original.status == 'approved' and original.reading_id %}
+    <div class="moderation-done">
+      Показание принято и записано в журнал.
+      <a href="{% url 'admin:water_reading_change' original.reading_id %}">Открыть запись</a>
+      <a href="{% url 'admin:water_reading_changelist' %}">Открыть журнал показаний</a>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}{% endblock %}

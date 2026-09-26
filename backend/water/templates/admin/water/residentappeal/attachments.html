@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:water_residentappeal_change' appeal.pk %}">← Вернуться к обращению №{{ appeal.pk }}</a></p>
+<h1>Переписка по обращению №{{ appeal.pk }}</h1>
+<p><strong>{{ appeal.subject }}</strong><br>{{ appeal.account }}</p>
+{% if can_reply %}<div class="module aligned">
+  <h2>Ответить жителю</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Отправить сообщение" class="default">
+  </form>
+</div>{% else %}<p><strong>Обращение завершено.</strong> Новые сообщения в закрытый диалог не отправляются.</p>{% endif %}
+<h2>Сообщения правления</h2>
+<table>
+  <thead><tr><th>Когда</th><th>Сообщение</th><th>Кто отправил</th></tr></thead>
+  <tbody>
+  {% for item in board_messages %}
+    <tr><td>{{ item.created_at|date:"d.m.Y H:i" }}</td><td>{{ item.body|linebreaksbr }}</td><td>{{ item.author.get_full_name|default:item.author.username }}</td></tr>
+  {% empty %}<tr><td colspan="3">Отдельных сообщений правления пока нет. Старый итоговый ответ, если он есть, остаётся в карточке обращения.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<h2>Файлы переписки</h2>
+<table>
+  <thead><tr><th>Когда</th><th>Файл</th><th>Кто загрузил</th><th>Контекст</th></tr></thead>
+  <tbody>
+  {% for item in attachments %}
+    <tr>
+      <td>{{ item.created_at|date:"d.m.Y H:i" }}</td>
+      <td><a href="{% url 'admin_appeal_attachment_download' item.pk %}">{{ item.original_name }}</a> · {{ item.file_size|filesizeformat }}</td>
+      <td>{{ item.uploaded_by.get_full_name|default:item.uploaded_by.username }}</td>
+      <td>{% if item.board_message_id %}Сообщение правления{% elif item.message_id %}Уточнение жителя{% elif item.uploaded_by.is_staff %}Правление{% else %}Первое сообщение жителя{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">Вложений пока нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>Файлы закрытые: скачивание проходит только после проверки прав, публичного URL к ним нет.</p>
+{% endblock %}

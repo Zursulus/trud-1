@@ -1,0 +1,74 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .capture { max-width:560px; margin:0 auto; }
+    .capture label { display:block; font-size:18px; font-weight:700; margin:16px 0 6px; }
+    .capture select, .capture input, .capture textarea { box-sizing:border-box; width:100%; min-height:50px; font-size:20px; padding:10px; }
+    .capture .identity { margin:10px 0 4px; padding:8px 0; }
+    .capture .identity strong { display:block; font-size:20px; }
+    .capture button { width:100%; min-height:56px; margin-top:20px; font-size:20px; }
+    .date-shortcuts { display:flex; gap:8px; margin-top:8px; }
+    .date-shortcuts button { flex:1; min-height:46px; margin:0; font-size:16px; }
+    .date-shortcuts button.selected { background:var(--button-bg); color:var(--button-fg); }
+    .capture .errorlist { color:var(--error-fg); font-weight:700; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="capture">
+    <p>Выберите адрес, дату и внесите текущее показание. После отправки данные попадут на проверку.</p>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label for="{{ form.meter.id_for_label }}">{{ form.meter.label }}</label>{{ form.meter.errors }}{{ form.meter }}
+      <div class="identity" id="identity" hidden><strong id="address"></strong></div>
+      <label for="{{ form.value.id_for_label }}">Текущее показание</label>{{ form.value.errors }}{{ form.value }}
+      <label for="{{ form.date.id_for_label }}">Дата показания</label>{{ form.date.errors }}{{ form.date }}
+      <div class="date-shortcuts" aria-label="Быстрый выбор даты">
+        <button type="button" data-days="2">Позавчера</button>
+        <button type="button" data-days="1">Вчера</button>
+        <button type="button" data-days="0">Сегодня</button>
+      </div>
+      <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>{{ form.notes.errors }}{{ form.notes }}
+      <button type="submit" class="default">Отправить на проверку</button>
+    </form>
+  </div>
+  {{ meter_data|json_script:"meter-data" }}
+  <script>
+    const select = document.getElementById('{{ form.meter.id_for_label }}');
+    const data = JSON.parse(document.getElementById('meter-data').textContent);
+    for (const option of select.options) {
+      const item = data[option.value];
+      if (item) option.textContent = item.address;
+    }
+    const updateIdentity = () => {
+      const item = data[select.value];
+      document.getElementById('identity').hidden = !item;
+      if (!item) return;
+      document.getElementById('address').textContent = item.address;
+    };
+    select.addEventListener('change', updateIdentity);
+    updateIdentity();
+    const dateInput = document.getElementById('{{ form.date.id_for_label }}');
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const isoDate = (daysAgo) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() - daysAgo);
+      return date.toISOString().slice(0, 10);
+    };
+    dateInput.max = isoDate(0);
+    if (!dateInput.value) dateInput.value = isoDate(0);
+    document.querySelectorAll('.date-shortcuts button').forEach((button) => {
+      const update = () => {
+        dateInput.value = isoDate(Number(button.dataset.days));
+        document.querySelectorAll('.date-shortcuts button').forEach((item) => item.classList.toggle('selected', item === button));
+      };
+      button.addEventListener('click', update);
+      if (dateInput.value === isoDate(Number(button.dataset.days))) update();
+    });
+    dateInput.addEventListener('change', () => document.querySelectorAll('.date-shortcuts button').forEach((button) => button.classList.toggle('selected', dateInput.value === isoDate(Number(button.dataset.days)))));
+  </script>
+{% endblock %}
