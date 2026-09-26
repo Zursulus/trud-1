@@ -88,14 +88,15 @@ def _meter_state(meter, on_date, user, *, posted_value=None, error=''):
         date=on_date,
         status='pending',
         submitted_by=user,
+        source=ControllerReadingSubmission.SOURCE_LINE_SENIOR,
     ).order_by('-submitted_at', '-id').first()
 
-    if approved is not None:
-        effective_value = approved.value
-        input_value = ''
-    elif pending is not None:
+    if pending is not None:
         effective_value = pending.value
         input_value = str(pending.value)
+    elif approved is not None:
+        effective_value = approved.value
+        input_value = ''
     else:
         effective_value = None
         input_value = ''
@@ -195,23 +196,6 @@ def _build_groups(user, on_date, posted_values=None, errors=None):
     return result
 
 
-def _validate_submission_value(meter, on_date, value):
-    previous = Reading.objects.filter(
-        meter=meter, date__lt=on_date,
-    ).order_by('-date', '-id').first()
-    following = Reading.objects.filter(
-        meter=meter, date__gt=on_date,
-    ).order_by('date', 'id').first()
-    if previous is not None and value < previous.value:
-        raise ValidationError(
-            f'Показание меньше предыдущего ({previous.value:.3f} от {previous.date:%d.%m.%Y}).'
-        )
-    if following is not None and value > following.value:
-        raise ValidationError(
-            f'Показание больше следующего ({following.value:.3f} от {following.date:%d.%m.%Y}).'
-        )
-
-
 def controller_workspace(request):
     if not request.user.has_perm('water.use_controller_workspace'):
         raise PermissionDenied
@@ -227,6 +211,37 @@ def controller_workspace(request):
 
     posted_values = {}
     errors = {}
+
+    if request.method == 'POST' and request.POST.get('review_submission'):
+        submission_id = request.POST.get('review_submission')
+        decision = request.POST.get('decision')
+        if decision not in {'confirm', 'flag'}:
+            raise PermissionDenied
+        with transaction.atomic():
+            submission = ControllerReadingSubmission.objects.select_for_update().get(
+                pk=submission_id,
+                source=ControllerReadingSubmission.SOURCE_RESIDENT,
+                status='pending',
+                line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            )
+            allowed_account_ids = Membership.objects.filter(
+                group_id__in=_active_accesses(request.user, submission.date).values('group_id'),
+                starts__lte=submission.date,
+            ).filter(Q(ends__isnull=True) | Q(ends__gt=submission.date)).values_list('account_id', flat=True)
+            if submission.meter.kind != 'individual' or submission.meter.account_id not in allowed_account_ids:
+                raise PermissionDenied
+            submission.line_review_status = (
+                ControllerReadingSubmission.LINE_REVIEW_CONFIRMED
+                if decision == 'confirm' else ControllerReadingSubmission.LINE_REVIEW_FLAGGED
+            )
+            submission.line_review_comment = request.POST.get('line_review_comment', '').strip()[:500]
+            submission.line_reviewed_by = request.user
+            submission.line_reviewed_at = timezone.now()
+            submission._history_user = request.user
+            submission._change_reason = 'Проверка наблюдения жителя старшим линии'
+            submission.save()
+        messages.success(request, 'Наблюдение жителя передано администратору с решением старшего линии.')
+        return HttpResponseRedirect(f'{reverse("water_controller_workspace")}?date={submission.date.isoformat()}')
 
     if request.method == 'POST' and date_form.is_valid():
         value_field = forms.DecimalField(
@@ -245,12 +260,10 @@ def controller_workspace(request):
         for meter in meters:
             raw = request.POST.get(f'value_{meter.pk}', '').strip()
             posted_values[meter.pk] = raw
-            approved = Reading.objects.filter(meter=meter, date=selected_date).exists()
-            if approved or not raw:
+            if not raw:
                 continue
             try:
                 value = value_field.clean(raw.replace(',', '.'))
-                _validate_submission_value(meter, selected_date, value)
             except ValidationError as error:
                 errors[meter.pk] = '; '.join(error.messages)
                 continue
@@ -259,10 +272,9 @@ def controller_workspace(request):
                 meter=meter,
                 date=selected_date,
                 status='pending',
+                submitted_by=request.user,
+                source=ControllerReadingSubmission.SOURCE_LINE_SENIOR,
             ).order_by('-submitted_at', '-id').first()
-            if pending is not None and pending.submitted_by_id != request.user.pk:
-                errors[meter.pk] = 'Это показание уже отправлено на проверку другим контролёром.'
-                continue
             candidates.append((meter, value, pending))
 
         if not errors and candidates:
@@ -280,12 +292,20 @@ def controller_workspace(request):
 
                     for meter, value, pending in candidates:
                         Meter.objects.select_for_update().get(pk=meter.pk)
+                        pending = ControllerReadingSubmission.objects.select_for_update().filter(
+                            meter=meter,
+                            date=selected_date,
+                            status='pending',
+                            submitted_by=request.user,
+                            source=ControllerReadingSubmission.SOURCE_LINE_SENIOR,
+                        ).order_by('-submitted_at', '-id').first()
                         if pending is None:
                             submission = ControllerReadingSubmission(
                                 meter=meter,
                                 date=selected_date,
                                 value=value,
                                 submitted_by=request.user,
+                                source=ControllerReadingSubmission.SOURCE_LINE_SENIOR,
                             )
                             reason = 'Пакетная подача старшим линии'
                         else:
@@ -331,6 +351,17 @@ def controller_workspace(request):
         'selected_date': selected_date,
         'groups': groups,
         'has_groups': bool(groups),
+        'resident_submissions': ControllerReadingSubmission.objects.filter(
+            source=ControllerReadingSubmission.SOURCE_RESIDENT,
+            status='pending',
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            date=selected_date,
+            meter__kind='individual',
+            meter__account_id__in=Membership.objects.filter(
+                group_id__in=_active_accesses(request.user, selected_date).values('group_id'),
+                starts__lte=selected_date,
+            ).filter(Q(ends__isnull=True) | Q(ends__gt=selected_date)).values('account_id'),
+        ).select_related('meter__account', 'submitted_by').order_by('meter__account__number', 'id'),
     }
     return TemplateResponse(
         request,

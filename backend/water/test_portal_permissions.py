@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
-    Account, AppealCategory, LandPlot, Meter, Person, PlotRelation, Reading,
+    Account, AppealCategory, ControllerReadingSubmission, LandPlot, Meter, Person, PlotRelation, Reading,
     ResidentAccess, ResidentAppeal, SupplyNode, User,
 )
 from .portal import has_any_portal_access, issue_password_reset
@@ -235,7 +235,10 @@ class PortalPermissionRouteTests(TestCase):
             {'date': self.today.isoformat(), 'value': '11.000', 'notes': 'Синтетический ввод'},
         )
         self.assertEqual(submit.status_code, 302)
-        self.assertEqual(Reading.objects.filter(meter=self.meter).count(), 2)
+        self.assertEqual(Reading.objects.filter(meter=self.meter).count(), 1)
+        observation = ControllerReadingSubmission.objects.get(meter=self.meter)
+        self.assertEqual(observation.source, ControllerReadingSubmission.SOURCE_RESIDENT)
+        self.assertEqual(observation.line_review_status, ControllerReadingSubmission.LINE_REVIEW_NOT_REQUIRED)
 
     def test_explicit_appeal_grant_works_without_legacy_access(self):
         self._grant(can_view_account=True, can_use_appeals=True)

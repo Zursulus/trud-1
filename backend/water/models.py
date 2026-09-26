@@ -195,7 +195,9 @@ class Reading(RecordedModel):
             raise ValidationError('Нельзя записать показание будущей датой.')
         previous = Reading.objects.filter(meter_id=self.meter_id, date__lt=self.date).exclude(pk=self.pk).order_by('-date').first()
         following = Reading.objects.filter(meter_id=self.meter_id, date__gt=self.date).exclude(pk=self.pk).order_by('date').first()
-        if previous and self.value < previous.value or following and self.value > following.value:
+        if not getattr(self, '_allow_chronology_override', False) and (
+            previous and self.value < previous.value or following and self.value > following.value
+        ):
             raise ValidationError('Показание нарушает последовательность. Проверьте цифры; при замене заведите новый счётчик.')
 
     def save(self, *args, **kwargs):
@@ -226,14 +228,28 @@ class ControllerReadingSubmission(RecordedModel):
     )
     photo = models.FileField('Фото счётчика', upload_to=controller_reading_photo_path, max_length=300, blank=True)
     notes = models.TextField('Примечание', blank=True, max_length=500)
+    SOURCE_CONTROLLER = 'controller'
+    SOURCE_LINE_SENIOR = 'line_senior'
+    SOURCE_RESIDENT = 'resident'
+    SOURCE_CHOICES = [(SOURCE_CONTROLLER, 'Независимый контролёр'), (SOURCE_LINE_SENIOR, 'Старший линии'), (SOURCE_RESIDENT, 'Житель')]
+    LINE_REVIEW_NOT_REQUIRED = 'not_required'
+    LINE_REVIEW_PENDING = 'pending'
+    LINE_REVIEW_CONFIRMED = 'confirmed'
+    LINE_REVIEW_FLAGGED = 'flagged'
+    LINE_REVIEW_CHOICES = [(LINE_REVIEW_NOT_REQUIRED, 'Не требуется'), (LINE_REVIEW_PENDING, 'Ожидает старшего линии'), (LINE_REVIEW_CONFIRMED, 'Подтверждено старшим линии'), (LINE_REVIEW_FLAGGED, 'Старший линии отметил расхождение')]
+    source = models.CharField('Источник', max_length=20, choices=SOURCE_CHOICES, default=SOURCE_CONTROLLER)
+    line_review_status = models.CharField('Проверка старшим линии', max_length=20, choices=LINE_REVIEW_CHOICES, default=LINE_REVIEW_NOT_REQUIRED, editable=False)
     status = models.CharField('Статус', max_length=20, choices=[
         ('pending', 'На проверке'), ('approved', 'Принято'), ('rejected', 'Отклонено'),
     ], default='pending', editable=False)
     submitted_by = models.ForeignKey(
-        User, verbose_name='Контролёр', on_delete=models.PROTECT,
+        User, verbose_name='Кто передал', on_delete=models.PROTECT,
         related_name='controller_reading_submissions', editable=False,
     )
     submitted_at = models.DateTimeField('Отправлено', default=timezone.now, editable=False)
+    line_reviewed_by = models.ForeignKey(User, verbose_name='Проверил старший линии', on_delete=models.PROTECT, blank=True, null=True, related_name='line_reviewed_controller_readings', editable=False)
+    line_reviewed_at = models.DateTimeField('Проверено старшим линии', blank=True, null=True, editable=False)
+    line_review_comment = models.CharField('Комментарий старшего линии', max_length=500, blank=True, editable=False)
     reviewed_by = models.ForeignKey(
         User, verbose_name='Проверил', on_delete=models.PROTECT, blank=True, null=True,
         related_name='reviewed_controller_readings', editable=False,
@@ -246,8 +262,8 @@ class ControllerReadingSubmission(RecordedModel):
     )
 
     class Meta:
-        verbose_name = 'Показание контролёра'
-        verbose_name_plural = '07 · Премодерация показаний'
+        verbose_name = 'Наблюдение счётчика'
+        verbose_name_plural = '07 · Премодерация и сверка показаний'
         ordering = ['status', '-submitted_at', '-id']
 
     def clean(self):
@@ -255,6 +271,43 @@ class ControllerReadingSubmission(RecordedModel):
             raise ValidationError({'photo': 'Фото должно быть не больше 12 МБ.'})
         if self.date and self.date > timezone.localdate():
             raise ValidationError({'date': 'Дата не может быть в будущем.'})
+        if self.meter_id and self.date:
+            if self.meter.retired_on and self.date > self.meter.retired_on:
+                raise ValidationError({'date': 'Дата позже снятия счётчика с учёта.'})
+            if self.meter.commissioned_on and self.date < self.meter.commissioned_on:
+                raise ValidationError({'date': 'Дата раньше установки счётчика.'})
+
+    def chronology_flags(self):
+        """Describe chronology conflicts without rejecting the observation."""
+        if not self.meter_id or not self.date or self.value is None:
+            return []
+
+        observed = ControllerReadingSubmission.objects.filter(
+            meter_id=self.meter_id,
+        ).exclude(pk=self.pk).exclude(status='rejected')
+        approved = Reading.objects.filter(meter_id=self.meter_id)
+        flags = []
+
+        earlier_values = list(approved.filter(date__lt=self.date).values_list('date', 'value'))
+        earlier_values += list(observed.filter(date__lt=self.date).values_list('date', 'value'))
+        backwards = [(date, value) for date, value in earlier_values if value > self.value]
+        if backwards:
+            date, value = max(backwards, key=lambda item: (item[0], item[1]))
+            flags.append(f'Значение ниже более раннего наблюдения: {value:.3f} от {date:%d.%m.%Y}.')
+
+        later_values = list(approved.filter(date__gt=self.date).values_list('date', 'value'))
+        later_values += list(observed.filter(date__gt=self.date).values_list('date', 'value'))
+        forwards = [(date, value) for date, value in later_values if value < self.value]
+        if forwards:
+            date, value = min(forwards, key=lambda item: (item[0], item[1]))
+            flags.append(f'Значение выше более позднего наблюдения: {value:.3f} от {date:%d.%m.%Y}.')
+
+        same_values = set(approved.filter(date=self.date).values_list('value', flat=True))
+        same_values.update(observed.filter(date=self.date).values_list('value', flat=True))
+        different = sorted(value for value in same_values if value != self.value)
+        if different:
+            flags.append('На эту дату есть другие значения: ' + ', '.join(f'{value:.3f}' for value in different) + '.')
+        return flags
 
     def __str__(self):
         return f'{self.meter} · {self.date} · {self.value} · {self.get_status_display()}'

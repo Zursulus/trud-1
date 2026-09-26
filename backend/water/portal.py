@@ -8,6 +8,7 @@ from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
@@ -18,7 +19,7 @@ from django.views.decorators.csrf import csrf_protect
 
 from .billing import account_totals
 from .models import (
-    Account, AccountDocument, AppealCategory, Charge, Meter, Payment, Reading,
+    Account, AccountDocument, AppealCategory, Charge, ControllerReadingSubmission, Membership, Meter, Payment, Reading,
     ResidentAccess, ResidentAppeal, ResidentAppealMessage, ResidentInvite,
     ResidentPasswordReset, User,
 )
@@ -344,14 +345,38 @@ def submit_reading(request, account_id, meter_id):
         raise Http404
     form = ResidentReadingForm(request.POST)
     if form.is_valid():
-        reading = Reading(
-            meter=meter, date=form.cleaned_data['date'], value=form.cleaned_data['value'],
-            notes=form.cleaned_data['notes'],
-        )
-        reading._history_user = request.user
-        reading._change_reason = 'Показание передано через личный кабинет'
+        observed_on = form.cleaned_data['date']
+        line_member = Membership.objects.filter(
+            account=access.account, starts__lte=observed_on,
+        ).filter(Q(ends__isnull=True) | Q(ends__gt=observed_on)).exists()
         try:
-            reading.save()
+            with transaction.atomic():
+                Meter.objects.select_for_update().get(pk=meter.pk)
+                submission = ControllerReadingSubmission.objects.select_for_update().filter(
+                    meter=meter, date=observed_on, submitted_by=request.user,
+                    source=ControllerReadingSubmission.SOURCE_RESIDENT, status='pending',
+                ).order_by('-submitted_at', '-id').first()
+                if submission is None:
+                    submission = ControllerReadingSubmission(
+                        meter=meter, date=observed_on, submitted_by=request.user,
+                        source=ControllerReadingSubmission.SOURCE_RESIDENT,
+                    )
+                    reason = 'Показание передано жителем на проверку'
+                else:
+                    reason = 'Житель уточнил ожидающее проверки показание'
+                submission.value = form.cleaned_data['value']
+                submission.notes = form.cleaned_data['notes']
+                submission.submitted_at = timezone.now()
+                submission.line_review_status = (
+                    ControllerReadingSubmission.LINE_REVIEW_PENDING
+                    if line_member else ControllerReadingSubmission.LINE_REVIEW_NOT_REQUIRED
+                )
+                submission.line_reviewed_by = None
+                submission.line_reviewed_at = None
+                submission.line_review_comment = ''
+                submission._history_user = request.user
+                submission._change_reason = reason
+                submission.save()
         except ValidationError as error:
             form.add_error(None, error)
         else:
