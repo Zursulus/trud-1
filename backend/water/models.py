@@ -853,8 +853,8 @@ class ResidentPasswordReset(RecordedModel):
         ordering = ['-id']
 
     def clean(self):
-        if self.user_id and (self.user.is_staff or not self.user.is_active):
-            raise ValidationError({'user': 'Восстановление доступно только действующему кабинету жителя.'})
+        if self.user_id and (self.user.is_superuser or not self.user.is_active):
+            raise ValidationError({'user': 'Сброс пароля недоступен для суперпользователя или отключённой учётной записи.'})
         if self._state.adding and self.expires_at and self.expires_at <= timezone.now():
             raise ValidationError({'expires_at': 'Срок ссылки должен быть в будущем.'})
 

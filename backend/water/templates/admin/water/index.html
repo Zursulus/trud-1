@@ -74,6 +74,13 @@
   <p class="trud-lead">Здесь оставлены основные рабочие действия. Полная техническая структура базы спрятана ниже в разделе «Настройки / служебное».</p>
 
   <div class="trud-grid" aria-label="Основные рабочие разделы">
+    {% if perms.water.add_residentpasswordreset %}
+      <a class="trud-card" href="{% url 'water_password_access_admin' %}">
+        <strong>Доступ и пароли</strong>
+        <span>Одноразовые ссылки для установки нового пароля жителям, старшим линий и контролёрам.</span>
+      </a>
+    {% endif %}
+
     {% if perms.water.use_controller_workspace %}
       <a class="trud-card trud-primary" href="{% url 'water_controller_workspace' %}">
         <strong>Внести показание по моей линии</strong>
