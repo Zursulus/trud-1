@@ -11,6 +11,25 @@ from . import _legacy_suite as legacy
 from django.contrib.auth.models import Group
 
 
+class ResidentPortalTests(legacy.ResidentPortalTests):
+    def test_resident_can_submit_only_own_meter_reading_with_attribution(self):
+        resident = self.create_resident()
+        self.client.force_login(resident)
+        response = self.client.post(
+            f'/admin/cabinet/account/{self.account.pk}/meter/{self.meter.pk}/reading/',
+            {'date': '2026-09-18', 'value': '123.456', 'notes': 'Synthetic resident value'},
+        )
+        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/')
+        self.assertFalse(Reading.objects.exists())
+        submission = ControllerReadingSubmission.objects.get()
+        self.assertEqual(submission.source, ControllerReadingSubmission.SOURCE_RESIDENT)
+        self.assertEqual(submission.history.first().history_user, resident)
+        self.assertEqual(self.client.post(
+            f'/admin/cabinet/account/{self.account.pk}/meter/{self.other_meter.pk}/reading/',
+            {'date': '2026-09-18', 'value': '1'},
+        ).status_code, 404)
+
+
 class RoleAuditTests(legacy.RoleAuditTests):
     def test_legacy_admin_role_is_renamed_without_losing_members(self):
         legacy_group = Group.objects.create(name='Администратор СНТ')

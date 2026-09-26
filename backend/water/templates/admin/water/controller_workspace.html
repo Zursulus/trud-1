@@ -89,6 +89,30 @@
   </form>
 
   {% if has_groups %}
+    {% if resident_submissions %}
+      <section class="line-card">
+        <div class="line-head">
+          <h2>Наблюдения жителей для проверки</h2>
+          <p>Подтвердите значение или отметьте расхождение. Окончательное решение принимает администратор.</p>
+        </div>
+        {% for submission in resident_submissions %}
+          <form method="post" class="meter-row">
+            {% csrf_token %}
+            <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+            <input type="hidden" name="review_submission" value="{{ submission.pk }}">
+            <div>
+              <div class="meter-title">{{ submission.meter.account.number|default:submission.meter.account.pk }} · {{ submission.meter.serial }}</div>
+              <div class="meter-meta">{{ submission.value|floatformat:3 }} м³ · {{ submission.date|date:"d.m.Y" }}</div>
+              <input type="text" name="line_review_comment" maxlength="500" placeholder="Комментарий (необязательно)" style="width:100%;box-sizing:border-box;margin-top:8px;min-height:40px">
+            </div>
+            <div class="meter-input">
+              <button type="submit" name="decision" value="confirm" class="controller-submit" style="margin:0 0 8px">Подтвердить</button>
+              <button type="submit" name="decision" value="flag" class="controller-submit" style="margin:0;background:#b45309">Отметить расхождение</button>
+            </div>
+          </form>
+        {% endfor %}
+      </section>
+    {% endif %}
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
@@ -118,24 +142,20 @@
                 </div>
 
                 <div class="meter-input">
-                  {% if row.approved %}
-                    <div class="meter-status approved">
-                      Принято: {{ row.approved.value|floatformat:3 }} м³
-                    </div>
-                  {% else %}
-                    <input
-                      type="number"
-                      inputmode="decimal"
-                      min="0"
-                      step="0.001"
-                      name="value_{{ row.meter.pk }}"
-                      value="{{ row.input_value }}"
-                      aria-label="{{ row.label }}"
-                      placeholder="0.000"
-                    >
-                    {% if row.pending %}
-                      <div class="meter-status pending">На проверке</div>
-                    {% endif %}
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.001"
+                    name="value_{{ row.meter.pk }}"
+                    value="{{ row.input_value }}"
+                    aria-label="{{ row.label }}"
+                    placeholder="0.000"
+                  >
+                  {% if row.pending %}
+                    <div class="meter-status pending">Ваше наблюдение на проверке</div>
+                  {% elif row.approved %}
+                    <div class="meter-status approved">В журнале: {{ row.approved.value|floatformat:3 }} м³</div>
                   {% endif %}
                 </div>
 

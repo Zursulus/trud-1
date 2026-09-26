@@ -208,7 +208,7 @@ class ControllerMeterChoiceField(forms.ModelChoiceField):
 
 
 class ControllerReadingCaptureForm(forms.ModelForm):
-    meter = ControllerMeterChoiceField(label='Выберите участок', queryset=Meter.objects.none())
+    meter = ControllerMeterChoiceField(label='Выберите счётчик', queryset=Meter.objects.none())
 
     class Meta:
         model = ControllerReadingSubmission
@@ -224,8 +224,8 @@ class ControllerReadingCaptureForm(forms.ModelForm):
         if not self.is_bound:
             self.fields['date'].initial = timezone.localdate()
         self.fields['meter'].queryset = Meter.objects.select_related('account', 'group', 'node').filter(
-            kind='individual', account__archived=False,
-        ).order_by('account__plot', 'account__number', 'serial')
+            Q(account__isnull=True) | Q(account__archived=False),
+        ).order_by('kind', 'account__plot', 'account__number', 'serial')
 
 
 class ResidentInviteForm(forms.Form):
@@ -702,13 +702,14 @@ class ReadingAdmin(RecordedAdmin):
 class ControllerReadingSubmissionAdmin(RecordedAdmin):
     change_list_template = 'admin/water/controllerreadingsubmission/change_list.html'
     change_form_template = 'admin/water/controllerreadingsubmission/change_form.html'
-    list_display = ('account_id_display', 'address_display', 'value', 'date', 'status', 'submitted_by', 'submitted_at')
-    list_filter = ('status', 'date')
+    list_display = ('account_id_display', 'address_display', 'value', 'date', 'source', 'submitted_by', 'line_review_status', 'chronology_display', 'current_reading_value', 'status')
+    list_filter = ('status', 'source', 'line_review_status', 'date')
     search_fields = ('meter__account__number', 'meter__account__plot', 'meter__serial')
     readonly_fields = (
-        'meter', 'date', 'value', 'photo_link', 'notes', 'status', 'submitted_by',
+        'meter', 'date', 'value', 'photo_link', 'notes', 'source', 'status', 'submitted_by',
+        'line_review_status', 'line_reviewed_by', 'line_reviewed_at', 'line_review_comment',
         'submitted_at', 'reviewed_by', 'reviewed_at', 'review_comment', 'reading',
-        'current_reading_value',
+        'current_reading_value', 'chronology_display',
     )
     fields = readonly_fields
 
@@ -745,8 +746,13 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
 
     @admin.display(description='Текущее утверждённое значение')
     def current_reading_value(self, obj):
-        reading = obj.reading or Reading.objects.filter(meter=obj.meter, date=obj.date).first()
+        reading = Reading.objects.filter(meter=obj.meter, date=obj.date).first()
         return f'{reading.value:.3f}' if reading else '—'
+
+    @admin.display(description='Автоматическая сверка')
+    def chronology_display(self, obj):
+        flags = obj.chronology_flags()
+        return format_html('<br>'.join('{}' for _ in flags), *flags) if flags else 'Нет расхождений'
 
     @admin.display(description='Фото')
     def photo_link(self, obj):
@@ -763,6 +769,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 meter = Meter.objects.select_for_update().get(pk=form.cleaned_data['meter'].pk)
                 submission = ControllerReadingSubmission.objects.select_for_update().filter(
                     meter=meter, date=form.cleaned_data['date'], status='pending',
+                    submitted_by=request.user, source=ControllerReadingSubmission.SOURCE_CONTROLLER,
                 ).order_by('-submitted_at', '-pk').first()
                 if submission is None:
                     submission = form.save(commit=False)
@@ -773,6 +780,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 submission.meter = meter
                 submission.date = form.cleaned_data['date']
                 submission.submitted_by = request.user
+                submission.source = ControllerReadingSubmission.SOURCE_CONTROLLER
                 submission._history_user = request.user
                 submission._change_reason = 'Уточнение показания контролёром' if submission.pk else 'Подача контролёром на премодерацию'
                 submission.save()
@@ -785,7 +793,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
             return HttpResponseRedirect(reverse('admin:water_controllerreading_capture'))
         meter_data = {
             str(meter.pk): {
-                'address': meter.account.plot or 'Адрес не заполнен',
+                'address': meter.account.plot if meter.account else str(meter.group or meter.node),
             }
             for meter in self._capture_meters(form)
         }
@@ -822,12 +830,17 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
                 if submission.status != 'pending':
                     raise ValidationError('Запись уже проверена.')
+                if submission.line_review_status == ControllerReadingSubmission.LINE_REVIEW_PENDING:
+                    raise ValidationError('Наблюдение жителя ещё ожидает проверки старшего линии.')
                 reading = Reading.objects.filter(meter=submission.meter, date=submission.date).first()
                 if reading:
                     reading.value = submission.value
                     reading.notes = f'Корректировка по заявке контролёра. {submission.notes}'.strip()
                 else:
                     reading = Reading(meter=submission.meter, date=submission.date, value=submission.value, notes=f'Показание контролёра. {submission.notes}'.strip())
+                # Only the final admin moderation path may deliberately resolve
+                # an observation that the automatic chronology check flagged.
+                reading._allow_chronology_override = True
                 reading._history_user = request.user
                 reading._change_reason = 'Корректировка по заявке контролёра' if reading.pk else 'Принято из премодерации'
                 reading.save()
@@ -849,7 +862,9 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
             raise PermissionDenied
         with transaction.atomic():
             submission = ControllerReadingSubmission.objects.select_for_update().get(pk=object_id)
-            if submission.status == 'pending':
+            if submission.line_review_status == ControllerReadingSubmission.LINE_REVIEW_PENDING:
+                messages.error(request, 'Нельзя отклонить: наблюдение жителя ещё ожидает проверки старшего линии.')
+            elif submission.status == 'pending':
                 submission.status = 'rejected'
                 submission.review_comment = request.POST.get('review_comment', '').strip()[:500]
                 submission.reviewed_by = request.user
@@ -857,7 +872,7 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 submission._history_user = request.user
                 submission._change_reason = 'Показание отклонено'
                 submission.save()
-        messages.success(request, 'Запись отклонена.')
+                messages.success(request, 'Запись отклонена.')
         return HttpResponseRedirect(reverse('admin:water_controllerreadingsubmission_change', args=[object_id]))
 
 
