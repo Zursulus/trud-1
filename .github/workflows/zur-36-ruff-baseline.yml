@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - chore/zur-36-ruff-baseline
-  pull_request:
-    branches:
-      - feature/water-admin
 
 permissions:
   contents: read
@@ -21,20 +18,28 @@ jobs:
           python-version: '3.11'
       - name: Install Ruff
         run: python -m pip install ruff
-      - name: Report Ruff findings without blocking
+      - name: Compare default and narrow gate candidates
         shell: bash
         run: |
           set +e
           ruff --version
-          ruff check backend ops --output-format=concise 2>&1 | tee /tmp/ruff-baseline.txt
-          rc=${PIPESTATUS[0]}
-          count=$(grep -Ec '^[^ ]+:[0-9]+:[0-9]+:' /tmp/ruff-baseline.txt || true)
-          echo "ruff_exit=$rc"
-          echo "ruff_findings=$count"
+
+          echo '=== DEFAULT BASELINE ==='
+          ruff check backend ops --output-format=concise 2>&1 | tee /tmp/ruff-default.txt
+          default_rc=${PIPESTATUS[0]}
+          default_count=$(grep -Ec '^[^ ]+:[0-9]+:[0-9]+:' /tmp/ruff-default.txt || true)
+
+          echo '=== NARROW E4/E7/E9/F CANDIDATE ==='
+          ruff check backend ops --select E4,E7,E9,F --output-format=concise 2>&1 | tee /tmp/ruff-narrow.txt
+          narrow_rc=${PIPESTATUS[0]}
+          narrow_count=$(grep -Ec '^[^ ]+:[0-9]+:[0-9]+:' /tmp/ruff-narrow.txt || true)
+
+          echo "default_exit=$default_rc default_findings=$default_count"
+          echo "narrow_exit=$narrow_rc narrow_findings=$narrow_count"
           {
-            echo "### ZUR-36 Ruff baseline"
-            echo "- Ruff exit code: $rc"
-            echo "- Findings: $count"
-            echo "- Mode: report-only; this job always succeeds"
+            echo '### ZUR-36 Ruff baseline'
+            echo "- Default findings: $default_count"
+            echo "- Narrow E4/E7/E9/F findings: $narrow_count"
+            echo '- Mode: report-only; no fixes and no blocking'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 0
