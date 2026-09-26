@@ -218,9 +218,7 @@ def controller_workspace(request):
         if decision not in {'confirm', 'flag'}:
             raise PermissionDenied
         with transaction.atomic():
-            submission = ControllerReadingSubmission.objects.select_for_update().select_related(
-                'meter__account',
-            ).get(
+            submission = ControllerReadingSubmission.objects.select_for_update().get(
                 pk=submission_id,
                 source=ControllerReadingSubmission.SOURCE_RESIDENT,
                 status='pending',
