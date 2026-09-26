@@ -232,8 +232,30 @@ def appeals(request, account_id):
     if denied:
         return denied
     access = _access_or_404(request.user, account_id, CAP_APPEALS)
+    all_appeals = _appeals_with_unread(request.user, access.account)
+    state = request.GET.get('state', 'all')
+    if state not in {'all', 'open', 'resolved'}:
+        state = 'all'
+
+    open_statuses = {'new', 'in_progress', 'awaiting_resident'}
+    resolved_statuses = {'resolved', 'closed'}
+    open_count = sum(item.status in open_statuses for item in all_appeals)
+    resolved_count = sum(item.status in resolved_statuses for item in all_appeals)
+
+    if state == 'open':
+        visible_appeals = [item for item in all_appeals if item.status in open_statuses]
+    elif state == 'resolved':
+        visible_appeals = [item for item in all_appeals if item.status in resolved_statuses]
+    else:
+        visible_appeals = all_appeals
+
     context = _common(request, access, 'more')
-    context['appeals'] = _appeals_with_unread(request.user, access.account)
+    context.update({
+        'appeals': visible_appeals,
+        'appeal_state': state,
+        'appeal_open_count': open_count,
+        'appeal_resolved_count': resolved_count,
+    })
     return TemplateResponse(request, 'water/portal/appeals.html', context)
 
 
