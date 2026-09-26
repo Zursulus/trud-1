@@ -118,12 +118,18 @@ def issue_invite(account, email, role, *, actor=None):
     return invite, raw
 
 
+def password_reset_allowed(user):
+    return bool(
+        user.is_active
+        and not user.is_superuser
+        and (has_any_portal_access(user) or user.has_perm('water.use_controller_workspace'))
+    )
+
+
 @transaction.atomic
 def issue_password_reset(user, *, actor=None):
-    if user.is_staff or not user.is_active:
-        raise ValidationError('Восстановление доступно только действующему кабинету жителя.')
-    if not has_any_portal_access(user):
-        raise ValidationError('У жителя нет действующего доступа к лицевому счёту.')
+    if not password_reset_allowed(user):
+        raise ValidationError('Сброс пароля разрешён только активному жителю, старшему линии или контролёру.')
     for previous in ResidentPasswordReset.objects.select_for_update().filter(
         user=user, used_at__isnull=True, revoked=False,
     ):
@@ -257,11 +263,7 @@ def reset_password(request, token):
     except UnicodeEncodeError as error:
         raise Http404 from error
     reset = get_object_or_404(ResidentPasswordReset.objects.select_related('user'), token_hash=digest)
-    has_access = has_any_portal_access(reset.user)
-    if (
-        reset.revoked or reset.used_at or reset.expires_at <= timezone.now()
-        or reset.user.is_staff or not reset.user.is_active or not has_access
-    ):
+    if reset.revoked or reset.used_at or reset.expires_at <= timezone.now() or not password_reset_allowed(reset.user):
         return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
     form = NewResidentPasswordForm(request.POST or None, user=reset.user)
     if request.method == 'POST' and form.is_valid():
@@ -270,7 +272,7 @@ def reset_password(request, token):
             if locked.revoked or locked.used_at or locked.expires_at <= timezone.now():
                 return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
             user = User.objects.select_for_update().get(pk=locked.user_id)
-            if user.is_staff or not user.is_active or not has_any_portal_access(user):
+            if not password_reset_allowed(user):
                 return TemplateResponse(request, 'water/portal/reset_invalid.html', status=410)
             user.set_password(form.cleaned_data['password1'])
             user.save(update_fields=['password'])
@@ -278,6 +280,8 @@ def reset_password(request, token):
             locked._history_user = user
             locked._change_reason = 'Пароль восстановлен жителем'
             locked.save()
+        if user.is_staff:
+            return HttpResponseRedirect(reverse('admin:login'))
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         return HttpResponseRedirect(reverse('resident_dashboard'))
     return TemplateResponse(request, 'water/portal/reset_password.html', {'form': form})
