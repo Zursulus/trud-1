@@ -40,7 +40,7 @@ def password_access_admin(request):
 
     context = {
         **admin.site.each_context(request),
-        'title': '?????? ? ??????',
+        'title': 'Доступ и пароли',
         'candidates': candidates,
         'target': target,
         'reset_url': reset_url,
