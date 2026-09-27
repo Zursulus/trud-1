@@ -1,105 +1,82 @@
-# Труд-1: рабочий план
+# Труд-1: продуктовый и технический roadmap
 
 Юридическое наименование: ТСН «ТРУД-1». Локация: Орджоникидзе, Крым.
 
-Этот файл — актуальный технический план. Оперативный статус задач хранится в Linear, код/CI — в GitHub, фактически установленная версия — на production через deployment marker/status. Исторические промежуточные планы остаются в Git history.
+Этот файл хранит направление продукта, последовательность крупных этапов и постоянные инварианты. Он **не является оперативным task tracker**. Исторические версии остаются в Git history.
 
 ## Источники истины
 
-1. Linear — задачи, приоритеты, NOW/NEXT, blockers.
-2. GitHub — код, тесты, CI и техническая документация.
-3. Production `trud-1.ru` — фактически установленная версия.
-4. Drive / Library — исходные Excel и крупные артефакты.
-5. Notion — долговременные решения и карта проекта.
+1. GitHub Issues / PR — незавершённые обязательства, acceptance criteria и реализация.
+2. GitHub commits / CI — техническая история и доказательство проверок.
+3. Production `trud-1.ru` deployment marker/status — фактически установленная версия. Push/merge не равен deploy.
+4. `docs/PLAN.md` и архитектурные документы — roadmap и устойчивые правила.
+5. Notion — долговременные решения/rationale и короткий recovery checkpoint; не второй task tracker.
+6. Drive / Library — исходные Excel и крупные/закрытые артефакты.
+7. Linear — read-only исторический архив работ до перехода на GitHub Issues.
 
-Push в GitHub не равен deploy.
+## Состояние продукта — 27 сентября 2026
 
-## Текущее состояние — 27 сентября 2026
-
-Ядро рабочей системы реализовано и используется:
-
-- реестр участков, людей, связей и постоянных внутренних ID;
-- счётчики, показания, линии, водный баланс, история и аудит;
-- безопасный предварительный импорт и ручной разбор неоднозначностей;
-- роли сотрудников, object scope, MFA и закрытый реестр ПД;
-- личный кабинет жителя, доступы, документы, обращения и восстановление пароля;
-- начисления, оплаты, задолженность, корректировки и отчётность;
-- опросы/правление и публичный контент;
-- ежедневный проверяемый backup, дополнительный restic-контур, recovery, guarded deploy и rollback;
-- CI с PostgreSQL, Django tests, Chromium/WebKit browser E2E и accessibility checks.
-
-Текущий staff-интерфейс вырос вокруг Django Admin и больше не соответствует сложности продукта. Целевая архитектура следующего этапа зафиксирована в `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
+Ядро рабочей системы реализовано: реестр участков/людей/связей, водоучёт и баланс, безопасный импорт, роли/object scope/MFA, закрытый реестр ПД, кабинет жителя, обращения/документы/доступы, начисления/оплаты/долги, опросы правления, публичный контент, backup/recovery, guarded deploy/rollback и CI с browser E2E/accessibility.
 
 ## Текущая фаза: Staff Workspace v1
 
-Цель — создать отдельную «Рабочую базу» сотрудников на `/work/`, оставив `/admin/` техническим fallback.
+Цель — отдельная ежедневная «Рабочая база» сотрудников на `/work/`; `/admin/` остаётся техническим fallback.
 
-Завершённые slices в `feature/water-admin`:
+Реализовано в интеграционной ветке `feature/water-admin`:
 
-- PR #69 — foundation: shell, поиск, карточка Account, permission/object scope, PII boundaries, query budgets, browser/accessibility gate;
-- PR #70 — Water Hub: role-adapted water queue, controller line scope, существующие audited write-workflows;
-- PR #71 — Appeals: очередь, единый диалог, private attachments, общий `appeal_workflow`, state transitions и read-only capability.
+1. Foundation / Search / Account — PR #69.
+2. Water — PR #70.
+3. Appeals — PR #71.
+4. Finance — PR #72.
 
-Эти изменения пока не считаются production-выпуском: push/merge не равен deploy.
+Следующие продуктовые slices после установления актуального production baseline:
 
-Утверждённый порядок следующих slices:
+5. Access.
+6. Documents/content.
+7. Governance/polls.
 
-1. Finance;
-2. Access;
-3. Documents/content;
-4. Governance/polls.
+Полные продуктовые границы и acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 
-Непосредственный риск по диску снят 27.09.2026: использование root filesystem снижено с 87% до 71% удалением только воспроизводимых RDC/npm/Puppeteer caches. Retention и alerting остаются отдельным эксплуатационным улучшением.
+## Release baseline
 
-## Архитектурные правила текущей фазы
+На 2026-09-27 проверено:
 
-- `/work/` строится вокруг пользовательских задач и процессов, не вокруг списка Django-моделей.
+- integration HEAD: `b413a436c7895cbc6292ce6e53767b7ed2db67ea`;
+- CI Water admin run #1080 для этого HEAD: success;
+- production marker: `96665e534bb2994b650d60a06b7c21630f457f84`, deployed `2026-09-26T20:15:14Z`;
+- integration branch на 83 commits впереди production;
+- текущая оперативная release-задача ведётся в GitHub Issue #73.
+
+До controlled deploy и production smoke новые Staff Workspace slices не считаются production-выпущенными.
+
+## Будущие / внешне заблокированные направления
+
+### Банковский обмен ВТБ
+
+GitHub Issue #74. Начинать только после получения реального формата/образца банка. Сначала read-only parser/dry-run, затем правила сопоставления/idempotency/audit, затем controlled import подтверждённых платежей. Формат не придумывать.
+
+### Юридически значимые процедуры
+
+GitHub Issue #75 хранит необходимость получить и проверить актуальный зарегистрированный устав до автоматизации процессов, которые действительно от него зависят. Внутренние неофициальные опросы правления этим не блокируются.
+
+### Историко-территориальные первоисточники
+
+GitHub Issue #76 хранит незавершённый поиск первичных документов создания и землеотвода. Результат исследования фиксируется в Notion с provenance источников; неподтверждённые вторичные сведения не превращаются в факты сайта.
+
+### 1С
+
+Проектировать только после банковского обмена и фиксации фактического финансового процесса.
+
+## Архитектурные правила Staff Workspace
+
+- `/work/` строится вокруг пользовательских задач и процессов, не вокруг Django-моделей.
 - `/admin/` не удаляется и остаётся аварийным/техническим интерфейсом.
-- Общая бизнес-логика выносится в service/use-case слой по мере переноса конкретных workflow; дублирование правил запрещено.
-- Не делать SPA, микросервисы или отдельный REST API только ради нового интерфейса.
+- Общая бизнес-логика выносится в service/use-case слой по мере переноса workflow; дублирование правил запрещено.
+- Не делать SPA, микросервисы или отдельный REST API только ради UI.
 - Не вводить новые роли без реального пользователя и отдельного процесса.
 - Permission и object scope проверяются server-side; скрытие UI не считается защитой.
 - Обычный staff workspace не расширяет границу персональных данных.
-- Каждый vertical slice — отдельная атомарная branch/PR/release единица.
-
-## Текущий vertical slice: Finance staff workflow
-
-**`/work/finance/` → период → draft review → approved charges → payment review → allocation → balance/history.**
-
-Минимальный результат:
-
-- отдельный Finance Hub с очередями черновиков начислений, оплат на проверке и подтверждённых оплат с нераспределённым остатком;
-- расчёт/пересчёт периода использует существующий `billing.calculate_period`, а новый `finance_workflow` добавляет permission/concurrency guards для операций рабочего интерфейса;
-- draft начисления рассматриваются поштучно и могут быть только утверждены либо отменены; период нельзя утвердить, пока остаются draft;
-- расчётный период проходит `open/calculated → approved → closed` с server-side guards;
-- новая оплата создаётся только как `pending`, затем отдельно подтверждается; архивный лицевой счёт не принимает новые оплаты;
-- подтверждённая оплата распределяется через существующий `billing.allocate_payment`, без копии правил allocation;
-- reversal не стирает историю распределений: отменённая оплата перестаёт уменьшать долг, но audit/history сохраняются;
-- карточка лицевого счёта ведёт в рабочую финансовую карточку с начислениями, оплатами и балансом; printable/CSV statement остаётся доступен как служебный отчёт;
-- тарифы, BillingPolicy/BillingAssignment и редкие ручные корректировки остаются technical fallback, пока для них нет отдельного ежедневного workflow;
-- Finance доступен только finance capability; оператор воды, контролёр и закрытый реестр не получают раздел автоматически;
-- ordinary workspace не показывает `Account.contact_name`, `phone`, `Person` или иные закрытые ПД;
-- mobile navigation нормализуется до пяти пунктов: Главная / Работа / Поиск / Участки / Ещё; специализированные разделы доступны через «Ещё» и desktop sidebar;
-- dashboard/period/payments имеют bounded query counts;
-- критический mobile flow проходит Chromium + WebKit, accessibility gate и отсутствие horizontal overflow.
-
-После завершения Finance следующий vertical slice — **Access staff workflow**.
-
-Полные продуктовые acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
-
-## Параллельные/будущие направления
-
-### Банковский обмен
-
-Начинать только после получения реального формата/образца ВТБ. Сначала read-only parser/dry-run, затем правила сопоставления, затем импорт подтверждённых платежей. Не придумывать формат заранее.
-
-### Интеграция с 1С
-
-Проектировать после банковского обмена и фиксации фактического финансового процесса.
-
-### Public/integrations
-
-Задачи публичной части и интеграций продолжаются атомарно, но не подменяют текущий продуктовый приоритет Staff Workspace.
+- Каждый существенный vertical slice должен оставлять трассу Issue → branch/PR → CI → merge SHA → production marker/smoke, если production применим.
 
 ## Постоянные инварианты данных
 
@@ -111,41 +88,36 @@ Push в GitHub не равен deploy.
 - Формульные итоги Excel не считать первичными данными.
 - Поле «Оплата по показаниям» не считать подтверждённым платежом без отдельного источника.
 - Групповые кубы и потери не распределять автоматически без утверждённого правила.
-- Публичный GitHub не должен содержать реальные телефоны, персональные данные, банковские данные, секреты или backup.
+- GitHub не должен содержать реальные телефоны, персональные/банковские данные, секреты или backup.
 - Production не использовать для отладки.
 
-## Правило выпуска
+## Release policy
 
-Для каждого изменения:
-
-1. отдельная задача/трек;
-2. отдельная branch/PR, если меняется код;
-3. tests/CI до merge;
-4. перед production — сверка deployed SHA, чистого дерева и backup;
-5. compatible deploy — только при отсутствии несовместимых migrations/requirements/settings/служебных изменений;
-6. изменение схемы/зависимостей требует отдельного reviewed deploy-плана;
-7. после deploy — service/marker, HTTP smoke и ручная проверка пользовательского сценария;
-8. результат фиксируется в каноническом трекере.
+1. Существенная незавершённая работа имеет GitHub Issue с целью/scope/acceptance criteria.
+2. Код меняется через минимальную branch/PR единицу; история commits/PR сохраняется для regression analysis.
+3. До merge проходят применимые tests/CI.
+4. Перед production сверяются deployed SHA, target diff, migrations/requirements/settings/ops changes и backup/rollback readiness.
+5. Deploy выполняется controlled-процедурой; несовместимые изменения получают отдельный reviewed deploy plan.
+6. После deploy проверяются service/marker, HTTP smoke и затронутый пользовательский сценарий.
+7. Production-задача закрывается только после production evidence.
 
 ## Definition of Done
 
-Задача закрыта только когда:
+Для работы применяются два фактических уровня:
 
-- код/документация и тесты в GitHub;
-- CI зелёный;
-- production обновлён отдельным controlled deploy, если задача требует production;
-- smoke-check пройден;
-- реальный пользовательский сценарий проверен;
-- канонический трекер отражает фактический результат и следующий шаг.
+- **Implementation Done** — acceptance criteria реализации выполнены, применимые tests/CI зелёные, изменение merged.
+- **Production Done** — дополнительно установлен нужный SHA и пройдены обязательные production smoke/acceptance checks.
+
+История не удаляется и не переписывается ради «чистоты»: при регрессии должна восстанавливаться цепочка `симптом → production SHA → merge commit → PR → Issue/исторический Linear context → diff`.
 
 ## Технические ссылки
 
-- `docs/STAFF-WORKSPACE-ARCHITECTURE.md` — целевая архитектура Staff Workspace и acceptance criteria.
-- `backend/README.md` — модель и функции backend.
+- `docs/STAFF-WORKSPACE-ARCHITECTURE.md` — Staff Workspace architecture/acceptance criteria.
+- `backend/README.md` — модель и backend invariants.
 - `docs/ROLES.md` — роли и аудит.
-- `docs/PRIVACY.md` — границы ПД и privacy model.
-- `docs/MFA.md` — второй фактор и восстановление.
-- `ops/DEPLOYMENT.md` — deploy и rollback.
+- `docs/PRIVACY.md` — privacy model.
+- `docs/MFA.md` — MFA/recovery.
+- `ops/DEPLOYMENT.md` — deploy/rollback.
 - `ops/RECOVERY.md` — backup/recovery.
 
 Обновлено: 2026-09-27.
