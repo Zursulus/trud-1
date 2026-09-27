@@ -64,6 +64,37 @@ class BoardPollCreateForm(forms.Form):
         return questions
 
 
+class BoardPollEditForm(forms.Form):
+    title = forms.CharField(label="Название", max_length=200)
+    description = forms.CharField(
+        label="Пояснение",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    closes_at = forms.DateTimeField(
+        label="Срок ответа",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M"],
+    )
+    version = forms.IntegerField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, poll=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if poll is not None and not self.is_bound:
+            self.initial.update({
+                "title": poll.title,
+                "description": poll.description,
+                "closes_at": timezone.localtime(poll.closes_at).replace(second=0, microsecond=0),
+                "version": poll.version,
+            })
+
+    def clean_closes_at(self):
+        closes_at = self.cleaned_data["closes_at"]
+        if closes_at <= timezone.now():
+            raise forms.ValidationError("Срок ответа должен быть в будущем.")
+        return closes_at
+
+
 class BoardProtocolUploadForm(forms.Form):
     document = forms.FileField(label="Протокол PDF или DOCX")
 
@@ -116,8 +147,9 @@ def _audit_events(poll):
     return list(BoardAuditEvent.objects.filter(query).select_related("actor").order_by("-created_at", "-id")[:100])
 
 
-def _poll_detail_context(request, poll, *, protocol_form=None):
+def _poll_detail_context(request, poll, *, edit_form=None, protocol_form=None):
     eligible = _eligible_users(poll)
+    can_change = _can(request.user, "water.change_boardpoll") and poll.is_open
     context = _base_context(request, section="governance")
     context.update({
         "poll": poll,
@@ -125,9 +157,11 @@ def _poll_detail_context(request, poll, *, protocol_form=None):
         "eligible_names": [_user_label(user) for user in eligible],
         "question_rows": _question_rows(poll, eligible),
         "protocol": BoardProtocol.objects.filter(poll=poll).first(),
+        "edit_form": edit_form or BoardPollEditForm(poll=poll),
         "protocol_form": protocol_form or BoardProtocolUploadForm(),
         "audit_events": _audit_events(poll),
-        "can_close": _can(request.user, "water.change_boardpoll") and poll.is_open,
+        "can_edit": can_change,
+        "can_close": can_change,
         "can_upload_protocol": _can(request.user, "water.add_boardprotocol") and not poll.is_open,
     })
     return context
@@ -196,11 +230,36 @@ def governance_create(request):
 def governance_detail(request, poll_id):
     _require_governance_view(request)
     poll = get_object_or_404(BoardPoll.objects.prefetch_related("questions__votes__user", "questions__discussion_comments__author"), pk=poll_id)
+    edit_form = BoardPollEditForm(poll=poll)
     protocol_form = BoardProtocolUploadForm()
 
     if request.method == "POST":
         action = request.POST.get("action") or ""
-        if action == "close":
+        if action == "edit":
+            if not _can(request.user, "water.change_boardpoll"):
+                raise PermissionDenied
+            edit_form = BoardPollEditForm(request.POST, poll=poll)
+            if edit_form.is_valid():
+                try:
+                    with transaction.atomic():
+                        locked = BoardPoll.objects.select_for_update().get(pk=poll.pk)
+                        if edit_form.cleaned_data["version"] != locked.version:
+                            raise ValidationError("Опрос уже изменён. Обновите страницу перед сохранением.")
+                        if not locked.is_open:
+                            raise ValidationError("Изменять через рабочую базу можно только открытый предварительный опрос.")
+                        locked.title = edit_form.cleaned_data["title"]
+                        locked.description = edit_form.cleaned_data["description"]
+                        locked.closes_at = edit_form.cleaned_data["closes_at"]
+                        locked._audit_actor = request.user
+                        locked._audit_reason = "Изменение метаданных предварительного опроса"
+                        locked.save()
+                except ValidationError as error:
+                    edit_form.add_error(None, "; ".join(error.messages))
+                else:
+                    messages.success(request, "Параметры предварительного опроса обновлены.")
+                    return HttpResponseRedirect(reverse("staff_workspace:governance_detail", args=[poll.pk]))
+
+        elif action == "close":
             if not _can(request.user, "water.change_boardpoll"):
                 raise PermissionDenied
             try:
@@ -224,7 +283,7 @@ def governance_detail(request, poll_id):
                 messages.success(request, "Предварительный опрос закрыт. Голоса и обсуждение больше не меняются.")
             return HttpResponseRedirect(reverse("staff_workspace:governance_detail", args=[poll.pk]))
 
-        if action == "upload_protocol":
+        elif action == "upload_protocol":
             if not _can(request.user, "water.add_boardprotocol"):
                 raise PermissionDenied
             if poll.is_open or BoardProtocol.objects.filter(poll=poll).exists():
@@ -243,14 +302,13 @@ def governance_detail(request, poll_id):
                     messages.success(request, "Протокол сохранён. Заменить его через рабочую базу нельзя.")
                     return HttpResponseRedirect(reverse("staff_workspace:governance_detail", args=[poll.pk]))
         else:
-            if action != "upload_protocol":
-                raise Http404
+            raise Http404
 
     poll.refresh_from_db()
     return TemplateResponse(
         request,
         "water/work/governance/detail.html",
-        _poll_detail_context(request, poll, protocol_form=protocol_form),
+        _poll_detail_context(request, poll, edit_form=edit_form, protocol_form=protocol_form),
     )
 
 
