@@ -1,0 +1,52 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Поиск{% endblock %}
+{% block content %}
+<section class="ws-page-head ws-page-head-compact">
+  <div>
+    <p class="ws-eyebrow">Глобальный поиск</p>
+    <h1>Найти участок или лицевой счёт</h1>
+    <p>Ищет только по данным, доступным вашей роли.</p>
+  </div>
+</section>
+
+<form class="ws-search-form" method="get" action="{% url 'staff_workspace:search' %}" role="search">
+  <label for="workspace-search">Номер счёта или участок{% if can_view_land_plots %}, адрес{% endif %}{% if can_view_water %} или счётчик{% endif %}</label>
+  <div class="ws-search-line">
+    <input id="workspace-search" name="q" type="search" value="{{ q }}" maxlength="160" autocomplete="off" placeholder="Например: 143 или Садовая 42" autofocus>
+    <button class="ws-primary" type="submit">Найти</button>
+  </div>
+</form>
+
+{% if q %}
+<section class="ws-section" aria-live="polite">
+  <div class="ws-section-head">
+    <h2>Результаты</h2>
+    <span>{{ results|length }}{% if results|length == 50 %}+{% endif %}</span>
+  </div>
+  {% if results %}
+    <div class="ws-result-list">
+      {% for account in results %}
+        <a class="ws-result" href="{% url 'staff_workspace:account' account.pk %}">
+          <div>
+            <span class="ws-result-type">Участок / лицевой счёт</span>
+            <strong>{{ account.plot|default:'Участок не указан' }}</strong>
+            <p>Л/с {{ account.number|default:'не присвоен' }}{% if can_view_land_plots %}{% for plot in account.land_plots.all %}{% if forloop.first %} · {{ plot.label }}{% endif %}{% endfor %}{% endif %}</p>
+          </div>
+          {% if account.archived %}<span class="ws-badge ws-badge-muted">Архив</span>{% else %}<span class="ws-chevron" aria-hidden="true">›</span>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ws-empty">
+      <strong>Ничего не найдено</strong>
+      <p>Проверьте запрос. Поиск намеренно не показывает объекты и поля вне вашего рабочего scope.</p>
+    </div>
+  {% endif %}
+</section>
+{% else %}
+<section class="ws-section ws-muted-panel">
+  <h2>Как искать</h2>
+  <p>Введите номер лицевого счёта или рабочее обозначение участка{% if can_view_land_plots %}, адрес{% endif %}{% if can_view_water %} или номер индивидуального счётчика{% endif %}.</p>
+</section>
+{% endif %}
+{% endblock %}

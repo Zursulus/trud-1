@@ -1,0 +1,59 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}{{ workspace_title }}{% endblock %} · ТСН «ТРУД-1»</title>
+  <link rel="stylesheet" href="{% static 'water/staff-workspace.css' %}">
+</head>
+<body>
+  <div class="ws-shell">
+    <aside class="ws-sidebar" aria-label="Рабочая навигация">
+      <a class="ws-brand" href="{% url 'staff_workspace:home' %}">
+        <span class="ws-brand-mark" aria-hidden="true">Т1</span>
+        <span><strong>ТРУД-1</strong><small>Рабочая база</small></span>
+      </a>
+      <nav class="ws-nav">
+        <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
+        <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}>Поиск</a>
+        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}>Участки и счета</a>
+        {% if can_use_controller_workspace %}<a href="{% url 'water_controller_workspace' %}">Мои линии</a>{% endif %}
+        {% if can_view_water and not can_use_controller_workspace %}<a href="{% url 'admin:water_reading_changelist' %}">Вода</a>{% endif %}
+      </nav>
+      <div class="ws-sidebar-foot">
+        <a href="{{ admin_url }}">Служебное / Django Admin</a>
+        <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+      </div>
+    </aside>
+
+    <div class="ws-main">
+      <header class="ws-topbar">
+        <div>
+          <strong>Рабочая база</strong>
+          <span>ТСН «ТРУД-1»</span>
+        </div>
+        <a class="ws-search-shortcut" href="{% url 'staff_workspace:search' %}" aria-label="Открыть поиск">Найти</a>
+      </header>
+      <main class="ws-content" id="main-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <nav class="ws-bottom-nav" aria-label="Мобильная навигация">
+    <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><span aria-hidden="true">⌂</span>Главная</a>
+    <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Поиск</a>
+    <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span>Участки</a>
+    {% if can_use_controller_workspace %}
+      <a href="{% url 'water_controller_workspace' %}"><span aria-hidden="true">◉</span>Линии</a>
+    {% elif can_view_water %}
+      <a href="{% url 'admin:water_reading_changelist' %}"><span aria-hidden="true">◉</span>Вода</a>
+    {% else %}
+      <a href="{% url 'staff_workspace:home' %}#work-queue"><span aria-hidden="true">✓</span>Работа</a>
+    {% endif %}
+    <a href="{{ admin_url }}"><span aria-hidden="true">⚙</span>Ещё</a>
+  </nav>
+</body>
+</html>

@@ -1,0 +1,108 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{{ account.plot|default:'Участок' }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки">
+  <a href="{% url 'staff_workspace:accounts' %}">Участки и счета</a><span aria-hidden="true">›</span><span>Л/с {{ account.number|default:'—' }}</span>
+</nav>
+
+<section class="ws-object-head{% if account.archived %} is-archived{% endif %}">
+  <div>
+    <p class="ws-eyebrow">Участок / лицевой счёт</p>
+    <h1>{{ account.plot|default:'Участок не указан' }}</h1>
+    <div class="ws-object-meta">
+      <span>Л/с <strong>{{ account.number|default:'не присвоен' }}</strong></span>
+      {% if account.archived %}<span class="ws-badge ws-badge-muted">Архивная карточка</span>{% else %}<span class="ws-badge ws-badge-ok">Активен</span>{% endif %}
+    </div>
+  </div>
+  <a class="ws-secondary" href="{% url 'staff_workspace:search' %}">Новый поиск</a>
+</section>
+
+{% if account.archived %}
+<div class="ws-banner ws-banner-warning"><strong>Архивный объект.</strong> Используйте данные как историю; рабочие действия могут быть недоступны.</div>
+{% endif %}
+
+<div class="ws-summary-grid">
+  {% if can_view_land_plots %}
+  <section class="ws-summary">
+    <span>Участки</span>
+    <strong>{{ land_plots|length }}</strong>
+    {% for plot in land_plots %}<p>{{ plot.label }}{% if plot.address %} · {{ plot.address }}{% endif %}{% if plot.archived %} · архив{% endif %}</p>{% empty %}<p>Связанный LandPlot пока не указан.</p>{% endfor %}
+  </section>
+  {% endif %}
+  {% if can_view_water %}
+  <section class="ws-summary">
+    <span>Линия / группа</span>
+    <strong>{{ memberships|length }}</strong>
+    {% for membership in memberships %}<p>{{ membership.group.name }} · {{ membership.group.node.name }}</p>{% empty %}<p>Активная группа не найдена.</p>{% endfor %}
+  </section>
+  <section class="ws-summary">
+    <span>Счётчики</span>
+    <strong>{{ meters|length }}</strong>
+    <p>Индивидуальные приборы этого лицевого счёта.</p>
+  </section>
+  {% endif %}
+  {% if can_view_finance %}
+  <section class="ws-summary{% if finance.balance > 0 %} ws-summary-attention{% endif %}">
+    <span>Баланс</span>
+    <strong>{{ finance.balance }} ₽</strong>
+    <p>{% if finance.balance > 0 %}Задолженность{% elif finance.balance < 0 %}Переплата{% else %}Расчёт закрыт{% endif %}</p>
+  </section>
+  {% endif %}
+</div>
+
+{% if can_view_water %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Вода</h2><span>{{ meters|length }} счётч.</span></div>
+  {% if meters %}
+    <div class="ws-table-wrap" tabindex="0" role="region" aria-label="Таблица показаний воды">
+      <table class="ws-table">
+        <thead><tr><th>Счётчик</th><th>Последнее показание</th><th>Дата</th><th>Состояние</th></tr></thead>
+        <tbody>
+        {% for meter in meters %}
+          <tr>
+            <td><strong>{{ meter.serial }}</strong></td>
+            <td>{% if meter.latest_reading_value is not None %}{{ meter.latest_reading_value }} м³{% else %}—{% endif %}</td>
+            <td>{{ meter.latest_reading_date|date:'d.m.Y'|default:'—' }}</td>
+            <td>{% if meter.retired_on %}<span class="ws-badge ws-badge-muted">Снят</span>{% else %}<span class="ws-badge ws-badge-ok">На учёте</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="ws-empty"><strong>Нет индивидуальных счётчиков</strong><p>Для этого лицевого счёта приборы не найдены или недоступны вашей роли.</p></div>
+  {% endif %}
+  <div class="ws-actions">
+    {% if can_use_controller_workspace %}<a class="ws-secondary" href="{% url 'water_controller_workspace' %}">Открыть мои линии</a>{% endif %}
+    {% if request.user.is_superuser or perms.water.view_reading %}<a class="ws-secondary" href="{% url 'admin:water_reading_changelist' %}?meter__account__id__exact={{ account.pk }}">Журнал показаний</a>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if can_view_finance %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Финансы</h2></div>
+  <div class="ws-finance-line"><span>Утверждено начислений</span><strong>{{ finance.charges }} ₽</strong></div>
+  <div class="ws-finance-line"><span>Подтверждено оплат</span><strong>{{ finance.payments }} ₽</strong></div>
+  <div class="ws-finance-line ws-finance-total"><span>Баланс</span><strong>{{ finance.balance }} ₽</strong></div>
+  <div class="ws-actions"><a class="ws-secondary" href="{% url 'admin:water_account_statement' account.pk %}">Открыть финансовую карточку</a></div>
+</section>
+{% endif %}
+
+{% if can_view_appeals or can_view_documents or can_view_access %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Связанные процессы</h2></div>
+  <div class="ws-action-list">
+    {% if can_view_appeals %}<a class="ws-action-row" href="{% url 'admin:water_residentappeal_changelist' %}?account__id__exact={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
+    {% if can_view_documents %}<a class="ws-action-row" href="{% url 'admin:water_accountdocument_changelist' %}?account__id__exact={{ account.pk }}"><span>Документы лицевого счёта</span><strong>{{ documents_count }}</strong></a>{% endif %}
+    {% if can_view_access %}<a class="ws-action-row" href="{% url 'admin:water_residentaccess_changelist' %}?account__id__exact={{ account.pk }}"><span>Активные доступы кабинета</span><strong>{{ access_count }}</strong></a>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+<section class="ws-section ws-muted-panel">
+  <h2>Служебная карточка</h2>
+  <p>Новый workspace пока read-only. Исправления выполняются через существующий audited workflow.</p>
+  {% if perms.water.change_account %}<a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Открыть в Django Admin</a>{% endif %}
+</section>
+{% endblock %}
