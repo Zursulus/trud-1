@@ -1,0 +1,30 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Опросы / правление{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:more' %}">Ещё</a><span>›</span><span>Опросы / правление</span></nav>
+<section class="ws-page-head"><div><p class="ws-eyebrow">Рабочая база · правление</p><h1>Опросы / правление</h1><p>Предварительные внутренние опросы: подготовка → проведение → результаты → протокол и аудит. Это не контур юридически значимого голосования.</p></div>{% if can_add_poll %}<a class="ws-primary" href="{% url 'staff_workspace:governance_poll_create' %}">Новый опрос</a>{% endif %}</section>
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Всего</span><strong>{{ poll_rows|length }}</strong></div>
+  <div class="ws-summary"><span>Открыты</span><strong>{{ open_count }}</strong></div>
+  <div class="ws-summary"><span>Завершены</span><strong>{{ closed_count }}</strong></div>
+</div>
+
+<section class="ws-section">
+  <div class="ws-section-head"><div><p class="ws-eyebrow">Неофициальный контур</p><h2>Предварительные опросы</h2></div></div>
+  {% if poll_rows %}
+    <div class="ws-card-grid">
+      {% for row in poll_rows %}
+        <a class="ws-card" href="{% url 'staff_workspace:governance_poll' row.poll.pk %}">
+          <span class="ws-card-kicker">{% if row.is_open %}Открыт{% elif row.is_scheduled %}Запланирован{% else %}Завершён{% endif %}</span>
+          <strong>{{ row.poll.title }}</strong>
+          <p>{{ row.question_count }} вопр. · {{ row.vote_count }} голосов</p>
+          <p>{% if row.is_open %}До {{ row.poll.closes_at|date:'d.m.Y H:i' }}{% elif row.poll.closed_at %}Закрыт {{ row.poll.closed_at|date:'d.m.Y H:i' }}{% else %}Срок истёк {{ row.poll.closes_at|date:'d.m.Y H:i' }}{% endif %}</p>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ws-empty"><strong>Опросов пока нет.</strong><p>Создавайте их только для предварительного внутреннего обсуждения правления.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
