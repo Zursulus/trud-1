@@ -2,6 +2,8 @@ import json
 import tempfile
 from pathlib import Path
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase, override_settings
 
 
@@ -53,3 +55,13 @@ class DeploymentStatusTests(SimpleTestCase):
         response = self.client.post('/admin/deployment-status/')
 
         self.assertEqual(response.status_code, 405)
+
+
+class PasswordPolicyTests(SimpleTestCase):
+    def test_six_arbitrary_characters_are_allowed(self):
+        validate_password('123456')
+        validate_password('qwerty')
+
+    def test_five_characters_are_rejected(self):
+        with self.assertRaises(ValidationError):
+            validate_password('12345')

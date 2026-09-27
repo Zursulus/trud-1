@@ -32,7 +32,7 @@ class StaffPasswordResetTests(TestCase):
 
         raw = reset_url.rstrip('/').split('/')[-1]
         self.client.logout()
-        new_password = 'Tangerine-Orbit-Quartz-582!'
+        new_password = '123456'
         response = self.client.post(
             reverse('resident_password_reset', args=[raw]),
             {'password1': new_password, 'password2': new_password},
