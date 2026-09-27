@@ -10,6 +10,7 @@
   <a class="ws-primary" href="{% url 'staff_workspace:search' %}">Найти участок или счёт</a>
 </section>
 
+<div id="work-queue">
 {% if attention %}
 <section class="ws-section" aria-labelledby="attention-title">
   <div class="ws-section-head">
@@ -30,6 +31,7 @@
   <p>В доступных вам процессах сейчас нет элементов, требующих отдельного действия.</p>
 </section>
 {% endif %}
+</div>
 
 <section class="ws-section" aria-labelledby="quick-title">
   <div class="ws-section-head"><h2 id="quick-title">Быстрый доступ</h2></div>
