@@ -68,14 +68,15 @@ def _own_appeal(request, account_id, appeal_id):
 
 
 def _prepare_resident_post(request, form, *, account, appeal=None, creating=False):
-    """Apply cheap burst guard first, then expensive file inspection and DB quotas."""
+    """Validate once, count every POST attempt, then apply persistent quotas."""
+    valid = form.is_valid()
     try:
         register_resident_submission_attempt(request, request.user)
     except ValidationError as error:
         form.add_error(None, error)
         return False
 
-    if not form.is_valid():
+    if not valid:
         record_form_upload_rejection(
             form=form,
             field_name='attachment',
