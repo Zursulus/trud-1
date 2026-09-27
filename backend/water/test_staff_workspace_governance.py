@@ -50,15 +50,27 @@ class StaffWorkspaceGovernanceTests(TestCase):
         self.assertContains(response, "неофициаль")
         self.assertContains(self.client.get("/work/more/"), "Опросы / правление")
 
-    def test_view_only_staff_cannot_create_or_close_by_direct_post(self):
+    def test_view_only_staff_cannot_create_edit_or_close_by_direct_post(self):
         self.login(self.viewer)
         self.assertEqual(self.client.get("/work/governance/new/").status_code, 403)
+        edit = self.client.post(
+            f"/work/governance/{self.poll.pk}/",
+            {
+                "action": "edit",
+                "title": "Попытка изменения",
+                "description": self.poll.description,
+                "closes_at": timezone.localtime(self.poll.closes_at).strftime("%Y-%m-%dT%H:%M"),
+                "version": self.poll.version,
+            },
+        )
+        self.assertEqual(edit.status_code, 403)
         response = self.client.post(
             f"/work/governance/{self.poll.pk}/",
             {"action": "close", "version": self.poll.version},
         )
         self.assertEqual(response.status_code, 403)
         self.poll.refresh_from_db()
+        self.assertEqual(self.poll.title, "Тест предварительного опроса")
         self.assertIsNone(self.poll.closed_at)
 
     def test_create_poll_with_ordered_questions_is_audited(self):
@@ -80,6 +92,33 @@ class StaffWorkspaceGovernanceTests(TestCase):
         self.assertTrue(BoardAuditEvent.objects.filter(target_type="boardpoll", target_id=poll.pk, actor=self.admin).exists())
         self.assertEqual(BoardAuditEvent.objects.filter(target_type="boardquestion", target_id__in=poll.questions.values("pk")).count(), 2)
 
+    def test_open_poll_metadata_edit_is_versioned_audited_and_leaves_questions_untouched(self):
+        self.login(self.admin)
+        original_question = self.question.text
+        closes_at = timezone.localtime(timezone.now() + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M")
+        response = self.client.post(
+            f"/work/governance/{self.poll.pk}/",
+            {
+                "action": "edit",
+                "title": "Уточнённый рабочий опрос",
+                "description": "Уточнено только пояснение",
+                "closes_at": closes_at,
+                "version": self.poll.version,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.poll.refresh_from_db()
+        self.question.refresh_from_db()
+        self.assertEqual(self.poll.title, "Уточнённый рабочий опрос")
+        self.assertEqual(self.question.text, original_question)
+        self.assertTrue(
+            BoardAuditEvent.objects.filter(
+                target_type="boardpoll",
+                target_id=self.poll.pk,
+                summary__icontains="метаданных",
+            ).exists()
+        )
+
     def test_detail_shows_results_non_voters_audit_and_legal_boundary(self):
         vote = BoardVote(question=self.question, user=self.member, choice="for", comment="За рабочий вариант")
         vote._audit_actor = self.member
@@ -93,7 +132,7 @@ class StaffWorkspaceGovernanceTests(TestCase):
         self.assertContains(response, "Ещё не ответили")
         self.assertContains(response, "Неизменяемая история")
         self.assertContains(response, "не является общим собранием")
-        self.assertNotContains(response, "юридически обязательное решение</strong>")
+        self.assertContains(response, "вопросы здесь не редактируются")
 
     def test_close_uses_submitted_version_and_rejects_stale_page(self):
         stale_version = self.poll.version
@@ -142,6 +181,8 @@ class StaffWorkspaceGovernanceTests(TestCase):
         protocol = BoardProtocol.objects.get(poll=self.poll)
         self.assertEqual(protocol.uploaded_by, self.admin)
         self.assertEqual(protocol.original_name, "board.pdf")
+        detail = self.client.get(f"/work/governance/{self.poll.pk}/")
+        self.assertContains(detail, "Скачать протокол")
 
         response = self.client.post(
             f"/work/governance/{self.poll.pk}/",
