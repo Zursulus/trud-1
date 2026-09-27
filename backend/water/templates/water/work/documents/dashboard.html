@@ -1,0 +1,53 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Документы и контент{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Документы и контент</h1><p>Закрытые документы жителей, публичные документы и новости разделены по назначению и правам.</p></div>
+</section>
+
+<form class="ws-search-form" method="get">
+  <label for="documents-q">Поиск в доступных вам документах</label>
+  <div class="ws-search-line"><input id="documents-q" name="q" value="{{ q }}" autocomplete="off" placeholder="Счёт, участок, название, категория"><button class="ws-primary" type="submit">Найти</button></div>
+</form>
+
+{% if can_view_account_documents %}
+<section class="ws-section" id="account-documents">
+  <div class="ws-section-head"><h2>Документы жителей</h2><span>Закрытый контур · {{ account_document_count }}</span></div>
+  <p class="ws-finance-note">Файлы привязаны к лицевому счёту. Житель видит только разрешённые документы своего счёта; файл после создания не подменяется.</p>
+  {% if can_add_account_documents %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:account_document_create' %}">Добавить документ жителя</a></div>{% endif %}
+  {% if account_documents %}<div class="ws-result-list">
+    {% for item in account_documents %}<a class="ws-result" href="{% url 'staff_workspace:account_document' item.pk %}"><div>
+      <span class="ws-result-type">{{ item.category.name }} · {% if item.visible_to_residents and item.published_at <= now %}виден жителю{% elif item.visible_to_residents %}ожидает даты{% else %}скрыт от жителя{% endif %}</span>
+      <strong>{{ item.title }}</strong><p>{{ item.account.number|default:'Без номера' }} · {{ item.account.plot }}</p>
+    </div><span class="ws-chevron" aria-hidden="true">›</span></a>{% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Документов не найдено.</strong><p>Измените запрос или создайте первый документ.</p></div>{% endif %}
+</section>
+{% endif %}
+
+{% if can_view_public_documents %}
+<section class="ws-section" id="public-documents">
+  <div class="ws-section-head"><h2>Публичные документы</h2><span>{{ public_document_count }} · черновиков {{ public_document_draft_count }}</span></div>
+  <p class="ws-finance-note">Публикация требует отдельного подтверждения отсутствия персональных, банковских и служебных данных.</p>
+  {% if can_add_public_documents %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:public_document_create' %}">Добавить публичный документ</a></div>{% endif %}
+  {% if public_documents %}<div class="ws-result-list">
+    {% for item in public_documents %}<a class="ws-result" href="{% url 'staff_workspace:public_document' item.pk %}"><div>
+      <span class="ws-result-type">{{ item.category.name }} · {% if item.is_published and item.public_checked %}опубликован{% else %}черновик{% endif %}</span>
+      <strong>{{ item.title }}</strong><p>{{ item.document_date|date:'d.m.Y' }} · {{ item.original_name }}</p>
+    </div><span class="ws-chevron" aria-hidden="true">›</span></a>{% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Публичных документов не найдено.</strong></div>{% endif %}
+</section>
+{% endif %}
+
+{% if can_view_public_news %}
+<section class="ws-section" id="news-content">
+  <div class="ws-section-head"><h2>Новости сайта</h2><span>{{ news_count }} · черновиков {{ news_draft_count }}</span></div>
+  {% if can_add_public_news %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:news_create' %}">Создать новость</a></div>{% endif %}
+  {% if news_items %}<div class="ws-result-list">
+    {% for item in news_items %}<a class="ws-result" href="{% url 'staff_workspace:news' item.pk %}"><div>
+      <span class="ws-result-type">{{ item.category }} · {% if item.is_published and item.public_checked %}опубликована{% else %}черновик{% endif %}{% if item.is_featured %} · выделена{% endif %}</span>
+      <strong>{{ item.title }}</strong><p>{{ item.published_on|date:'d.m.Y' }} · {{ item.summary }}</p>
+    </div><span class="ws-chevron" aria-hidden="true">›</span></a>{% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Новостей не найдено.</strong></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
