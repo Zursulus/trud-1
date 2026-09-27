@@ -19,4 +19,4 @@ class AdminWorkspaceReturnLinkTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'href="/work/"')
-        self.assertContains(response, ">Рабочая база</a>")
+        self.assertContains(response, "Вернуться в Рабочую базу")
