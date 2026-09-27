@@ -7,6 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 
+from .access_requests import ResidentAccessRequest
 from .appeal_workflow import OPEN_APPEAL_STATES
 from .billing import account_totals
 from .controller_scope import ControllerLineAccess
@@ -84,6 +85,18 @@ def _capabilities(user):
         "water.view_payment",
         "water.view_paymentallocation",
     )
+    can_review_access_requests = user.is_superuser or (
+        user.has_perm("water.access_private_registry")
+        and user.has_perm("water.view_residentaccessrequest")
+    )
+    access_management_permissions = (
+        "water.view_residentaccess",
+        "water.view_residentinvite",
+        "water.view_residentpasswordreset",
+    )
+    can_manage_access = user.is_superuser or all(
+        user.has_perm(permission) for permission in access_management_permissions
+    )
     return {
         "can_view_accounts": user.is_superuser
         or user.has_perm("water.view_account")
@@ -99,7 +112,10 @@ def _capabilities(user):
         or all(user.has_perm(permission) for permission in finance_workspace_permissions),
         "can_view_appeals": user.is_superuser or user.has_perm("water.view_residentappeal"),
         "can_view_documents": user.is_superuser or user.has_perm("water.view_accountdocument"),
-        "can_view_access": user.is_superuser or user.has_perm("water.view_residentaccess"),
+        "can_view_access": can_manage_access,
+        "can_review_access_requests": can_review_access_requests,
+        "can_manage_access": can_manage_access,
+        "can_use_access_workspace": can_review_access_requests or can_manage_access,
     }
 
 
@@ -172,6 +188,16 @@ def dashboard(request):
                 "label": "Рассчитанные периоды ждут завершения",
                 "count": calculated_periods,
                 "url": reverse("staff_workspace:finance"),
+            })
+    if context["can_review_access_requests"]:
+        new_access_requests = ResidentAccessRequest.objects.filter(
+            status=ResidentAccessRequest.STATUS_NEW,
+        ).count()
+        if new_access_requests:
+            attention.append({
+                "label": "Новые заявки на доступ",
+                "count": new_access_requests,
+                "url": reverse("staff_workspace:access") + "?request_state=new",
             })
     context["attention"] = attention
     return TemplateResponse(request, "water/work/dashboard.html", context)
