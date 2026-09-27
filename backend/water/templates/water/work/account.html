@@ -22,17 +22,19 @@
 {% endif %}
 
 <div class="ws-summary-grid">
+  {% if can_view_land_plots %}
   <section class="ws-summary">
     <span>Участки</span>
     <strong>{{ land_plots|length }}</strong>
     {% for plot in land_plots %}<p>{{ plot.label }}{% if plot.address %} · {{ plot.address }}{% endif %}{% if plot.archived %} · архив{% endif %}</p>{% empty %}<p>Связанный LandPlot пока не указан.</p>{% endfor %}
   </section>
+  {% endif %}
+  {% if can_view_water %}
   <section class="ws-summary">
     <span>Линия / группа</span>
     <strong>{{ memberships|length }}</strong>
     {% for membership in memberships %}<p>{{ membership.group.name }} · {{ membership.group.node.name }}</p>{% empty %}<p>Активная группа не найдена.</p>{% endfor %}
   </section>
-  {% if can_view_water %}
   <section class="ws-summary">
     <span>Счётчики</span>
     <strong>{{ meters|length }}</strong>
