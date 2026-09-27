@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import staff_appeals, staff_finance, staff_workspace
+from . import staff_appeals, staff_finance, staff_more, staff_workspace
 
 
 app_name = "staff_workspace"
@@ -23,5 +23,6 @@ urlpatterns = [
     path("finance/payments/new/", staff_finance.workspace_finance_payment_create, name="finance_payment_create"),
     path("finance/payments/<int:payment_id>/", staff_finance.workspace_finance_payment, name="finance_payment"),
     path("finance/accounts/<int:account_id>/", staff_finance.workspace_finance_account, name="finance_account"),
+    path("more/", staff_more.workspace_more, name="more"),
     path("accounts/<int:account_id>/", staff_workspace.workspace_account, name="account"),
 ]
