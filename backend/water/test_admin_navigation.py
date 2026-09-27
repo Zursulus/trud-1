@@ -23,8 +23,11 @@ class AdminNavigationTests(TestCase):
 
     def login_as(self, user):
         device, _ = TOTPDevice.objects.get_or_create(
-            user=user, defaults={'name': 'navigation test device', 'confirmed': True},
+            user=user, name='default', defaults={'confirmed': True},
         )
+        if not device.confirmed:
+            device.confirmed = True
+            device.save(update_fields=['confirmed'])
         self.client.force_login(user)
         session = self.client.session
         session[DEVICE_ID_SESSION_KEY] = device.persistent_id
