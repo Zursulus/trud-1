@@ -24,15 +24,12 @@ from water.reading_review_config import export_readings_xlsx, reading_review_vie
 
 
 class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
-    """Password-only staff access; the technical superuser still requires OTP."""
+    """2FA is optional for every staff account, including superusers."""
 
     def has_permission(self, request):
-        allowed = AdminSite.has_permission(self, request)
-        return allowed and (not request.user.is_superuser or request.user.is_verified())
+        return AdminSite.has_permission(self, request)
 
     def login(self, request, extra_context=None):
-        if request.user.is_authenticated and request.user.is_superuser and not request.user.is_verified():
-            return AdminSiteOTPRequiredMixin.login(self, request, extra_context)
         return original_login(self, request, extra_context)
 
 

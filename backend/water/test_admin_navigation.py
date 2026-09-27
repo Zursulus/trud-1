@@ -49,6 +49,18 @@ class AdminNavigationTests(TestCase):
         self.assertContains(profile, reverse('two_factor:disable'))
         self.assertNotContains(profile, 'Provide a template named')
 
+    def test_superuser_can_use_admin_without_two_factor(self):
+        superuser = User.objects.create_superuser(
+            username='navigation-superuser', password='123456',
+        )
+        self.client.force_login(superuser)
+
+        response = self.client.get('/admin/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(TOTPDevice.objects.filter(user=superuser, confirmed=True).exists())
+        self.assertContains(response, '2FA / безопасность')
+
     def test_manager_sees_operational_workflows_but_not_private_registry(self):
         self.login_as(self.manager)
         response = self.client.get('/admin/')
