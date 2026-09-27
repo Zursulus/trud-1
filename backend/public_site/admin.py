@@ -1,8 +1,8 @@
 from django import forms
 from django.contrib import admin
-from django.utils import timezone
 
 from .models import PublicDocument, PublicDocumentCategory, PublicNews
+from .publication_workflow import apply_publication_state
 
 
 class AuditedAdminForm(forms.ModelForm):
@@ -66,14 +66,12 @@ class PublicationAdmin(NoDeleteAuditedAdmin):
         return ('public_checked', 'published_at', 'published_by', 'created_at', 'updated_at')
 
     def save_model(self, request, obj, form, change):
-        if obj.is_published:
-            obj.public_checked = True
-            obj.published_at = timezone.now()
-            obj.published_by = request.user
-        else:
-            obj.public_checked = False
-            obj.published_at = None
-            obj.published_by = None
+        apply_publication_state(
+            obj,
+            actor=request.user,
+            is_published=obj.is_published,
+            confirmed=form.cleaned_data.get('confirm_publication', False),
+        )
         super().save_model(request, obj, form, change)
 
 

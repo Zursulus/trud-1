@@ -1,0 +1,22 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{% if mode == 'create' %}Новая новость{% else %}{{ item.title }}{% endif %}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:documents' %}">Документы</a><span>›</span><span>{% if mode == 'create' %}Новая новость{% else %}{{ item.title }}{% endif %}</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Публичный контент</p><h1>{% if mode == 'create' %}Новость сайта{% else %}{{ item.title }}{% endif %}</h1><p>Черновик можно сохранять без публикации; опубликованную версию нужно заново проверить на закрытые данные.</p></div></section>
+
+{% if item %}
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Статус</span><strong style="font-size:16px">{% if item.is_published and item.public_checked %}Опубликована{% else %}Черновик{% endif %}</strong></div>
+  <div class="ws-summary"><span>Дата</span><strong style="font-size:16px">{{ item.published_on|date:'d.m.Y' }}</strong></div>
+  <div class="ws-summary"><span>Проверил</span><strong style="font-size:16px">{% if item.published_by %}{{ item.published_by.username }}{% else %}—{% endif %}</strong><p>{% if item.published_at %}{{ item.published_at|date:'d.m.Y H:i' }}{% endif %}</p></div>
+</div>
+{% endif %}
+
+<section class="ws-section"><div class="ws-finance-form">
+  {% if mode == 'edit' and not can_change %}
+    <div class="ws-banner ws-banner-warning">У вас есть право просмотра, но нет права изменять эту новость.</div>
+  {% else %}
+    <form method="post">{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">{% if mode == 'create' %}Сохранить новость{% else %}Сохранить изменения{% endif %}</button></form>
+  {% endif %}
+</div></section>
+{% endblock %}

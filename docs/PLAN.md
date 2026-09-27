@@ -28,20 +28,26 @@
 2. Water — PR #70.
 3. Appeals — PR #71.
 4. Finance — PR #72.
-5. Access — PR #79.
+5. Access — PR #79; Production Done на SHA `cdcdb638f46188677cf097aa0205c8e81485f0cc`.
+6. Documents/content — Issue #84 / PR #85; implementation/release evidence хранится в GitHub, production не смешивать с заблокированным security release #80.
 
-Следующие продуктовые slices:
+Следующий продуктовый slice после завершения Documents/content:
 
-6. Documents/content.
 7. Governance/polls.
 
 Полные продуктовые границы и acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 
 ## Release baseline
 
-Последний подтверждённый production baseline перед Access slice: `ecad83b0a8ff50dd3cfd9d89807947636a23b6c7`.
+Текущий подтверждённый production SHA: `3e489e19ebca3126c846535a7095c46198315bf8` — Access плюс отдельный production hotfix возврата из старого Django Admin в `/work/` (#82/#83).
 
-Release #73 завершён controlled deploy, внешним HTTP smoke и authenticated iPhone smoke Staff Workspace. Следующие slices считаются Production Done только после установки их точного merge SHA и отдельной production verification.
+Production и integration сейчас намеренно расходятся: integration содержит merged security hardening PR #81, который нельзя выпускать обычным deploy до снятия инфраструктурного blocker #80. Следующие slices считаются Production Done только после установки разрешённого точного target SHA и отдельной production verification.
+
+### Security hardening #80 — BLOCKED_BY_INFRA_CAPACITY
+
+PR #81 merged в integration, но production release отложен. На текущем production-сервере при проверке было около 960 MiB RAM, 0 swap и около 2.7 ГБ свободного диска; постоянный ClamAV daemon в этот ресурсный контур без отдельного инфраструктурного решения не устанавливать. Fail-closed защиту не ослаблять ради deploy.
+
+Blocked #80 не должен останавливать независимую продуктовую разработку, но любой будущий production release обязан явно исключать #81 либо сначала безопасно снять этот blocker.
 
 ## Будущие / внешне заблокированные направления
 
