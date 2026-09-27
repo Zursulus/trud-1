@@ -152,6 +152,7 @@ class PublicNewsForm(PublicationFormMixin, forms.ModelForm):
 
 @transaction.atomic
 def _save_public_form(form, *, actor):
+    was_existing = bool(form.instance.pk)
     obj = form.save(commit=False)
     apply_publication_state(
         obj,
@@ -162,7 +163,7 @@ def _save_public_form(form, *, actor):
     obj.full_clean()
     obj.save()
     reason = (form.cleaned_data.get("change_reason") or "Создание записи").strip()
-    _log_content(actor, obj, CHANGE if form.instance.pk else ADDITION, reason)
+    _log_content(actor, obj, CHANGE if was_existing else ADDITION, reason)
     return obj
 
 
@@ -251,7 +252,8 @@ def account_document_detail(request, document_id):
         raise PermissionDenied
     item = get_object_or_404(AccountDocument.objects.select_related("account", "category"), pk=document_id)
     can_change = _can(request.user, "water.change_accountdocument")
-    form = AccountDocumentEditForm(request.POST or None if can_change else None, item=item)
+    bound_data = request.POST if request.method == "POST" and can_change else None
+    form = AccountDocumentEditForm(bound_data, item=item)
     if request.method == "POST":
         if not can_change:
             raise PermissionDenied
@@ -304,7 +306,8 @@ def public_document_detail(request, document_id):
         raise PermissionDenied
     item = get_object_or_404(PublicDocument.objects.select_related("category", "published_by"), pk=document_id)
     can_change = _can(request.user, "public_site.change_publicdocument")
-    form = PublicDocumentEditForm(request.POST or None if can_change else None, instance=item)
+    bound_data = request.POST if request.method == "POST" and can_change else None
+    form = PublicDocumentEditForm(bound_data, instance=item)
     if request.method == "POST":
         if not can_change:
             raise PermissionDenied
@@ -357,7 +360,8 @@ def news_detail(request, news_id):
         raise PermissionDenied
     item = get_object_or_404(PublicNews.objects.select_related("published_by"), pk=news_id)
     can_change = _can(request.user, "public_site.change_publicnews")
-    form = PublicNewsForm(request.POST or None if can_change else None, instance=item)
+    bound_data = request.POST if request.method == "POST" and can_change else None
+    form = PublicNewsForm(bound_data, instance=item)
     if request.method == "POST":
         if not can_change:
             raise PermissionDenied
