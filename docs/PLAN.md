@@ -18,20 +18,20 @@
 
 Ядро рабочей системы реализовано: реестр участков/людей/связей, водоучёт и баланс, безопасный импорт, роли/object scope/MFA, закрытый реестр ПД, кабинет жителя, обращения/документы/доступы, начисления/оплаты/долги, опросы правления, публичный контент, backup/recovery, guarded deploy/rollback и CI с browser E2E/accessibility.
 
-## Текущая фаза: Staff Workspace v1
+## Текущая фаза: Staff Workspace
 
 Цель — отдельная ежедневная «Рабочая база» сотрудников на `/work/`; `/admin/` остаётся техническим fallback.
 
-Реализовано в интеграционной ветке `feature/water-admin`:
+Последовательно реализованы vertical slices:
 
 1. Foundation / Search / Account — PR #69.
 2. Water — PR #70.
 3. Appeals — PR #71.
 4. Finance — PR #72.
+5. Access — PR #79.
 
-Следующие продуктовые slices после установления актуального production baseline:
+Следующие продуктовые slices:
 
-5. Access.
 6. Documents/content.
 7. Governance/polls.
 
@@ -39,15 +39,9 @@
 
 ## Release baseline
 
-На 2026-09-27 проверено:
+Последний подтверждённый production baseline перед Access slice: `ecad83b0a8ff50dd3cfd9d89807947636a23b6c7`.
 
-- integration HEAD: `b413a436c7895cbc6292ce6e53767b7ed2db67ea`;
-- CI Water admin run #1080 для этого HEAD: success;
-- production marker: `96665e534bb2994b650d60a06b7c21630f457f84`, deployed `2026-09-26T20:15:14Z`;
-- integration branch на 83 commits впереди production;
-- текущая оперативная release-задача ведётся в GitHub Issue #73.
-
-До controlled deploy и production smoke новые Staff Workspace slices не считаются production-выпущенными.
+Release #73 завершён controlled deploy, внешним HTTP smoke и authenticated iPhone smoke Staff Workspace. Следующие slices считаются Production Done только после установки их точного merge SHA и отдельной production verification.
 
 ## Будущие / внешне заблокированные направления
 
