@@ -2,19 +2,31 @@
 
 ## Purpose
 
-Production-backed site and Django workspace for ТСН «ТРУД-1». Prefer the smallest reversible change that satisfies the active task. The public site, staff admin and resident cabinet are separate surfaces and must not be assumed to share the same deployment behavior.
+Production-backed site and Django workspace for ТСН «ТРУД-1». Prefer the smallest reversible change that satisfies the active work item. Public site, staff workspace/admin and resident cabinet are separate surfaces and must not be assumed to share deployment behavior.
 
 ## Sources of truth
 
-Use this order before substantial work:
+Before substantial work use this order:
 
-1. Active Linear issue — current task, scope, NOW/NEXT and Definition of Done.
-2. `docs/PLAN.md` — current repository plan and project checkpoints.
+1. Active GitHub Issue / PR — current unfinished obligation, scope and acceptance criteria.
+2. `docs/PLAN.md` — product roadmap, architecture phase and permanent project invariants.
 3. `backend/README.md` — data-model, runtime and safety invariants.
 4. `ops/DEPLOYMENT.md` and `ops/RECOVERY.md` when deployment/recovery is in scope.
-5. Production state only when the issue requires live verification.
+5. Production deployment marker/status — only source of the actually installed commit.
+6. Notion — durable decisions/rationale and a short recovery checkpoint; not a duplicate task list.
+7. Linear — read-only historical archive for pre-migration work. Do not create new project work there.
 
 If sources disagree, stop mutations, establish the current fact, update the stale source, then continue.
+
+## Work model
+
+- One substantial unfinished obligation = one GitHub Issue. Do not create issues for every implementation step.
+- One primary NOW item at a time; independent production-critical bugs may interrupt it.
+- A code change uses an isolated branch/PR when appropriate. PR/commits/CI preserve implementation history and must not be rewritten merely to make history look cleaner.
+- Status follows evidence: open issue = unfinished; branch/PR = in progress; ready PR + applicable green checks = reviewable; merged = implemented; deployed marker + smoke/acceptance = production done when production is required.
+- Merge/push never implies deploy.
+- Close production-relevant issues only after required production evidence exists.
+- Keep historical Linear references in migrated issue/PR descriptions when they materially explain origin or intent.
 
 ## Safety invariants
 
@@ -24,17 +36,21 @@ If sources disagree, stop mutations, establish the current fact, update the stal
 - Do not weaken authentication, MFA, permissions, CSRF or history just to make a test pass.
 - Schema changes and production deployment require an explicit compatibility/rollback path and a verified backup where relevant.
 - Test/sandbox verification comes before production for substantial changes.
-- A user-reported UI regression must be reproducible or explicitly smoke-tested before adding more UI work. The controller menu and controller-reading flow are critical.
+- Production is not a debugging environment.
+- A user-reported UI regression must be reproducible or explicitly smoke-tested before adding more UI work. Controller and resident critical flows remain regression-sensitive.
 
 ## Workflow
 
-- Read the active Linear issue before choosing work.
-- Use minimum viable context: inspect only the code/docs relevant to that issue.
-- For truly parallel independent work, use one issue/executor/branch/worktree/PR per task. Do not create a worktree when there is no parallelism benefit.
-- Fetch/reconcile the target branch before starting an isolated worktree.
-- Make the smallest safe patch; avoid unrelated cleanup.
-- Review the diff and run the relevant validation before commit/PR.
-- After substantive work, update Linear and any project-state documentation whose conclusions changed.
+1. Restore: active Issue/PR → integration HEAD → applicable CI → production marker.
+2. Diagnose the smallest relevant code/docs/data surface.
+3. Make the smallest safe change; avoid unrelated cleanup.
+4. Run targeted validation during iteration and full applicable gate before merge.
+5. Review diff and preserve traceability from Issue → PR → merge SHA.
+6. For production work: precheck → backup/rollback readiness → controlled deploy → marker/service/HTTP/user-flow smoke.
+7. Close only when the Issue acceptance criteria and applicable Definition of Done are evidenced.
+8. Update `docs/PLAN.md` only when roadmap/invariants change; update Notion checkpoint only when recovery state changes.
+
+For truly parallel independent work use one issue/executor/branch/worktree/PR per task. Do not create a worktree when there is no parallelism benefit.
 
 ## Validation
 
@@ -48,13 +64,14 @@ python -m unittest discover -s ops/tests -v
 bash -n ops/deploy-compatible.sh ops/deploy-water-workspace.sh ops/backup-trud-site.sh
 ```
 
-For UI work, verify the critical staff/controller flow and a mobile viewport. Once Playwright coverage exists, run the targeted E2E suite and inspect its trace/artifacts on failure.
+For UI work, verify the critical role-specific flow and a mobile viewport. Use targeted Playwright E2E and inspect trace/artifacts on failure.
 
 ## Documentation map
 
 - `README.md` — repository entry point.
 - `backend/README.md` — Django/data/runtime rules.
-- `docs/PLAN.md` — current project plan.
+- `docs/PLAN.md` — roadmap and permanent project rules, not a duplicate task tracker.
+- `docs/STAFF-WORKSPACE-ARCHITECTURE.md` — approved Staff Workspace product architecture.
 - `docs/ROLES.md` — roles and permissions.
 - `docs/MFA.md` — MFA behavior.
 - `ops/DEPLOYMENT.md` — deploy/rollback procedure.
