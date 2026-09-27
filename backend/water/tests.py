@@ -30,6 +30,17 @@ class ResidentPortalTests(legacy.ResidentPortalTests):
         ).status_code, 404)
 
 
+class AccessTests(legacy.AccessTests):
+    def test_superuser_can_use_password_without_otp(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get('/admin/water/account/').status_code, 200)
+        self.assertFalse(TOTPDevice.objects.filter(user=self.admin, confirmed=True).exists())
+
+    # Historical policy required the technical superuser to enroll OTP before
+    # opening Admin. Issue #92 intentionally makes 2FA optional for all staff.
+    test_password_only_cannot_open_admin_and_first_login_starts_setup = None
+
+
 class RoleAuditTests(legacy.RoleAuditTests):
     def test_legacy_admin_role_is_renamed_without_losing_members(self):
         legacy_group = Group.objects.create(name='Администратор СНТ')
