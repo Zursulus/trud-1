@@ -72,9 +72,16 @@ def appeal_list(request):
         state = "open"
     q = " ".join((request.GET.get("q") or "").split())[:160]
     account_id = request.GET.get("account") or ""
+    if not account_id.isdigit():
+        account_id = ""
 
+    count_base = ResidentAppeal.objects.all()
     base = ResidentAppeal.objects.select_related("account", "category")
-    counts = ResidentAppeal.objects.aggregate(
+    if account_id:
+        account_pk = int(account_id)
+        count_base = count_base.filter(account_id=account_pk)
+        base = base.filter(account_id=account_pk)
+    counts = count_base.aggregate(
         total=Count("id"),
         open=Count("id", filter=Q(status__in=OPEN_APPEAL_STATES)),
         new=Count("id", filter=Q(status="new")),
@@ -91,10 +98,6 @@ def appeal_list(request):
     elif state == "resolved":
         base = base.filter(status__in=FINAL_APPEAL_STATES)
 
-    if account_id.isdigit():
-        base = base.filter(account_id=int(account_id))
-    else:
-        account_id = ""
     if q:
         criteria = (
             Q(subject__icontains=q)
