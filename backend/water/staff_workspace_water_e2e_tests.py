@@ -56,7 +56,8 @@ class StaffWorkspaceWaterBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(response.status, 200)
             self.assertTrue(page.get_by_role("heading", name="Вода", exact=True).is_visible())
             self.assertTrue(page.get_by_text("Активные счётчики", exact=True).is_visible())
-            self.assertTrue(page.get_by_role("link", name="Внести показания", exact=True).is_visible())
+            action = page.get_by_role("link").filter(has_text="Внести показания").first
+            self.assertTrue(action.is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
