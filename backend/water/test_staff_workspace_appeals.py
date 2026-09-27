@@ -172,6 +172,7 @@ class StaffWorkspaceAppealTests(TestCase):
         response = self.client.post(
             f"/work/appeals/{self.resolved.pk}/",
             {"action": "reply", "body": "Поздний ответ", "next_status": "in_progress"},
+            follow=True,
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Обращение уже завершено")
@@ -182,7 +183,7 @@ class StaffWorkspaceAppealTests(TestCase):
         dashboard = self.client.get("/work/")
         self.assertContains(dashboard, "/work/appeals/?state=open")
         card = self.client.get(f"/work/accounts/{self.account.pk}/")
-        self.assertContains(card, f"/work/appeals/?state=open&amp;account={self.account.pk}")
+        self.assertContains(card, f"/work/appeals/?state=open&account={self.account.pk}")
 
     def test_queue_and_detail_have_bounded_query_counts(self):
         self.login(self.manager)
