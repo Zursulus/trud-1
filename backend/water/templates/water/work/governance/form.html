@@ -1,0 +1,14 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Новый предварительный опрос{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:governance' %}">Опросы / правление</a><span>›</span><span>Новый опрос</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Подготовка</p><h1>Новый предварительный опрос</h1><p>Внутренний неофициальный инструмент правления. Он не определяет кворум, юридический результат и не заменяет официальный протокол или иную предусмотренную уставом процедуру.</p></div></section>
+
+<section class="ws-section"><div class="ws-finance-form">
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="ws-primary" type="submit">Создать предварительный опрос</button>
+  </form>
+</div></section>
+{% endblock %}
