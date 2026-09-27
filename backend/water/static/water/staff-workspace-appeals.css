@@ -1,0 +1,45 @@
+.ws-flash-stack { display: grid; gap: 8px; margin: 0 0 18px; }
+.ws-flash { padding: 12px 14px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); line-height: 1.4; }
+.ws-flash-success { border-color: #b7dfc8; background: #edf8f1; color: var(--ws-success); }
+.ws-flash-error { border-color: #edc6c6; background: #fff1f1; color: var(--ws-danger); }
+
+.ws-tabs { display: flex; gap: 7px; margin: 0 0 18px; padding-bottom: 2px; overflow-x: auto; scrollbar-width: none; }
+.ws-tabs::-webkit-scrollbar { display: none; }
+.ws-tabs a { flex: 0 0 auto; min-height: 40px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--ws-line); border-radius: 999px; background: var(--ws-surface); color: var(--ws-muted); text-decoration: none; font-size: 13px; font-weight: 750; }
+.ws-tabs a[aria-current="page"] { border-color: #bdd4ca; background: var(--ws-brand-soft); color: var(--ws-brand); }
+
+.ws-badge-attention { color: var(--ws-warning); background: var(--ws-warning-soft); }
+.ws-result-tail { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
+
+.ws-conversation { display: grid; gap: 10px; }
+.ws-message { width: min(92%, 760px); padding: 15px 16px; border: 1px solid var(--ws-line); border-radius: 15px; background: var(--ws-surface); box-shadow: var(--ws-shadow); }
+.ws-message-board { margin-left: auto; border-color: #cbded6; background: #f2f8f5; }
+.ws-message-resident { margin-right: auto; }
+.ws-message-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px; color: var(--ws-muted); font-size: 12px; }
+.ws-message-meta strong { color: var(--ws-text); font-size: 13px; }
+.ws-message-body { line-height: 1.55; overflow-wrap: anywhere; }
+.ws-attachments { display: grid; gap: 6px; margin-top: 10px; }
+.ws-attachments a { width: fit-content; max-width: 100%; color: var(--ws-brand); font-size: 13px; overflow-wrap: anywhere; }
+
+.ws-form-panel { padding: 18px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); box-shadow: var(--ws-shadow); }
+.ws-form { display: grid; gap: 15px; }
+.ws-field { display: grid; gap: 7px; }
+.ws-field label { font-size: 13px; font-weight: 750; color: var(--ws-text); }
+.ws-field small { color: var(--ws-muted); line-height: 1.4; }
+.ws-field textarea, .ws-field select, .ws-field input[type="file"] { width: 100%; max-width: 100%; font: inherit; color: var(--ws-text); }
+.ws-field textarea, .ws-field select { min-height: 48px; padding: 11px 12px; border: 1px solid #cbd3dd; border-radius: 12px; background: #fff; outline: none; }
+.ws-field textarea { resize: vertical; min-height: 132px; }
+.ws-field textarea:focus, .ws-field select:focus { border-color: var(--ws-brand); box-shadow: 0 0 0 3px rgba(36,91,71,.12); }
+.errorlist { margin: 0; padding: 0; list-style: none; color: var(--ws-danger); font-size: 13px; line-height: 1.4; }
+
+.ws-bottom-nav { display: flex; }
+.ws-bottom-nav a { flex: 1 1 0; }
+
+@media (max-width: 520px) {
+  .ws-message { width: 96%; }
+  .ws-result-tail .ws-badge { max-width: 92px; text-align: center; justify-content: center; }
+}
+
+@media (min-width: 920px) {
+  .ws-bottom-nav { display: none; }
+}

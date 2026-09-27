@@ -34,7 +34,7 @@ Push в GitHub не равен deploy.
 
 Цель — создать отдельную «Рабочую базу» сотрудников на `/work/`, оставив `/admin/` техническим fallback.
 
-Foundation первого vertical slice уже смержен в `feature/water-admin` через PR #69:
+Foundation первого vertical slice смержен в `feature/water-admin` через PR #69:
 
 - отдельный `/work/` shell и role-adapted navigation;
 - глобальный поиск;
@@ -44,16 +44,23 @@ Foundation первого vertical slice уже смержен в `feature/water
 - query budgets;
 - Chromium + WebKit mobile/desktop critical flow и accessibility gate.
 
-Этот foundation пока не считается production-выпуском: push/merge не равен deploy.
+Water Hub смержен через PR #70:
+
+- `/work/water/` как единая role-adapted точка входа;
+- корректное разделение controller line review и финальной модерации;
+- server-side controller scope;
+- отсутствие новых write-paths;
+- Chromium + WebKit mobile smoke и accessibility gate.
+
+Эти изменения пока не считаются production-выпуском: push/merge не равен deploy.
 
 Утверждённый порядок следующих slices:
 
-1. Water;
-2. Appeals;
-3. Finance;
-4. Access;
-5. Documents/content;
-6. Governance/polls.
+1. Appeals;
+2. Finance;
+3. Access;
+4. Documents/content;
+5. Governance/polls.
 
 Непосредственный риск по диску снят 27.09.2026: использование root filesystem снижено с 87% до 71% удалением только воспроизводимых RDC/npm/Puppeteer caches. Retention и alerting остаются отдельным эксплуатационным улучшением.
 
@@ -68,23 +75,24 @@ Foundation первого vertical slice уже смержен в `feature/water
 - Обычный staff workspace не расширяет границу персональных данных.
 - Каждый vertical slice — отдельная атомарная branch/PR/release единица.
 
-## Текущий vertical slice: Water Hub
+## Текущий vertical slice: Appeals staff workflow
 
-**`/work/water/` → роль-адаптированная очередь → существующие audited water workflows.**
+**`/work/appeals/` → очередь → диалог → ответ/смена состояния через общий application layer.**
 
 Минимальный результат:
 
-- единая точка входа «Вода» в desktop и mobile Staff Workspace;
-- Администратор ТСН видит только показания, готовые к финальной премодерации;
-- наблюдения жителя, ещё ожидающие старшего линии, не выдаются как готовые к финальному решению;
-- контролёр/старший линии видит только закреплённые линии, свои незавершённые передачи и resident observations внутри своего `ControllerLineAccess` scope;
-- оператор воды получает понятные входы в ввод показаний, журнал, счётчики, anomaly review и водный баланс по фактическим permissions;
-- закрытый реестр не получает Water Hub только из-за доступа к Account/LandPlot;
-- ordinary workspace не показывает `Account.contact_name`, `phone`, `Person` или личность автора-жителя;
-- новые write-paths не создаются: запись и модерация продолжают использовать существующие транзакционные/audited workflows;
-- Water Hub имеет bounded query counts, Chromium + WebKit mobile smoke, accessibility gate и отсутствие horizontal overflow.
+- отдельная очередь обращений с server-side фильтрами `open/new/waiting/resolved/all`, поиском и переходом из карточки лицевого счёта;
+- карточка обращения показывает единый хронологический диалог жителя и правления с закрытыми вложениями;
+- ordinary staff UI не показывает username/email автора обращения и не расширяет границу ПД;
+- пользователь только с `view_residentappeal` получает read-only режим; оператор воды и закрытый реестр не получают раздел автоматически;
+- ответ правления, ожидание уточнения, итоговое решение и закрытие выполняются через общий транзакционный `appeal_workflow`, а не отдельную копию логики в `/work/`;
+- старый admin conversation workflow использует тот же application layer и остаётся техническим fallback;
+- итоговый ответ хранится совместимо с существующим `ResidentAppeal.response` и не дублируется в кабинете жителя;
+- вложения остаются private/no-store и скачиваются только после server-side проверки permission;
+- queue/detail имеют bounded query counts;
+- критический mobile flow проходит Chromium + WebKit, accessibility gate и проверку отсутствия horizontal overflow.
 
-После завершения Water следующий vertical slice — **Appeals staff workflow**.
+После завершения Appeals следующий vertical slice — **Finance staff workflow**.
 
 Полные продуктовые acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 

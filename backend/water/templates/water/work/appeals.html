@@ -1,0 +1,67 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Обращения{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Рабочая очередь</p>
+    <h1>Обращения</h1>
+    <p>Диалоги жителей без раскрытия профиля автора. Фильтры и статусы применяются на сервере.</p>
+  </div>
+</section>
+
+<div class="ws-summary-grid">
+  <section class="ws-summary{% if counts.open %} ws-summary-attention{% endif %}"><span>Открытые</span><strong>{{ counts.open }}</strong><p>Новые, в работе и ждут жителя.</p></section>
+  <section class="ws-summary"><span>Новые</span><strong>{{ counts.new }}</strong><p>Ещё не взяты в работу.</p></section>
+  <section class="ws-summary"><span>Ждём жителя</span><strong>{{ counts.waiting }}</strong><p>Нужно уточнение от заявителя.</p></section>
+  <section class="ws-summary"><span>Завершённые</span><strong>{{ counts.resolved }}</strong><p>Решённые и закрытые.</p></section>
+</div>
+
+<nav class="ws-tabs" aria-label="Фильтр обращений">
+  <a href="?state=open{% if account_id %}&account={{ account_id }}{% endif %}"{% if appeal_state == 'open' %} aria-current="page"{% endif %}>Открытые</a>
+  <a href="?state=new{% if account_id %}&account={{ account_id }}{% endif %}"{% if appeal_state == 'new' %} aria-current="page"{% endif %}>Новые</a>
+  <a href="?state=waiting{% if account_id %}&account={{ account_id }}{% endif %}"{% if appeal_state == 'waiting' %} aria-current="page"{% endif %}>Ждём жителя</a>
+  <a href="?state=resolved{% if account_id %}&account={{ account_id }}{% endif %}"{% if appeal_state == 'resolved' %} aria-current="page"{% endif %}>Завершённые</a>
+  <a href="?state=all{% if account_id %}&account={{ account_id }}{% endif %}"{% if appeal_state == 'all' %} aria-current="page"{% endif %}>Все</a>
+</nav>
+
+<form class="ws-search-form" method="get">
+  <input type="hidden" name="state" value="{{ appeal_state }}">
+  {% if account_id %}<input type="hidden" name="account" value="{{ account_id }}">{% endif %}
+  <label for="appeal-search">Найти по № обращения, теме, участку или лицевому счёту</label>
+  <div class="ws-search-line">
+    <input id="appeal-search" name="q" value="{{ q }}" maxlength="160" autocomplete="off">
+    <button class="ws-primary" type="submit">Найти</button>
+  </div>
+</form>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Очередь</h2><span>{{ page.paginator.count }} шт.</span></div>
+  {% if page.object_list %}
+  <div class="ws-result-list">
+    {% for appeal in page.object_list %}
+    <a class="ws-result" href="{% url 'staff_workspace:appeal' appeal.pk %}">
+      <div>
+        <span class="ws-result-type">№{{ appeal.pk }} · {{ appeal.category.name }}</span>
+        <strong>{{ appeal.subject }}</strong>
+        <p>{{ appeal.account.plot|default:'Участок не указан' }} · л/с {{ appeal.account.number|default:'—' }} · {{ appeal.opened_at|date:'d.m.Y H:i' }}</p>
+      </div>
+      <div class="ws-result-tail">
+        <span class="ws-badge{% if appeal.status == 'new' %} ws-badge-attention{% elif appeal.status == 'resolved' or appeal.status == 'closed' %} ws-badge-ok{% else %} ws-badge-muted{% endif %}">{{ appeal.get_status_display }}</span>
+        <span class="ws-chevron" aria-hidden="true">›</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ws-empty"><strong>Обращений по этому фильтру нет</strong><p>Смените состояние или поисковый запрос.</p></div>
+  {% endif %}
+</section>
+
+{% if page.has_previous or page.has_next %}
+<nav class="ws-pagination" aria-label="Страницы">
+  {% if page.has_previous %}<a href="?state={{ appeal_state }}&q={{ q|urlencode }}&account={{ account_id }}&page={{ page.previous_page_number }}">Назад</a>{% endif %}
+  <span>{{ page.number }} из {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?state={{ appeal_state }}&q={{ q|urlencode }}&account={{ account_id }}&page={{ page.next_page_number }}">Далее</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

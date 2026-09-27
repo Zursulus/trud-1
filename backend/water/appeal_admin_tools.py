@@ -2,14 +2,14 @@ from pathlib import Path
 
 from django import forms
 from django.contrib import admin
-from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 
+from .appeal_workflow import send_board_reply
 from .models import ResidentAppeal
 from .resident_models import (
     APPEAL_ATTACHMENT_EXTENSIONS,
@@ -47,30 +47,17 @@ def manage_appeal_attachments(request, appeal_id):
     if request.method == 'POST' and not can_reply:
         form.add_error(None, 'Обращение уже завершено. Для нового вопроса нужен новый диалог.')
     elif request.method == 'POST' and form.is_valid():
-        with transaction.atomic():
-            locked = ResidentAppeal.objects.select_for_update().get(pk=appeal.pk)
-            if locked.status in ('resolved', 'closed'):
-                form.add_error(None, 'Обращение уже завершено. Обновите страницу.')
-            else:
-                message = ResidentAppealBoardMessage.objects.create(
-                    appeal=locked,
-                    author=request.user,
-                    body=form.cleaned_data['body'],
-                )
-                upload = form.cleaned_data.get('document')
-                if upload:
-                    ResidentAppealAttachment.objects.create(
-                        appeal=locked,
-                        board_message=message,
-                        uploaded_by=request.user,
-                        document=upload,
-                    )
-                if locked.status == 'new':
-                    locked.status = 'in_progress'
-                    locked._history_user = request.user
-                    locked._change_reason = 'Правление начало переписку по обращению'
-                    locked.save()
-                return HttpResponseRedirect(reverse('admin_appeal_attachments', args=[appeal.pk]))
+        try:
+            send_board_reply(
+                appeal_id=appeal.pk,
+                actor=request.user,
+                body=form.cleaned_data['body'],
+                document=form.cleaned_data.get('document'),
+            )
+        except ValidationError as error:
+            form.add_error(None, '; '.join(error.messages))
+        else:
+            return HttpResponseRedirect(reverse('admin_appeal_attachments', args=[appeal.pk]))
     attachments = ResidentAppealAttachment.objects.filter(appeal=appeal).select_related(
         'uploaded_by', 'message', 'board_message',
     )
