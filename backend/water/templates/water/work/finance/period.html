@@ -1,0 +1,20 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Период {{ period.starts|date:'d.m.Y' }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:finance' %}">Финансы</a><span aria-hidden="true">›</span><span>{{ period.starts|date:'d.m.Y' }}–{{ period.ends|date:'d.m.Y' }}</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Расчётный период</p><h1>{{ period.starts|date:'d.m.Y' }}–{{ period.ends|date:'d.m.Y' }}</h1><div class="ws-object-meta"><span class="ws-badge {% if period.status == 'closed' %}ws-badge-muted{% else %}ws-badge-ok{% endif %}">{{ period.get_status_display }}</span></div></div></section>
+
+<div class="ws-summary-grid"><section class="ws-summary{% if draft_count %} ws-summary-attention{% endif %}"><span>Черновики</span><strong>{{ draft_count }}</strong><p>{{ draft_amount }} ₽</p></section><section class="ws-summary"><span>Утверждено</span><strong>{{ approved_amount }} ₽</strong><p>Начисления периода</p></section></div>
+
+<section class="ws-section"><div class="ws-section-head"><h2>Действия периода</h2></div><div class="ws-finance-actions">
+{% if can_calculate %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="calculate"><button class="ws-primary" type="submit">Рассчитать / пересчитать черновики</button></form>{% endif %}
+{% if can_approve_period %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve_period"><button class="ws-primary" type="submit">Утвердить период</button></form>{% endif %}
+{% if can_close_period %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="close_period"><button class="ws-secondary" type="submit">Закрыть период</button></form>{% endif %}
+</div></section>
+
+<section class="ws-section"><div class="ws-section-head"><h2>Начисления</h2><span>{{ charges|length }}</span></div>
+{% if charges %}<div class="ws-table-wrap" tabindex="0" role="region" aria-label="Начисления периода"><table class="ws-table"><thead><tr><th>Лицевой счёт</th><th>Вид</th><th>Расчёт</th><th>Сумма</th><th>Статус</th><th>Действие</th></tr></thead><tbody>
+{% for charge in charges %}<tr><td><a href="{% url 'staff_workspace:finance_account' charge.account_id %}"><strong>{{ charge.account.number|default:'—' }}</strong><br>{{ charge.account.plot|default:'Участок не указан' }}</a></td><td>{{ charge.get_kind_display }}</td><td class="ws-charge-calculation">{% if charge.volume is not None %}{{ charge.volume }} м³ × {{ charge.rate }} ₽<br>{% endif %}{{ charge.calculation|default:charge.notes|default:'—' }}</td><td><strong>{{ charge.amount }} ₽</strong></td><td class="ws-finance-status">{{ charge.get_status_display }}</td><td>{% if can_change_charge and charge.status == 'draft' %}<div class="ws-finance-actions"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve_charge"><input type="hidden" name="charge_id" value="{{ charge.pk }}"><button class="ws-primary" type="submit">Утвердить</button></form><form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel_charge"><input type="hidden" name="charge_id" value="{{ charge.pk }}"><button class="ws-danger-action" type="submit">Отменить</button></form></div>{% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="ws-empty"><strong>Начислений нет</strong><p>Запустите расчёт, если период открыт и правила с тарифами уже настроены.</p></div>{% endif %}
+</section>
+{% endblock %}
