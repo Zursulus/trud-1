@@ -93,7 +93,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Связанные процессы</h2></div>
   <div class="ws-action-list">
-    {% if can_view_appeals %}<a class="ws-action-row" href="{% url 'admin:water_residentappeal_changelist' %}?account__id__exact={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
+    {% if can_view_appeals %}<a class="ws-action-row" href="{% url 'staff_workspace:appeals' %}?state=open&account={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
     {% if can_view_documents %}<a class="ws-action-row" href="{% url 'admin:water_accountdocument_changelist' %}?account__id__exact={{ account.pk }}"><span>Документы лицевого счёта</span><strong>{{ documents_count }}</strong></a>{% endif %}
     {% if can_view_access %}<a class="ws-action-row" href="{% url 'admin:water_residentaccess_changelist' %}?account__id__exact={{ account.pk }}"><span>Активные доступы кабинета</span><strong>{{ access_count }}</strong></a>{% endif %}
   </div>
@@ -102,7 +102,7 @@
 
 <section class="ws-section ws-muted-panel">
   <h2>Служебная карточка</h2>
-  <p>Новый workspace пока read-only. Исправления выполняются через существующий audited workflow.</p>
+  <p>Исправления реестра выполняются через существующий audited workflow; рабочие процессы постепенно переносятся в этот интерфейс.</p>
   {% if perms.water.change_account %}<a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Открыть в Django Admin</a>{% endif %}
 </section>
 {% endblock %}
