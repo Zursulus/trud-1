@@ -18,7 +18,17 @@ class StaffWorkspaceGovernanceTests(TestCase):
         self.addCleanup(self._media_override.disable)
         self.addCleanup(self._media.cleanup)
 
-        self.admin = User.objects.create_superuser(username="governance-admin", password="x", email="admin@example.invalid")
+        self.admin = User.objects.create_user(username="governance-admin", password="x", is_staff=True)
+        self.admin.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label="water",
+            codename__in={
+                "view_boardpoll",
+                "add_boardpoll",
+                "change_boardpoll",
+                "add_boardquestion",
+                "add_boardprotocol",
+            },
+        ))
         self.viewer = User.objects.create_user(username="governance-viewer", password="x", is_staff=True)
         self.viewer.user_permissions.add(Permission.objects.get(codename="view_boardpoll", content_type__app_label="water"))
         self.no_permission = User.objects.create_user(username="governance-none", password="x", is_staff=True)
