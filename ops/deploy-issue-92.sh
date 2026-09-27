@@ -125,7 +125,7 @@ gitapp checkout --detach "$TARGET"
 manage check
 manage migrate --check
 manage collectstatic --noinput
-manage shell -c "from django.contrib.auth.password_validation import validate_password; from django.core.exceptions import ValidationError; validate_password('123456');\ntry:\n validate_password('12345'); raise SystemExit('5-char password unexpectedly accepted')\nexcept ValidationError:\n pass"
+manage shell -c "from django.conf import settings; from django.contrib.auth.password_validation import validate_password; validate_password('123456'); assert settings.AUTH_PASSWORD_VALIDATORS == [{'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 6}}]"
 manage shell -c "from django.template.loader import get_template; from django.urls import reverse; assert reverse('two_factor:profile') == '/admin/account/two_factor/'; assert reverse('two_factor:disable') == '/admin/account/two_factor/disable/'; assert str(get_template('two_factor/_base.html').origin.name).endswith('/backend/templates/two_factor/_base.html'); assert str(get_template('admin/base_site.html').origin.name).endswith('/backend/templates/admin/base_site.html')"
 systemctl start trud-1-site.service
 systemctl is-active --quiet trud-1-site.service
