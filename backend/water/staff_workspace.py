@@ -7,6 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 
+from .appeal_workflow import OPEN_APPEAL_STATES
 from .billing import account_totals
 from .controller_scope import ControllerLineAccess
 from .models import (
@@ -20,8 +21,6 @@ from .models import (
     ResidentAccess,
     ResidentAppeal,
 )
-
-OPEN_APPEAL_STATES = ("new", "in_progress", "awaiting_resident")
 
 
 def _controller_group_ids(user, on_date=None):
@@ -138,7 +137,7 @@ def dashboard(request):
             attention.append({
                 "label": "Открытые обращения",
                 "count": count,
-                "url": reverse("admin:water_residentappeal_changelist"),
+                "url": reverse("staff_workspace:appeals") + "?state=open",
             })
     context["attention"] = attention
     return TemplateResponse(request, "water/work/dashboard.html", context)
