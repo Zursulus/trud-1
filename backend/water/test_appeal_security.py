@@ -196,4 +196,4 @@ class AppealSpamAlertTests(TestCase):
         self.assertContains(response, 'Подозрение на спам')
         self.assertContains(response, f'Пользователь #{self.resident.pk}')
         self.assertNotContains(response, 'spam-resident')
-        self.assertContains(response, 'Антиспам')
+        self.assertContains(response, 'SPAM-1')
