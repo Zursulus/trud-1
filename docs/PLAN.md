@@ -26,7 +26,7 @@ Push в GitHub не равен deploy.
 - начисления, оплаты, задолженность, корректировки и отчётность;
 - опросы/правление и публичный контент;
 - ежедневный проверяемый backup, дополнительный restic-контур, recovery, guarded deploy и rollback;
-- CI с PostgreSQL, Django tests, browser E2E и accessibility checks.
+- CI с PostgreSQL, Django tests, Chromium/WebKit browser E2E и accessibility checks.
 
 Текущий staff-интерфейс вырос вокруг Django Admin и больше не соответствует сложности продукта. Целевая архитектура следующего этапа зафиксирована в `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 
@@ -34,15 +34,26 @@ Push в GitHub не равен deploy.
 
 Цель — создать отдельную «Рабочую базу» сотрудников на `/work/`, оставив `/admin/` техническим fallback.
 
-Утверждённый порядок:
+Foundation первого vertical slice уже смержен в `feature/water-admin` через PR #69:
 
-1. operational gate;
-2. `/work/` shell и role-adapted navigation;
-3. global search;
-4. карточка «Участок / лицевой счёт» с техническим центром `Account` и контекстом `LandPlot`;
-5. WebKit/Chromium, accessibility и performance gates;
-6. production smoke первого vertical slice;
-7. следующие slices: Water → Appeals → Finance → Access → Documents/content → Governance/polls.
+- отдельный `/work/` shell и role-adapted navigation;
+- глобальный поиск;
+- read-only карточка «Участок / лицевой счёт» с центром `Account`;
+- server-side permission/object scope;
+- PII regression boundaries;
+- query budgets;
+- Chromium + WebKit mobile/desktop critical flow и accessibility gate.
+
+Этот foundation пока не считается production-выпуском: push/merge не равен deploy.
+
+Утверждённый порядок следующих slices:
+
+1. Water;
+2. Appeals;
+3. Finance;
+4. Access;
+5. Documents/content;
+6. Governance/polls.
 
 Непосредственный риск по диску снят 27.09.2026: использование root filesystem снижено с 87% до 71% удалением только воспроизводимых RDC/npm/Puppeteer caches. Retention и alerting остаются отдельным эксплуатационным улучшением.
 
@@ -57,24 +68,25 @@ Push в GitHub не равен deploy.
 - Обычный staff workspace не расширяет границу персональных данных.
 - Каждый vertical slice — отдельная атомарная branch/PR/release единица.
 
-## Ближайший vertical slice
+## Текущий vertical slice: Water Hub
 
-**`/work/` → глобальный поиск → карточка «Участок / лицевой счёт».**
+**`/work/water/` → роль-адаптированная очередь → существующие audited water workflows.**
 
 Минимальный результат:
 
-- Администратор ТСН может открыть `/work/` и найти объект по номеру счёта/адресу;
-- карточка собирает разрешённый рабочий контекст: участок, линии/счётчики, последнее показание, finance summary при permission, обращения, документы, состояние кабинета и последние изменения;
-- оператор воды не видит финансы/ПД;
-- контролёр не получает объект вне своего scope через прямой URL;
-- закрытый реестр не получает автоматически рабочие write-права;
-- архивные объекты явно отличаются;
-- существующие `/admin/` workflows остаются доступны как fallback;
-- мобильный viewport 390×844 без horizontal overflow;
-- критический сценарий проверяется Chromium и WebKit;
-- для поиска/карточки есть query budget и нет N+1.
+- единая точка входа «Вода» в desktop и mobile Staff Workspace;
+- Администратор ТСН видит только показания, готовые к финальной премодерации;
+- наблюдения жителя, ещё ожидающие старшего линии, не выдаются как готовые к финальному решению;
+- контролёр/старший линии видит только закреплённые линии, свои незавершённые передачи и resident observations внутри своего `ControllerLineAccess` scope;
+- оператор воды получает понятные входы в ввод показаний, журнал, счётчики, anomaly review и водный баланс по фактическим permissions;
+- закрытый реестр не получает Water Hub только из-за доступа к Account/LandPlot;
+- ordinary workspace не показывает `Account.contact_name`, `phone`, `Person` или личность автора-жителя;
+- новые write-paths не создаются: запись и модерация продолжают использовать существующие транзакционные/audited workflows;
+- Water Hub имеет bounded query counts, Chromium + WebKit mobile smoke, accessibility gate и отсутствие horizontal overflow.
 
-Полные acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
+После завершения Water следующий vertical slice — **Appeals staff workflow**.
+
+Полные продуктовые acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 
 ## Параллельные/будущие направления
 

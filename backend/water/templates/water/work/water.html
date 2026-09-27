@@ -1,0 +1,153 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Вода{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Учёт воды</p>
+    <h1>Вода</h1>
+    <p>Показания, премодерация и контроль потерь в одном рабочем контуре.</p>
+  </div>
+</section>
+
+<div class="ws-summary-grid">
+  <section class="ws-summary">
+    <span>Активные счётчики</span>
+    <strong>{{ meter_count }}</strong>
+    <p>Доступны вашей роли на текущую дату.</p>
+  </section>
+  <section class="ws-summary">
+    <span>Показаний сегодня</span>
+    <strong>{{ today_reading_count }}</strong>
+    <p>Утверждённые записи на текущую дату.</p>
+  </section>
+  {% if can_use_controller_workspace and not can_moderate_submissions %}
+    <section class="ws-summary">
+      <span>Мои линии</span>
+      <strong>{{ controller_line_count }}</strong>
+      <p>Активные закрепления на сегодня.</p>
+    </section>
+    <section class="ws-summary{% if line_review_count %} ws-summary-attention{% endif %}">
+      <span>Ждут моей сверки</span>
+      <strong>{{ line_review_count }}</strong>
+      <p>Наблюдения жителей только по моим линиям.</p>
+    </section>
+  {% elif can_moderate_submissions %}
+    <section class="ws-summary{% if final_review_count %} ws-summary-attention{% endif %}">
+      <span>На финальной проверке</span>
+      <strong>{{ final_review_count }}</strong>
+      <p>Можно принять или отклонить после обязательной сверки.</p>
+    </section>
+    <section class="ws-summary">
+      <span>Ждут старшего линии</span>
+      <strong>{{ line_review_waiting_count }}</strong>
+      <p>Пока не готовы к финальному решению.</p>
+    </section>
+  {% endif %}
+</div>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Рабочие действия</h2></div>
+  <div class="ws-card-grid">
+    {% if can_use_controller_workspace %}
+      <a class="ws-card" href="{% url 'water_controller_workspace' %}">
+        <span class="ws-card-kicker">Мои линии</span>
+        <strong>Внести и сверить показания</strong>
+        <p>Только закреплённые линии и участки; предварительный баланс считается до утверждения.</p>
+      </a>
+    {% elif can_enter_readings %}
+      <a class="ws-card" href="{% url 'admin:water_reading_workspace' %}">
+        <span class="ws-card-kicker">Ввод</span>
+        <strong>Внести показания</strong>
+        <p>Рабочее место оператора с предыдущими значениями и проверкой последовательности.</p>
+      </a>
+    {% endif %}
+
+    {% if can_capture_observation and not can_use_controller_workspace %}
+      <a class="ws-card" href="{% url 'admin:water_controllerreading_capture' %}">
+        <span class="ws-card-kicker">Наблюдение</span>
+        <strong>Передать показание на проверку</strong>
+        <p>Без прямой записи в журнал: наблюдение проходит премодерацию.</p>
+      </a>
+    {% endif %}
+
+    {% if can_moderate_submissions %}
+      <a class="ws-card" href="{% url 'admin:water_controllerreadingsubmission_changelist' %}?status__exact=pending">
+        <span class="ws-card-kicker">Очередь</span>
+        <strong>Премодерация показаний</strong>
+        <p>Финальное решение только по записям, прошедшим необходимые промежуточные проверки.</p>
+      </a>
+    {% endif %}
+
+    {% if can_review_readings %}
+      <a class="ws-card" href="{% url 'water_readings_review' %}">
+        <span class="ws-card-kicker">Контроль</span>
+        <strong>Проверка аномалий</strong>
+        <p>Скачки, обратная хронология и другие сигналы для ручной сверки.</p>
+      </a>
+      <a class="ws-card" href="{% url 'admin:water_reading_changelist' %}">
+        <span class="ws-card-kicker">История</span>
+        <strong>Журнал показаний</strong>
+        <p>Все утверждённые показания и история учёта.</p>
+      </a>
+    {% endif %}
+
+    {% if can_view_meters %}
+      <a class="ws-card" href="{% url 'admin:water_meter_changelist' %}">
+        <span class="ws-card-kicker">Приборы</span>
+        <strong>Счётчики</strong>
+        <p>Индивидуальные, линейные и общие приборы учёта.</p>
+      </a>
+    {% endif %}
+
+    {% if can_view_balance %}
+      <a class="ws-card" href="{% url 'water_balance' %}">
+        <span class="ws-card-kicker">Баланс</span>
+        <strong>Водный баланс и потери</strong>
+        <p>Входной объём, подтверждённый расход и разница за период.</p>
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+{% if can_moderate_submissions %}
+<section class="ws-section" id="water-review-queue">
+  <div class="ws-section-head"><h2>На финальной проверке</h2><span>{{ final_review_count }}</span></div>
+  {% if final_review_items %}
+    <div class="ws-result-list">
+      {% for item in final_review_items %}
+        <a class="ws-result" href="{% url 'admin:water_controllerreadingsubmission_change' item.pk %}">
+          <div>
+            <span class="ws-result-type">{{ item.get_source_display }}</span>
+            <strong>{% if item.meter.account %}{{ item.meter.account.number|default:item.meter.account.plot }} · {% endif %}{{ item.meter.serial }}</strong>
+            <p>{{ item.date|date:'d.m.Y' }} · {{ item.value }} м³{% if item.meter.account.plot %} · {{ item.meter.account.plot }}{% endif %}</p>
+          </div>
+          <span class="ws-chevron" aria-hidden="true">›</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ws-empty"><strong>Очередь пуста</strong><p>Нет показаний, готовых к финальному решению.</p></div>
+  {% endif %}
+</section>
+{% elif can_use_controller_workspace %}
+<section class="ws-section" id="water-line-review-queue">
+  <div class="ws-section-head"><h2>Ждут проверки старшего линии</h2><span>{{ line_review_count }}</span></div>
+  {% if line_review_items %}
+    <div class="ws-result-list">
+      {% for item in line_review_items %}
+        <a class="ws-result" href="{% url 'water_controller_workspace' %}?date={{ item.date|date:'Y-m-d' }}">
+          <div>
+            <span class="ws-result-type">Наблюдение жителя</span>
+            <strong>{{ item.meter.account.number|default:item.meter.account.plot }} · {{ item.meter.serial }}</strong>
+            <p>{{ item.date|date:'d.m.Y' }} · {{ item.value }} м³{% if item.meter.account.plot %} · {{ item.meter.account.plot }}{% endif %}</p>
+          </div>
+          <span class="ws-chevron" aria-hidden="true">›</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ws-empty"><strong>Очередь пуста</strong><p>По закреплённым линиям нет наблюдений жителей, ожидающих вашей сверки.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

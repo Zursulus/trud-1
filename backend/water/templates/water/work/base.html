@@ -19,8 +19,7 @@
         <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
         <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}>Поиск</a>
         <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}>Участки и счета</a>
-        {% if can_use_controller_workspace %}<a href="{% url 'water_controller_workspace' %}">Мои линии</a>{% endif %}
-        {% if can_view_water and not can_use_controller_workspace %}<a href="{% url 'admin:water_reading_changelist' %}">Вода</a>{% endif %}
+        {% if can_view_water %}<a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}>Вода</a>{% endif %}
       </nav>
       <div class="ws-sidebar-foot">
         <a href="{{ admin_url }}">Служебное / Django Admin</a>
@@ -46,10 +45,8 @@
     <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><span aria-hidden="true">⌂</span>Главная</a>
     <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Поиск</a>
     <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span>Участки</a>
-    {% if can_use_controller_workspace %}
-      <a href="{% url 'water_controller_workspace' %}"><span aria-hidden="true">◉</span>Линии</a>
-    {% elif can_view_water %}
-      <a href="{% url 'admin:water_reading_changelist' %}"><span aria-hidden="true">◉</span>Вода</a>
+    {% if can_view_water %}
+      <a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}><span aria-hidden="true">◉</span>Вода</a>
     {% else %}
       <a href="{% url 'staff_workspace:home' %}#work-queue"><span aria-hidden="true">✓</span>Работа</a>
     {% endif %}
