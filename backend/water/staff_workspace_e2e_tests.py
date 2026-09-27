@@ -15,12 +15,8 @@ from .models import Account, LandPlot, Membership, Meter, SupplyNode, User, Wate
 
 
 class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        call_command("setup_roles", stdout=StringIO())
-
     def setUp(self):
+        call_command("setup_roles", stdout=StringIO())
         today = timezone.localdate()
         self.manager = User.objects.create_user(username="workspace-e2e", is_staff=True)
         self.manager.groups.add(Group.objects.get(name="Администратор ТСН"))
@@ -53,11 +49,11 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
         ]
         self.assertEqual(blocking, [], f"{label}: {blocking}")
 
-    def _exercise(self, browser, viewport, label):
+    def _exercise(self, browser, viewport, label, session_cookie):
         context = browser.new_context(viewport=viewport)
         context.add_cookies([{
             "name": settings.SESSION_COOKIE_NAME,
-            "value": self._verified_session_cookie(),
+            "value": session_cookie,
             "url": self.live_server_url,
         }])
         page = context.new_page()
@@ -93,18 +89,26 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             context.close()
 
     def test_workspace_critical_flow_chromium_desktop_and_mobile(self):
+        session_cookie = self._verified_session_cookie()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                self._exercise(browser, {"width": 1280, "height": 900}, "chromium desktop")
-                self._exercise(browser, {"width": 390, "height": 844}, "chromium mobile")
+                self._exercise(
+                    browser, {"width": 1280, "height": 900}, "chromium desktop", session_cookie,
+                )
+                self._exercise(
+                    browser, {"width": 390, "height": 844}, "chromium mobile", session_cookie,
+                )
             finally:
                 browser.close()
 
     def test_workspace_critical_flow_webkit_mobile(self):
+        session_cookie = self._verified_session_cookie()
         with sync_playwright() as playwright:
             browser = playwright.webkit.launch(headless=True)
             try:
-                self._exercise(browser, {"width": 390, "height": 844}, "webkit mobile")
+                self._exercise(
+                    browser, {"width": 390, "height": 844}, "webkit mobile", session_cookie,
+                )
             finally:
                 browser.close()
