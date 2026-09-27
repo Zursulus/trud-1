@@ -74,7 +74,7 @@ class AccessWorkflowTests(TestCase):
             self.request.pk,
             account=self.account,
             email=self.request.email,
-            role=ResidentAccess.ROLE_OWNER,
+            role='owner',
             decision_note='Основание проверено',
             actor=self.actor,
         )
@@ -89,7 +89,7 @@ class AccessWorkflowTests(TestCase):
                 self.request.pk,
                 account=self.account,
                 email=self.request.email,
-                role=ResidentAccess.ROLE_OWNER,
+                role='owner',
                 decision_note='Повтор',
                 actor=self.actor,
             )
@@ -111,7 +111,7 @@ class AccessWorkflowTests(TestCase):
             self.request.pk,
             account=self.account,
             email=self.request.email,
-            role=ResidentAccess.ROLE_OWNER,
+            role='owner',
             decision_note='Основание проверено',
             actor=self.actor,
         )
@@ -124,7 +124,7 @@ class AccessWorkflowTests(TestCase):
         resident = User.objects.create_user(username='resident', password='test', email='resident2@example.test')
         starts = timezone.localdate() - timedelta(days=10)
         access = ResidentAccess.objects.create(
-            user=resident, account=self.account, role=ResidentAccess.ROLE_OWNER, starts=starts,
+            user=resident, account=self.account, role='owner', starts=starts,
         )
         ended = end_resident_access(access.pk, ends_on=timezone.localdate(), actor=self.actor)
         self.assertEqual(ended.ends, timezone.localdate())
@@ -137,7 +137,7 @@ class AccessWorkflowTests(TestCase):
         access = ResidentAccess.objects.create(
             user=resident,
             account=self.account,
-            role=ResidentAccess.ROLE_OWNER,
+            role='owner',
             starts=timezone.localdate() - timedelta(days=1),
         )
         reset, raw = issue_access_password_reset(access.pk, actor=self.actor)
