@@ -74,9 +74,9 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
 
             page.goto(f"{self.live_server_url}/work/access/requests/{request_id}/", wait_until="networkidle")
             self.assertTrue(page.get_by_text("+7 900 555-44-33", exact=True).is_visible())
-            page.locator("#id_account").select_option(str(self.account.pk))
-            page.locator("#id_role").select_option("owner")
-            page.locator("#id_decision_note").fill(f"E2E проверка {label}")
+            page.locator("#id_approve-account").select_option(str(self.account.pk))
+            page.locator("#id_approve-role").select_option("owner")
+            page.locator("#id_approve-decision_note").fill(f"E2E проверка {label}")
             page.get_by_role("button", name="Одобрить и создать приглашение", exact=True).click()
             page.wait_for_load_state("networkidle")
 
