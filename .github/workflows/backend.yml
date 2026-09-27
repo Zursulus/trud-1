@@ -89,7 +89,7 @@ jobs:
       - name: Install Chromium and WebKit for Playwright
         run: python -m playwright install --with-deps chromium webkit
       - name: Run critical browser and accessibility regressions
-        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.accessibility_e2e_tests water.staff_workspace_e2e_tests -v 2
+        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.accessibility_e2e_tests water.staff_workspace_e2e_tests water.staff_workspace_water_e2e_tests -v 2
       - name: Upload browser trace on failure
         if: failure()
         uses: actions/upload-artifact@v4
