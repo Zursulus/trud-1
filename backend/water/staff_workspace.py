@@ -2,7 +2,6 @@ from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Q, Subquery
-from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -51,23 +50,30 @@ def scoped_accounts(user):
     raise PermissionDenied
 
 
-def _base_context(request, *, section):
-    user = request.user
+def _capabilities(user):
     return {
-        "workspace_section": section,
-        "workspace_title": "Рабочая база",
         "can_view_accounts": user.is_superuser
         or user.has_perm("water.view_account")
         or user.has_perm("water.use_controller_workspace"),
+        "can_view_land_plots": user.is_superuser or user.has_perm("water.view_landplot"),
         "can_use_controller_workspace": user.has_perm("water.use_controller_workspace"),
-        "can_view_water": user.has_perm("water.view_meter")
+        "can_view_water": user.is_superuser
+        or user.has_perm("water.view_meter")
         or user.has_perm("water.use_controller_workspace"),
-        "can_view_finance": user.has_perm("water.view_charge")
-        and user.has_perm("water.view_payment"),
-        "can_view_appeals": user.has_perm("water.view_residentappeal"),
-        "can_view_documents": user.has_perm("water.view_accountdocument"),
-        "can_view_access": user.has_perm("water.view_residentaccess"),
+        "can_view_finance": user.is_superuser
+        or (user.has_perm("water.view_charge") and user.has_perm("water.view_payment")),
+        "can_view_appeals": user.is_superuser or user.has_perm("water.view_residentappeal"),
+        "can_view_documents": user.is_superuser or user.has_perm("water.view_accountdocument"),
+        "can_view_access": user.is_superuser or user.has_perm("water.view_residentaccess"),
+    }
+
+
+def _base_context(request, *, section):
+    return {
+        "workspace_section": section,
+        "workspace_title": "Рабочая база",
         "admin_url": reverse("admin:index"),
+        **_capabilities(request.user),
     }
 
 
@@ -104,19 +110,15 @@ def search(request):
     context["q"] = q
     results = []
     if q:
-        results = list(
-            scoped_accounts(request.user)
-            .filter(
-                Q(number__icontains=q)
-                | Q(plot__icontains=q)
-                | Q(land_plots__label__icontains=q)
-                | Q(land_plots__address__icontains=q)
-                | Q(meter__serial__icontains=q)
-            )
-            .distinct()
-            .prefetch_related("land_plots")
-            .order_by("archived", "plot", "number", "id")[:50]
-        )
+        criteria = Q(number__icontains=q) | Q(plot__icontains=q)
+        if context["can_view_land_plots"]:
+            criteria |= Q(land_plots__label__icontains=q) | Q(land_plots__address__icontains=q)
+        if context["can_view_water"]:
+            criteria |= Q(meter__serial__icontains=q)
+        queryset = scoped_accounts(request.user).filter(criteria).distinct()
+        if context["can_view_land_plots"]:
+            queryset = queryset.prefetch_related("land_plots")
+        results = list(queryset.order_by("archived", "plot", "number", "id")[:50])
     context["results"] = results
     return TemplateResponse(request, "water/work/search.html", context)
 
@@ -127,14 +129,17 @@ def account_list(request):
     accounts = scoped_accounts(request.user)
     if q:
         accounts = accounts.filter(Q(number__icontains=q) | Q(plot__icontains=q))
-    accounts = accounts.prefetch_related("land_plots").order_by("archived", "plot", "number", "id")
+    if context["can_view_land_plots"]:
+        accounts = accounts.prefetch_related("land_plots")
+    accounts = accounts.order_by("archived", "plot", "number", "id")
     page = Paginator(accounts, 30).get_page(request.GET.get("page"))
     context.update({"q": q, "page": page})
     return TemplateResponse(request, "water/work/accounts.html", context)
 
 
 def _meter_rows(user, account):
-    if not (user.has_perm("water.view_meter") or user.has_perm("water.use_controller_workspace")):
+    capabilities = _capabilities(user)
+    if not capabilities["can_view_water"]:
         return []
     latest = Reading.objects.filter(meter=OuterRef("pk")).order_by("-date", "-id")
     return list(
@@ -149,29 +154,34 @@ def _meter_rows(user, account):
 
 
 def account_detail(request, account_id):
-    accounts = scoped_accounts(request.user)
-    account = get_object_or_404(accounts, pk=account_id)
+    account = get_object_or_404(scoped_accounts(request.user), pk=account_id)
     context = _base_context(request, section="accounts")
-
     today = timezone.localdate()
-    memberships = Membership.objects.filter(
-        account=account,
-        starts__lte=today,
-    ).filter(Q(ends__isnull=True) | Q(ends__gt=today)).select_related("group", "group__node")
 
-    if not (request.user.is_superuser or request.user.has_perm("water.view_account")):
-        memberships = memberships.filter(group_id__in=_controller_group_ids(request.user, today))
+    memberships = []
+    if context["can_view_water"]:
+        membership_qs = Membership.objects.filter(
+            account=account,
+            starts__lte=today,
+        ).filter(
+            Q(ends__isnull=True) | Q(ends__gt=today)
+        ).select_related("group", "group__node")
+        if not (request.user.is_superuser or request.user.has_perm("water.view_membership")):
+            membership_qs = membership_qs.filter(group_id__in=_controller_group_ids(request.user, today))
+        memberships = list(membership_qs)
 
-    land_plots = list(
-        LandPlot.objects.filter(account=account).only(
-            "id", "label", "address", "archived", "account_id"
-        ).order_by("archived", "label", "id")
-    )
+    land_plots = []
+    if context["can_view_land_plots"]:
+        land_plots = list(
+            LandPlot.objects.filter(account=account).only(
+                "id", "label", "address", "archived", "account_id"
+            ).order_by("archived", "label", "id")
+        )
 
     context.update({
         "account": account,
         "land_plots": land_plots,
-        "memberships": list(memberships),
+        "memberships": memberships,
         "meters": _meter_rows(request.user, account),
     })
 
@@ -192,7 +202,7 @@ def account_detail(request, account_id):
     return TemplateResponse(request, "water/work/account.html", context)
 
 
-# Export wrapped views so every /work/ route inherits the existing staff login/security gate.
+# Every /work/ route inherits the existing staff login/security gate.
 workspace_dashboard = admin.site.admin_view(dashboard)
 workspace_search = admin.site.admin_view(search)
 workspace_accounts = admin.site.admin_view(account_list)
