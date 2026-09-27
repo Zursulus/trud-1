@@ -6,7 +6,18 @@
   <style>
     .trud-dashboard { max-width: 1180px; }
     .trud-dashboard h1 { margin: 0 0 8px; font-size: 28px; }
-    .trud-lead { margin: 0 0 22px; color: #475569; font-size: 16px; line-height: 1.45; }
+    .trud-lead { margin: 0 0 16px; color: #475569; font-size: 16px; line-height: 1.45; }
+    .trud-back {
+      display: inline-block;
+      margin: 0 0 22px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: #0b57d0;
+      color: #fff !important;
+      font-weight: 700;
+      text-decoration: none !important;
+    }
+    .trud-back:hover, .trud-back:focus { background: #0848ad; color: #fff !important; }
     .trud-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
@@ -53,6 +64,7 @@
     @media (max-width: 600px) {
       #content { padding: 16px !important; }
       .trud-dashboard h1 { font-size: 24px; }
+      .trud-back { display: block; text-align: center; }
       .trud-card { min-height: 74px; padding: 16px; }
       .trud-card strong { font-size: 17px; }
     }
@@ -72,6 +84,7 @@
 <div id="content-main" class="trud-dashboard">
   <h1>Рабочая панель</h1>
   <p class="trud-lead">Здесь оставлены основные рабочие действия. Полная техническая структура базы спрятана ниже в разделе «Настройки / служебное».</p>
+  <a class="trud-back" href="{% url 'staff_workspace:home' %}">← Вернуться в Рабочую базу</a>
 
   <div class="trud-grid" aria-label="Основные рабочие разделы">
     {% if perms.water.add_residentpasswordreset %}
