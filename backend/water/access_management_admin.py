@@ -131,7 +131,7 @@ class ResidentAccessAdmin(RecordedAdmin):
             'reset_url': reset_url,
             'error': error,
         }
-        return TemplateResponse(request, 'admin/water/resident_access/reset_password.html', context)
+        return TemplateResponse(request, 'admin/water/residentaccess/reset_password.html', context)
 
 
 @admin.register(ResidentInvite)
