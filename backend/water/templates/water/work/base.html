@@ -61,7 +61,7 @@
 
   <nav class="ws-bottom-nav" aria-label="Мобильная навигация">
     <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><span aria-hidden="true">⌂</span>Главная</a>
-    <a href="{% url 'staff_workspace:home' %}#work-queue"{% if workspace_section == 'water' or workspace_section == 'appeals' or workspace_section == 'finance' or workspace_section == 'access' or workspace_section == 'security' %} aria-current="page"{% endif %}><span aria-hidden="true">✓</span>Работа</a>
+    <a href="{% url 'staff_workspace:tasks' %}"{% if workspace_section == 'work' or workspace_section == 'water' or workspace_section == 'appeals' or workspace_section == 'finance' or workspace_section == 'access' or workspace_section == 'security' %} aria-current="page"{% endif %}><span aria-hidden="true">✓</span>Работа</a>
     <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Поиск</a>
     <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span>Участки</a>
     <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}><span aria-hidden="true">•••</span>Ещё</a>
