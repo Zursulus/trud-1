@@ -32,7 +32,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Протокол после опроса</h2></div>
   {% if protocol %}
-    <div class="ws-empty"><strong>{{ protocol.original_name }}</strong><p>{{ protocol.file_size }} байт · загружен {{ protocol.uploaded_at|date:'d.m.Y H:i' }}. Сохранённый файл нельзя заменить через рабочую базу.</p></div>
+    <div class="ws-empty"><strong>{{ protocol.original_name }}</strong><p>{{ protocol.file_size }} байт · загружен {{ protocol.uploaded_at|date:'d.m.Y H:i' }}. Сохранённый файл нельзя заменить через рабочую базу.</p><a class="ws-secondary" href="{% url 'board_poll_protocol' poll.pk %}">Скачать протокол</a></div>
   {% elif can_upload_protocol %}
     <form class="ws-finance-form" method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="upload_protocol">{{ protocol_form.as_p }}<button class="ws-primary" type="submit">Прикрепить протокол</button></form>
   {% else %}
