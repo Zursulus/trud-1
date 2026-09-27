@@ -100,7 +100,7 @@ class AccountDocumentEditForm(forms.Form):
             })
 
 
-class PublicationFormMixin:
+class PublicationFormBase(forms.ModelForm):
     confirm_publication = forms.BooleanField(
         label="Проверено: нет персональных, банковских и служебных данных",
         required=False,
@@ -121,7 +121,7 @@ class PublicationFormMixin:
         return data
 
 
-class PublicDocumentCreateForm(PublicationFormMixin, forms.ModelForm):
+class PublicDocumentCreateForm(PublicationFormBase):
     class Meta:
         model = PublicDocument
         fields = ("category", "title", "description", "document", "document_date", "is_published", "notes")
@@ -132,14 +132,14 @@ class PublicDocumentCreateForm(PublicationFormMixin, forms.ModelForm):
         self.fields["category"].queryset = PublicDocumentCategory.objects.filter(active=True).order_by("sort_order", "name")
 
 
-class PublicDocumentEditForm(PublicationFormMixin, forms.ModelForm):
+class PublicDocumentEditForm(PublicationFormBase):
     class Meta:
         model = PublicDocument
         fields = ("category", "title", "description", "document_date", "is_published", "notes")
         widgets = {"document_date": forms.DateInput(attrs={"type": "date"}), "notes": forms.Textarea(attrs={"rows": 3})}
 
 
-class PublicNewsForm(PublicationFormMixin, forms.ModelForm):
+class PublicNewsForm(PublicationFormBase):
     class Meta:
         model = PublicNews
         fields = ("title", "category", "summary", "body", "published_on", "is_featured", "is_published")
