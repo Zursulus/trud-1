@@ -53,8 +53,8 @@ class StaffWorkspaceTests(TestCase):
             number="WS-202", plot="Лесная 202",
             contact_name="Секретное ФИО 202", phone="+79990000202",
         )
-        LandPlot.objects.create(label="Участок 101", address="Садовая 101", account=cls.account_a)
-        LandPlot.objects.create(label="Участок 202", address="Лесная 202", account=cls.account_b)
+        LandPlot.objects.create(label="Участок 101", address="Кадастровый ориентир 101", account=cls.account_a)
+        LandPlot.objects.create(label="Участок 202", address="Кадастровый ориентир 202", account=cls.account_b)
         Person.objects.create(full_name="Очень Секретный Человек", phone="+79991112233")
 
         Membership.objects.create(account=cls.account_a, group=cls.group_a, starts=cls.today - timedelta(days=30))
@@ -88,9 +88,10 @@ class StaffWorkspaceTests(TestCase):
 
     def test_manager_searches_and_opens_account_without_pii(self):
         self.login(self.manager)
-        response = self.client.get("/work/search/", {"q": "Садовая 101"})
+        response = self.client.get("/work/search/", {"q": "Кадастровый ориентир 101"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "WS-101")
+        self.assertContains(response, "Участок 101")
         self.assertNotContains(response, "Секретное ФИО 101")
         self.assertNotContains(response, "+79990000101")
         self.assertNotContains(response, "Очень Секретный Человек")
@@ -98,40 +99,52 @@ class StaffWorkspaceTests(TestCase):
         card = self.client.get(f"/work/accounts/{self.account_a.pk}/")
         self.assertEqual(card.status_code, 200)
         self.assertContains(card, "Садовая 101")
+        self.assertContains(card, "Кадастровый ориентир 101")
         self.assertContains(card, "WS-METER-101")
         self.assertContains(card, "600.00 ₽")
         self.assertContains(card, "Финансы")
         self.assertNotContains(card, "Секретное ФИО 101")
         self.assertNotContains(card, "+79990000101")
 
-    def test_operator_gets_water_context_but_no_finance_or_pii(self):
+    def test_operator_gets_water_context_but_no_finance_landplot_or_pii(self):
         self.login(self.operator)
         response = self.client.get(f"/work/accounts/{self.account_a.pk}/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "WS-METER-101")
+        self.assertContains(response, "Линия workspace A")
+        self.assertNotContains(response, "Кадастровый ориентир 101")
         self.assertNotContains(response, "Финансы")
         self.assertNotContains(response, "600.00 ₽")
         self.assertNotContains(response, "Секретное ФИО 101")
         self.assertNotContains(response, "+79990000101")
 
-    def test_controller_is_limited_to_current_line_scope_even_by_direct_url(self):
+    def test_controller_is_limited_to_line_scope_and_water_fields(self):
         self.login(self.controller)
         allowed = self.client.get(f"/work/accounts/{self.account_a.pk}/")
         denied = self.client.get(f"/work/accounts/{self.account_b.pk}/")
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(denied.status_code, 404)
+        self.assertContains(allowed, "WS-METER-101")
+        self.assertContains(allowed, "Линия workspace A")
+        self.assertNotContains(allowed, "Кадастровый ориентир 101")
 
-        search = self.client.get("/work/search/", {"q": "WS-"})
+        search = self.client.get("/work/search/", {"q": "WS-METER-101"})
         self.assertContains(search, "WS-101")
         self.assertNotContains(search, "WS-202")
         self.assertNotContains(search, "Финансы")
 
-    def test_private_registry_role_does_not_gain_finance_capability(self):
+    def test_private_registry_gets_landplot_but_no_water_or_finance_capability(self):
         self.login(self.private_user)
         response = self.client.get(f"/work/accounts/{self.account_a.pk}/")
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Кадастровый ориентир 101")
+        self.assertNotContains(response, "WS-METER-101")
+        self.assertNotContains(response, "Линия workspace A")
         self.assertNotContains(response, "Финансы")
         self.assertNotContains(response, "600.00 ₽")
+
+        meter_search = self.client.get("/work/search/", {"q": "WS-METER-101"})
+        self.assertNotContains(meter_search, "WS-101")
 
     def test_archived_account_is_visibly_marked(self):
         archived = Account.objects.create(number="WS-ARCH", plot="Архивный участок", archived=True)
