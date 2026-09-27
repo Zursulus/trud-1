@@ -7,6 +7,7 @@ from . import (
     staff_finance,
     staff_more,
     staff_security,
+    staff_tasks,
     staff_workspace,
 )
 
@@ -15,6 +16,7 @@ app_name = "staff_workspace"
 
 urlpatterns = [
     path("", staff_workspace.workspace_dashboard, name="home"),
+    path("tasks/", staff_tasks.workspace_tasks, name="tasks"),
     path("search/", staff_workspace.workspace_search, name="search"),
     path("accounts/", staff_workspace.workspace_accounts, name="accounts"),
     path("water/", staff_workspace.workspace_water, name="water"),

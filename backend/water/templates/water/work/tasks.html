@@ -1,0 +1,78 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Работа{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Работа</p>
+    <h1>Рабочая очередь</h1>
+    <p>Задачи и процессы, которые требуют вашего действия.</p>
+  </div>
+</section>
+
+<section class="ws-section" id="work-queue" aria-labelledby="work-queue-title">
+  <div class="ws-section-head"><h2 id="work-queue-title">Требует действия</h2></div>
+  {% if attention %}
+  <div class="ws-action-list">
+    {% for item in attention %}
+      <a class="ws-action-row" href="{{ item.url }}">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.count }}</strong>
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ws-empty">
+    <strong>Нет срочных очередей</strong>
+    <p>В доступных вам процессах сейчас нет элементов, требующих отдельного действия.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="ws-section" aria-labelledby="work-processes-title">
+  <div class="ws-section-head"><h2 id="work-processes-title">Рабочие процессы</h2></div>
+  <div class="ws-card-grid">
+    {% if can_view_water %}
+    <a class="ws-card" href="{% url 'staff_workspace:water' %}">
+      <span class="ws-card-kicker">Вода</span>
+      <strong>Показания и проверки</strong>
+      <p>Работа со счётчиками, показаниями и доступными линиями.</p>
+    </a>
+    {% endif %}
+    {% if can_view_appeals %}
+    <a class="ws-card" href="{% url 'staff_workspace:appeals' %}">
+      <span class="ws-card-kicker">Обращения</span>
+      <strong>Очередь обращений</strong>
+      <p>Диалоги, статусы и решения по обращениям жителей.</p>
+    </a>
+    {% endif %}
+    {% if can_use_finance_workspace %}
+    <a class="ws-card" href="{% url 'staff_workspace:finance' %}">
+      <span class="ws-card-kicker">Финансы</span>
+      <strong>Начисления и оплаты</strong>
+      <p>Периоды, начисления, оплаты и распределение.</p>
+    </a>
+    {% endif %}
+    {% if can_use_access_workspace %}
+    <a class="ws-card" href="{% url 'staff_workspace:access' %}">
+      <span class="ws-card-kicker">Доступ</span>
+      <strong>Доступ жителей</strong>
+      <p>Заявки, выдача доступа и восстановление кабинета.</p>
+    </a>
+    {% endif %}
+    {% if perms.water.view_accountdocument or perms.public_site.view_publicdocument or perms.public_site.view_publicnews %}
+    <a class="ws-card" href="{% url 'staff_workspace:documents' %}">
+      <span class="ws-card-kicker">Документы</span>
+      <strong>Документы и публикации</strong>
+      <p>Закрытые документы жителей, публичные документы и новости.</p>
+    </a>
+    {% endif %}
+    {% if can_view_security_alerts %}
+    <a class="ws-card" href="{% url 'staff_workspace:security' %}">
+      <span class="ws-card-kicker">Безопасность</span>
+      <strong>Сигналы безопасности</strong>
+      <p>Проверка доступных вам сигналов и инцидентов.</p>
+    </a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
