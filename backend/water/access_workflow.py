@@ -10,7 +10,7 @@ from .portal import issue_invite, issue_password_reset
 def _required_note(value, label='Основание решения'):
     note = (value or '').strip()
     if not note:
-        raise ValidationError(f'{label} обязательно.')
+        raise ValidationError(f'{label}: обязательно заполнить.')
     return note
 
 
