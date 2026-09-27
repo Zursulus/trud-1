@@ -31,9 +31,10 @@ gitapp cat-file -e "$TARGET^{commit}"
 gitapp merge-base --is-ancestor "$EXPECTED" "$TARGET"
 
 mapfile -t changed < <(gitapp diff --name-only "$EXPECTED" "$TARGET")
-test "${#changed[@]}" -eq 3
+test "${#changed[@]}" -eq 4
 printf '%s\n' "${changed[@]}" | grep -Fxq 'backend/config/urls.py'
 printf '%s\n' "${changed[@]}" | grep -Fxq 'backend/water/test_admin_navigation.py'
+printf '%s\n' "${changed[@]}" | grep -Fxq 'backend/water/tests.py'
 printf '%s\n' "${changed[@]}" | grep -Fxq 'ops/deploy-issue-92-optional-2fa.sh'
 
 test -f "$STATUS"
