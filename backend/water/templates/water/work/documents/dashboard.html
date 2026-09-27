@@ -17,7 +17,7 @@
   {% if can_add_account_documents %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:account_document_create' %}">Добавить документ жителя</a></div>{% endif %}
   {% if account_documents %}<div class="ws-result-list">
     {% for item in account_documents %}<a class="ws-result" href="{% url 'staff_workspace:account_document' item.pk %}"><div>
-      <span class="ws-result-type">{{ item.category.name }} · {% if item.visible_to_residents and item.published_at <= now %}виден жителю{% elif item.visible_to_residents %}ожидает даты{% else %}скрыт от жителя{% endif %}</span>
+      <span class="ws-result-type">{{ item.category.name }} · {% if item.visible_to_residents %}разрешён жителю с {{ item.published_at|date:'d.m.Y H:i' }}{% else %}скрыт от жителя{% endif %}</span>
       <strong>{{ item.title }}</strong><p>{{ item.account.number|default:'Без номера' }} · {{ item.account.plot }}</p>
     </div><span class="ws-chevron" aria-hidden="true">›</span></a>{% endfor %}
   </div>{% else %}<div class="ws-empty"><strong>Документов не найдено.</strong><p>Измените запрос или создайте первый документ.</p></div>{% endif %}
