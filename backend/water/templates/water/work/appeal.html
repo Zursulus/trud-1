@@ -1,0 +1,92 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Обращение №{{ appeal.pk }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки">
+  <a href="{% url 'staff_workspace:appeals' %}">Обращения</a><span aria-hidden="true">›</span><span>№{{ appeal.pk }}</span>
+</nav>
+
+<section class="ws-object-head">
+  <div>
+    <p class="ws-eyebrow">Обращение №{{ appeal.pk }}</p>
+    <h1>{{ appeal.subject }}</h1>
+    <div class="ws-object-meta">
+      <span>{{ appeal.category.name }}</span>
+      <span>{{ appeal.opened_at|date:'d.m.Y H:i' }}</span>
+      <span class="ws-badge{% if appeal.status == 'new' %} ws-badge-attention{% elif appeal.status == 'resolved' or appeal.status == 'closed' %} ws-badge-ok{% else %} ws-badge-muted{% endif %}">{{ appeal.get_status_display }}</span>
+    </div>
+  </div>
+  {% if can_view_accounts %}<a class="ws-secondary" href="{% url 'staff_workspace:account' appeal.account_id %}">{{ appeal.account.plot|default:'Участок' }} · л/с {{ appeal.account.number|default:'—' }}</a>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Диалог</h2><span>{{ events|length }} сообщ.</span></div>
+  <div class="ws-conversation">
+    {% for event in events %}
+    <article class="ws-message{% if event.kind == 'board' %} ws-message-board{% else %} ws-message-resident{% endif %}">
+      <div class="ws-message-meta">
+        <strong>{% if event.kind == 'board' %}Правление{% if event.final %} · итоговый ответ{% endif %}{% else %}Житель{% endif %}</strong>
+        <time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:'d.m.Y H:i' }}</time>
+      </div>
+      {% if event.body %}<div class="ws-message-body">{{ event.body|linebreaksbr }}</div>{% endif %}
+      {% if event.attachments %}
+      <div class="ws-attachments" aria-label="Вложения">
+        {% for item in event.attachments %}
+        <a href="{% url 'staff_workspace:appeal_attachment' item.pk %}">{{ item.original_name }} · {{ item.file_size|filesizeformat }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+{% if can_reply %}
+<section class="ws-section ws-form-panel">
+  <div class="ws-section-head"><h2>Ответить жителю</h2></div>
+  <form class="ws-form" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reply">
+    {{ form.non_field_errors }}
+    <div class="ws-field">
+      <label for="{{ form.body.id_for_label }}">{{ form.body.label }}</label>
+      {{ form.body }}
+      {{ form.body.errors }}
+    </div>
+    <div class="ws-field">
+      <label for="{{ form.document.id_for_label }}">{{ form.document.label }}</label>
+      {{ form.document }}
+      {% if form.document.help_text %}<small>{{ form.document.help_text }}</small>{% endif %}
+      {{ form.document.errors }}
+    </div>
+    <div class="ws-field">
+      <label for="{{ form.next_status.id_for_label }}">{{ form.next_status.label }}</label>
+      {{ form.next_status }}
+      {{ form.next_status.errors }}
+    </div>
+    <button class="ws-primary" type="submit">Отправить сообщение</button>
+  </form>
+</section>
+{% elif appeal.status == 'resolved' and can_manage_appeals %}
+<section class="ws-section ws-muted-panel">
+  <h2>Обращение решено</h2>
+  <p>Итоговый ответ уже отправлен. Закройте карточку, когда дополнительная работа больше не нужна.</p>
+  <form method="post" class="ws-actions">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="close">
+    <button class="ws-secondary" type="submit">Закрыть обращение</button>
+  </form>
+</section>
+{% elif appeal.status == 'closed' %}
+<section class="ws-section ws-muted-panel"><h2>Диалог закрыт</h2><p>Новые сообщения в эту карточку не отправляются.</p></section>
+{% elif not can_manage_appeals %}
+<section class="ws-section ws-muted-panel"><h2>Только просмотр</h2><p>У вашей роли нет права отвечать или менять состояние обращения.</p></section>
+{% endif %}
+
+{% if can_manage_appeals %}
+<section class="ws-section ws-muted-panel">
+  <h2>Технический fallback</h2>
+  <p>Django Admin остаётся доступен для истории и редких служебных исправлений.</p>
+  <a class="ws-secondary" href="{% url 'admin:water_residentappeal_change' appeal.pk %}">Открыть служебную карточку</a>
+</section>
+{% endif %}
+{% endblock %}
