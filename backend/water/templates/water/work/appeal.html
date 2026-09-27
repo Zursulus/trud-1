@@ -55,12 +55,12 @@
 
     <div class="ws-composer-tools" aria-label="Инструменты ответа">
       <button class="ws-composer-tool" type="button" data-file-trigger>＋ Вложить</button>
-      <button class="ws-composer-tool" type="button" data-panel-target="emoji" aria-expanded="false">😊</button>
+      <button class="ws-composer-tool" type="button" data-panel-target="emoji" aria-expanded="false" aria-label="Добавить смайлик">😊</button>
       <button class="ws-composer-tool" type="button" data-panel-target="quick" aria-expanded="false">⚡ Быстрый ответ</button>
     </div>
 
-    <div class="ws-composer-panel" data-composer-panel="emoji" hidden aria-label="Смайлики">
-      {% for emoji in '👍 ✅ 🙏 🙂 😊 👌 ❗ ❓ 📎 📌'.split %}<button type="button" data-insert-text="{{ emoji }}">{{ emoji }}</button>{% endfor %}
+    <div class="ws-composer-panel ws-emoji-panel" data-composer-panel="emoji" hidden aria-label="Смайлики">
+      <button type="button" data-insert-text="👍">👍</button><button type="button" data-insert-text="✅">✅</button><button type="button" data-insert-text="🙏">🙏</button><button type="button" data-insert-text="🙂">🙂</button><button type="button" data-insert-text="😊">😊</button><button type="button" data-insert-text="👌">👌</button><button type="button" data-insert-text="❗">❗</button><button type="button" data-insert-text="❓">❓</button><button type="button" data-insert-text="📎">📎</button><button type="button" data-insert-text="📌">📌</button>
     </div>
 
     <div class="ws-composer-panel ws-quick-replies" data-composer-panel="quick" hidden aria-label="Быстрые ответы">
