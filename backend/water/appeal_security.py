@@ -1,3 +1,4 @@
+from datetime import timedelta
 import hashlib
 import logging
 from pathlib import Path
@@ -172,6 +173,7 @@ def _scan_malware(fileobj):
 
     timeout = _setting_int("APPEAL_CLAMDSCAN_TIMEOUT", 20)
     fileobj.seek(0)
+    result = None
     try:
         with tempfile.NamedTemporaryFile(prefix="trud-appeal-", suffix=".upload") as temporary:
             while True:
@@ -203,6 +205,8 @@ def _scan_malware(fileobj):
     finally:
         fileobj.seek(0)
 
+    if result is None:
+        return
     if result.returncode == 1:
         _raise("Файл отклонён системой безопасности.", "appeal_malware")
     if result.returncode != 0 and required:
@@ -355,7 +359,7 @@ def register_resident_submission_attempt(request, user):
 def enforce_resident_submission_limits(*, request, user, account, appeal=None, upload=None, creating=False):
     """Database-backed limits for successful traffic and attachment volume."""
     now = timezone.now()
-    minute_start = now - timezone.timedelta(minutes=1)
+    minute_start = now - timedelta(minutes=1)
     recent = ResidentAppeal.objects.filter(author=user, opened_at__gte=minute_start).count()
     recent += ResidentAppealMessage.objects.filter(author=user, created_at__gte=minute_start).count()
     message_limit = _setting_int("APPEAL_MESSAGES_PER_MINUTE", 5)
@@ -375,7 +379,7 @@ def enforce_resident_submission_limits(*, request, user, account, appeal=None, u
         )
 
     if creating:
-        creation_start = now - timezone.timedelta(minutes=10)
+        creation_start = now - timedelta(minutes=10)
         new_count = ResidentAppeal.objects.filter(author=user, opened_at__gte=creation_start).count()
         new_limit = _setting_int("APPEAL_NEW_PER_TEN_MINUTES", 3)
         if new_count >= new_limit:
