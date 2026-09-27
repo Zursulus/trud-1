@@ -1,0 +1,7 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Новая оплата{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:finance' %}">Финансы</a><span aria-hidden="true">›</span><a href="{% url 'staff_workspace:finance_payments' %}">Оплаты</a><span aria-hidden="true">›</span><span>Новая</span></nav>
+<section class="ws-page-head ws-page-head-compact"><div><p class="ws-eyebrow">Финансы</p><h1>Внести оплату</h1><p>Новая запись создаётся со статусом «Ожидает проверки».</p></div></section>
+<form class="ws-finance-form" method="post">{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">Сохранить на проверку</button></form>
+{% endblock %}
