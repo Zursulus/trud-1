@@ -134,6 +134,9 @@ def appeal_detail(request, appeal_id):
         if not can_change:
             raise PermissionDenied
         action = request.POST.get("action")
+        if action == "reply" and appeal.status in FINAL_APPEAL_STATES:
+            messages.error(request, "Обращение уже завершено. Новое сообщение не отправлено.")
+            return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
         if action == "close":
             try:
                 close_resolved_appeal(appeal_id=appeal.pk, actor=request.user)
