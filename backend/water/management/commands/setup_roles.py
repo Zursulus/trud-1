@@ -79,6 +79,7 @@ class Command(BaseCommand):
             'view_historicalcontrollerlineaccess',
         })
         administrator.update({'export_account', 'export_reading', 'view_chargeobligation'})
+        administrator.update({'view_securityalert', 'change_securityalert'})
         administrator.update({f'view_{name}' for name in BOARD_VIEW})
         administrator.update({f'{action}_{name}' for name in BOARD_MANAGE for action in ('add', 'change')})
         administrator.add('add_boardprotocol')

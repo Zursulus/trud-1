@@ -38,6 +38,7 @@ TEMPLATES = [{
     'OPTIONS': {'context_processors': [
         'django.template.context_processors.request', 'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
+        'water.security_context.security_alerts',
     ]},
 }]
 if DEBUG and os.environ.get('DJANGO_TEST_SQLITE') == '1':
@@ -104,3 +105,15 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
 if os.environ.get('DJANGO_TRUST_PROXY') == '1':
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Appeal attachment security. Production fails closed if malware scanning is unavailable.
+APPEAL_MALWARE_SCAN_REQUIRED = os.environ.get(
+    'TRUD_APPEAL_MALWARE_SCAN_REQUIRED', '0' if DEBUG else '1',
+) == '1'
+APPEAL_CLAMDSCAN_PATH = os.environ.get('TRUD_APPEAL_CLAMDSCAN_PATH', '/usr/bin/clamdscan')
+APPEAL_CLAMDSCAN_TIMEOUT = int(os.environ.get('TRUD_APPEAL_CLAMDSCAN_TIMEOUT', '20'))
+APPEAL_POST_ATTEMPTS_PER_MINUTE = int(os.environ.get('TRUD_APPEAL_POST_ATTEMPTS_PER_MINUTE', '12'))
+APPEAL_MESSAGES_PER_MINUTE = int(os.environ.get('TRUD_APPEAL_MESSAGES_PER_MINUTE', '5'))
+APPEAL_NEW_PER_TEN_MINUTES = int(os.environ.get('TRUD_APPEAL_NEW_PER_TEN_MINUTES', '3'))
+APPEAL_DAILY_UPLOAD_BYTES = int(os.environ.get('TRUD_APPEAL_DAILY_UPLOAD_BYTES', str(50 * 1024 * 1024)))
+APPEAL_TOTAL_UPLOAD_BYTES = int(os.environ.get('TRUD_APPEAL_TOTAL_UPLOAD_BYTES', str(100 * 1024 * 1024)))
