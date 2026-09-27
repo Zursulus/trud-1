@@ -54,7 +54,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Вода</h2><span>{{ meters|length }} счётч.</span></div>
   {% if meters %}
-    <div class="ws-table-wrap">
+    <div class="ws-table-wrap" tabindex="0" role="region" aria-label="Таблица показаний воды">
       <table class="ws-table">
         <thead><tr><th>Счётчик</th><th>Последнее показание</th><th>Дата</th><th>Состояние</th></tr></thead>
         <tbody>
