@@ -22,7 +22,9 @@ class AdminNavigationTests(TestCase):
         self.controller.groups.add(Group.objects.get(name='Контролёр воды'))
 
     def login_as(self, user):
-        device, _ = TOTPDevice.objects.get_or_create(user=user, defaults={'name': 'navigation test device'})
+        device, _ = TOTPDevice.objects.get_or_create(
+            user=user, defaults={'name': 'navigation test device', 'confirmed': True},
+        )
         self.client.force_login(user)
         session = self.client.session
         session[DEVICE_ID_SESSION_KEY] = device.persistent_id
