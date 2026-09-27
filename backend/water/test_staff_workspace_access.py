@@ -103,10 +103,10 @@ class StaffWorkspaceAccessTests(TestCase):
             f"/work/access/requests/{request_obj.pk}/",
             {
                 "action": "approve",
-                "account": self.account.pk,
-                "role": "owner",
-                "email": request_obj.email,
-                "decision_note": "Проверено",
+                "approve-account": self.account.pk,
+                "approve-role": "owner",
+                "approve-email": request_obj.email,
+                "approve-decision_note": "Проверено",
             },
         )
         self.assertEqual(approve.status_code, 403)
@@ -114,7 +114,7 @@ class StaffWorkspaceAccessTests(TestCase):
 
         reject = self.client.post(
             f"/work/access/requests/{request_obj.pk}/",
-            {"action": "reject", "decision_note": "Основание не подтверждено"},
+            {"action": "reject", "reject-decision_note": "Основание не подтверждено"},
         )
         self.assertEqual(reject.status_code, 302)
         request_obj.refresh_from_db()
@@ -130,10 +130,10 @@ class StaffWorkspaceAccessTests(TestCase):
             f"/work/access/requests/{request_obj.pk}/",
             {
                 "action": "approve",
-                "account": self.account.pk,
-                "role": "owner",
-                "email": request_obj.email,
-                "decision_note": "Личность и счёт проверены",
+                "approve-account": self.account.pk,
+                "approve-role": "owner",
+                "approve-email": request_obj.email,
+                "approve-decision_note": "Личность и счёт проверены",
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -148,10 +148,10 @@ class StaffWorkspaceAccessTests(TestCase):
             f"/work/access/requests/{request_obj.pk}/",
             {
                 "action": "approve",
-                "account": self.account.pk,
-                "role": "owner",
-                "email": request_obj.email,
-                "decision_note": "Повтор",
+                "approve-account": self.account.pk,
+                "approve-role": "owner",
+                "approve-email": request_obj.email,
+                "approve-decision_note": "Повтор",
             },
         )
         self.assertEqual(repeat.status_code, 200)
