@@ -51,7 +51,7 @@
     {% elif can_view_water %}
       <a href="{% url 'admin:water_reading_changelist' %}"><span aria-hidden="true">◉</span>Вода</a>
     {% else %}
-      <a href="{{ admin_url }}"><span aria-hidden="true">⋯</span>Ещё</a>
+      <a href="{% url 'staff_workspace:home' %}#work-queue"><span aria-hidden="true">✓</span>Работа</a>
     {% endif %}
     <a href="{{ admin_url }}"><span aria-hidden="true">⚙</span>Ещё</a>
   </nav>
