@@ -1,0 +1,65 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{{ poll.title }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:governance' %}">Опросы / правление</a><span>›</span><span>{{ poll.title }}</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Предварительный опрос · неофициальный контур</p><h1>{{ poll.title }}</h1><p>{{ poll.description|default:'Без дополнительного пояснения.' }}</p></div></section>
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Статус</span><strong style="font-size:16px">{% if poll.is_open %}Открыт{% elif poll.closed_at %}Закрыт{% elif poll.opens_at > now %}Запланирован{% else %}Срок истёк{% endif %}</strong></div>
+  <div class="ws-summary"><span>Начало</span><strong style="font-size:16px">{{ poll.opens_at|date:'d.m.Y H:i' }}</strong></div>
+  <div class="ws-summary"><span>Срок ответа</span><strong style="font-size:16px">{{ poll.closes_at|date:'d.m.Y H:i' }}</strong></div>
+</div>
+
+<section class="ws-section">
+  <div class="ws-section-head"><div><p class="ws-eyebrow">Результаты</p><h2>Вопросы и ответы</h2></div></div>
+  <div class="ws-card-grid">
+    {% for row in question_rows %}
+      <article class="ws-card">
+        <span class="ws-card-kicker">Вопрос {{ row.question.order }}</span>
+        <strong>{{ row.question.text }}</strong>
+        <p>За: {{ row.for_count }} · Против: {{ row.against_count }} · Воздержались: {{ row.abstain_count }}</p>
+        <p>Ответили: {{ row.votes|length }} из {{ row.eligible_count }}</p>
+        {% if row.not_voted %}<p><strong>Ещё не ответили:</strong> {{ row.not_voted|join:', ' }}</p>{% endif %}
+        {% if row.comments %}<p>Комментариев: {{ row.comments|length }}</p>{% endif %}
+      </article>
+    {% empty %}
+      <div class="ws-empty"><strong>Вопросов нет.</strong></div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if can_close %}
+<section class="ws-section"><div class="ws-finance-form">
+  <h2>Завершить опрос</h2>
+  <p>После закрытия новые голоса и комментарии не принимаются. История сохраняется.</p>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="close">{{ close_form.as_p }}<button class="ws-primary" type="submit">Закрыть предварительный опрос</button></form>
+</div></section>
+{% elif close_form.non_field_errors %}
+<section class="ws-section"><div class="ws-finance-form">{{ close_form.non_field_errors }}</div></section>
+{% endif %}
+
+<section class="ws-section">
+  <div class="ws-section-head"><div><p class="ws-eyebrow">После завершения</p><h2>Протокол</h2></div></div>
+  {% if protocol %}
+    <div class="ws-card"><span class="ws-card-kicker">Приватный неизменяемый файл</span><strong>{{ protocol.original_name }}</strong><p>{{ protocol.file_size }} байт · {{ protocol.uploaded_at|date:'d.m.Y H:i' }}</p><a href="{% url 'staff_workspace:governance_protocol' poll.pk %}">Скачать протокол</a></div>
+  {% elif can_upload_protocol %}
+    <div class="ws-finance-form"><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="protocol">{{ protocol_form.as_p }}<button class="ws-primary" type="submit">Связать протокол</button></form></div>
+  {% else %}
+    <div class="ws-empty"><p>Протокол можно связать после завершения опроса при наличии соответствующего права.</p></div>
+  {% endif %}
+  {% if protocol_form.non_field_errors %}<div class="ws-banner ws-banner-warning">{{ protocol_form.non_field_errors }}</div>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><div><p class="ws-eyebrow">Неизменяемый след</p><h2>Аудит</h2></div></div>
+  {% if audit_rows %}
+    <div class="ws-card-grid">
+      {% for event in audit_rows %}
+        <article class="ws-card"><span class="ws-card-kicker">{{ event.created_at|date:'d.m.Y H:i' }}</span><strong>{{ event.get_action_display }}</strong><p>{{ event.summary|default:'Без пояснения' }}</p><p>{% if event.actor %}{{ event.actor.get_full_name|default:event.actor.username }}{% else %}Системное действие{% endif %}</p></article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ws-empty"><p>Событий аудита пока нет.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
