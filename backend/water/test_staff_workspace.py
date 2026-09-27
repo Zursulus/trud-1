@@ -101,7 +101,7 @@ class StaffWorkspaceTests(TestCase):
         self.assertContains(card, "Садовая 101")
         self.assertContains(card, "Кадастровый ориентир 101")
         self.assertContains(card, "WS-METER-101")
-        self.assertContains(card, "600.00 ₽")
+        self.assertContains(card, "600,00 ₽")
         self.assertContains(card, "Финансы")
         self.assertNotContains(card, "Секретное ФИО 101")
         self.assertNotContains(card, "+79990000101")
@@ -114,7 +114,7 @@ class StaffWorkspaceTests(TestCase):
         self.assertContains(response, "Линия workspace A")
         self.assertNotContains(response, "Кадастровый ориентир 101")
         self.assertNotContains(response, "Финансы")
-        self.assertNotContains(response, "600.00 ₽")
+        self.assertNotContains(response, "600,00 ₽")
         self.assertNotContains(response, "Секретное ФИО 101")
         self.assertNotContains(response, "+79990000101")
 
@@ -141,7 +141,7 @@ class StaffWorkspaceTests(TestCase):
         self.assertNotContains(response, "WS-METER-101")
         self.assertNotContains(response, "Линия workspace A")
         self.assertNotContains(response, "Финансы")
-        self.assertNotContains(response, "600.00 ₽")
+        self.assertNotContains(response, "600,00 ₽")
 
         meter_search = self.client.get("/work/search/", {"q": "WS-METER-101"})
         self.assertNotContains(meter_search, "WS-101")
