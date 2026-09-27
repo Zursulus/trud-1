@@ -42,16 +42,7 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
         session.save()
         return self.client.cookies[settings.SESSION_COOKIE_NAME].value
 
-    def _assert_no_blocking_accessibility(self, page, label):
-        results = Axe().run(page).response
-        blocking = [
-            violation for violation in results.get("violations", [])
-            if violation.get("impact") in {"serious", "critical"}
-            and any(str(tag).startswith("wcag") for tag in violation.get("tags") or [])
-        ]
-        self.assertEqual(blocking, [], f"{label}: {blocking}")
-
-    def _exercise(self, browser, label, session_cookie):
+    def _finance_case(self, label):
         charge = Charge.objects.create(
             account=self.account,
             period=self.period,
@@ -69,6 +60,18 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             status="pending",
             reference=f"E2E {label}",
         )
+        return charge.pk, payment.pk
+
+    def _assert_no_blocking_accessibility(self, page, label):
+        results = Axe().run(page).response
+        blocking = [
+            violation for violation in results.get("violations", [])
+            if violation.get("impact") in {"serious", "critical"}
+            and any(str(tag).startswith("wcag") for tag in violation.get("tags") or [])
+        ]
+        self.assertEqual(blocking, [], f"{label}: {blocking}")
+
+    def _exercise(self, browser, label, session_cookie, payment_id):
         context = browser.new_context(viewport={"width": 390, "height": 844})
         context.add_cookies([{
             "name": settings.SESSION_COOKIE_NAME,
@@ -89,7 +92,7 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(page.get_by_text("+79996660000").count(), 0)
             self.assertEqual(page.locator(".ws-bottom-nav a").count(), 5)
 
-            page.goto(f"{self.live_server_url}/work/finance/payments/{payment.pk}/", wait_until="networkidle")
+            page.goto(f"{self.live_server_url}/work/finance/payments/{payment_id}/", wait_until="networkidle")
             page.get_by_role("button", name="Подтвердить оплату", exact=True).click()
             page.wait_for_load_state("networkidle")
             self.assertTrue(page.get_by_text("Оплата подтверждена.", exact=True).is_visible())
@@ -104,18 +107,27 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(console_errors, [])
         finally:
             context.close()
-        self.assertTrue(PaymentAllocation.objects.filter(payment=payment, charge=charge).exists())
 
     def test_finance_mobile_chromium_and_webkit(self):
         session_cookie = self._verified_session_cookie()
+        chromium_charge_id, chromium_payment_id = self._finance_case("Chromium mobile")
+        webkit_charge_id, webkit_payment_id = self._finance_case("WebKit mobile")
+
         with sync_playwright() as playwright:
             chromium = playwright.chromium.launch(headless=True)
             try:
-                self._exercise(chromium, "Chromium mobile", session_cookie)
+                self._exercise(chromium, "Chromium mobile", session_cookie, chromium_payment_id)
             finally:
                 chromium.close()
             webkit = playwright.webkit.launch(headless=True)
             try:
-                self._exercise(webkit, "WebKit mobile", session_cookie)
+                self._exercise(webkit, "WebKit mobile", session_cookie, webkit_payment_id)
             finally:
                 webkit.close()
+
+        self.assertTrue(PaymentAllocation.objects.filter(
+            payment_id=chromium_payment_id, charge_id=chromium_charge_id,
+        ).exists())
+        self.assertTrue(PaymentAllocation.objects.filter(
+            payment_id=webkit_payment_id, charge_id=webkit_charge_id,
+        ).exists())
