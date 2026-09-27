@@ -160,7 +160,6 @@ def _save_public_form(form, *, actor):
         is_published=form.cleaned_data["is_published"],
         confirmed=form.cleaned_data.get("confirm_publication", False),
     )
-    obj.full_clean()
     obj.save()
     reason = (form.cleaned_data.get("change_reason") or "Создание записи").strip()
     _log_content(actor, obj, CHANGE if was_existing else ADDITION, reason)
