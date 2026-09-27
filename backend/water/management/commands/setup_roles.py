@@ -62,6 +62,10 @@ class Command(BaseCommand):
             'access_private_registry',
             'view_account',
             'view_landplot',
+            # Applicant PII stays behind the separately revocable private-registry boundary.
+            # Add permission is deliberately omitted: residents create requests publicly.
+            'view_residentaccessrequest',
+            'change_residentaccessrequest',
         }
 
         administrator = water_view | registry | finance | {

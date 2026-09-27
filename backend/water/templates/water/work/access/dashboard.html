@@ -1,0 +1,111 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Доступ жителей{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Рабочий процесс</p>
+    <h1>Доступ жителей</h1>
+    <p>Заявки, приглашения, действующие доступы и восстановление пароля — с раздельной границей ПД.</p>
+  </div>
+</section>
+
+<div class="ws-summary-grid">
+  {% if can_review_access_requests %}
+  <div class="ws-summary{% if new_request_count %} ws-summary-attention{% endif %}">
+    <span>Новые заявки</span><strong>{{ new_request_count }}</strong><p>Доступны только закрытому реестру.</p>
+  </div>
+  {% endif %}
+  {% if can_manage_access %}
+  <div class="ws-summary"><span>Активные доступы</span><strong>{{ active_access_count }}</strong><p>Доступы, действующие сегодня.</p></div>
+  <div class="ws-summary"><span>Приглашения</span><strong>{{ active_invites|length }}</strong><p>Активные неиспользованные ссылки.</p></div>
+  <div class="ws-summary"><span>Сброс пароля</span><strong>{{ active_resets|length }}</strong><p>Активные ссылки восстановления.</p></div>
+  {% endif %}
+</div>
+
+<form class="ws-search-form" method="get">
+  <label for="access-q">Поиск в доступном вам контуре</label>
+  <div class="ws-search-line">
+    <input id="access-q" name="q" value="{{ q }}" autocomplete="off" placeholder="Счёт, участок, учётная запись{% if can_review_access_requests %}, ФИО или контакт заявки{% endif %}">
+    <button class="ws-primary" type="submit">Найти</button>
+  </div>
+  <input type="hidden" name="request_state" value="{{ request_state }}">
+  <input type="hidden" name="access_state" value="{{ access_state }}">
+</form>
+
+{% if can_review_access_requests %}
+<section class="ws-section" id="access-requests">
+  <div class="ws-section-head"><h2>Заявки на доступ</h2><span>Приватный контур</span></div>
+  <div class="ws-finance-filters" aria-label="Фильтр заявок">
+    <a href="?request_state=new&access_state={{ access_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if request_state == 'new' %} aria-current="page"{% endif %}>Новые</a>
+    <a href="?request_state=approved&access_state={{ access_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if request_state == 'approved' %} aria-current="page"{% endif %}>Одобрены</a>
+    <a href="?request_state=rejected&access_state={{ access_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if request_state == 'rejected' %} aria-current="page"{% endif %}>Отклонены</a>
+    <a href="?request_state=all&access_state={{ access_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if request_state == 'all' %} aria-current="page"{% endif %}>Все</a>
+  </div>
+  {% if access_requests %}
+  <div class="ws-result-list">
+    {% for item in access_requests %}
+    <a class="ws-result" href="{% url 'staff_workspace:access_request' item.pk %}">
+      <div>
+        <span class="ws-result-type">{{ item.get_status_display }} · {{ item.submitted_at|date:'d.m.Y H:i' }}</span>
+        <strong>{{ item.full_name }}</strong>
+        <p>{{ item.plot_hint }} · {{ item.email }}</p>
+      </div><span class="ws-chevron" aria-hidden="true">›</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<div class="ws-empty"><strong>Заявок в этом фильтре нет.</strong><p>Попробуйте другой статус или поиск.</p></div>{% endif %}
+</section>
+{% endif %}
+
+{% if can_manage_access %}
+<section class="ws-section" id="resident-accesses">
+  <div class="ws-section-head"><h2>Доступы жителей</h2><span>Операционный контур</span></div>
+  <div class="ws-finance-filters" aria-label="Фильтр доступов">
+    <a href="?access_state=active&request_state={{ request_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if access_state == 'active' %} aria-current="page"{% endif %}>Активные</a>
+    <a href="?access_state=ended&request_state={{ request_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if access_state == 'ended' %} aria-current="page"{% endif %}>Завершённые</a>
+    <a href="?access_state=all&request_state={{ request_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if access_state == 'all' %} aria-current="page"{% endif %}>Все</a>
+  </div>
+  {% if accesses %}
+  <div class="ws-result-list">
+    {% for access in accesses %}
+    <a class="ws-result" href="{% url 'staff_workspace:access_detail' access.pk %}">
+      <div>
+        <span class="ws-result-type">{{ access.get_role_display }}{% if access.ends %} · завершён {{ access.ends|date:'d.m.Y' }}{% else %} · действует{% endif %}</span>
+        <strong>{{ access.account.number|default:'Без номера' }} · {{ access.account.plot }}</strong>
+        <p>{{ access.user.username }}{% if access.user.email %} · {{ access.user.email }}{% endif %}</p>
+      </div><span class="ws-chevron" aria-hidden="true">›</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<div class="ws-empty"><strong>Доступов в этом фильтре нет.</strong><p>История не удаляется; завершённые записи доступны отдельным фильтром.</p></div>{% endif %}
+</section>
+
+<section class="ws-section" id="active-invites">
+  <div class="ws-section-head"><h2>Активные приглашения</h2><span>{{ active_invites|length }}</span></div>
+  {% if active_invites %}
+  <div class="ws-table-wrap" tabindex="0" role="region" aria-label="Активные приглашения">
+    <table class="ws-table"><thead><tr><th>Email</th><th>Счёт</th><th>Основание</th><th>До</th><th>Действие</th></tr></thead><tbody>
+    {% for invite in active_invites %}<tr>
+      <td>{{ invite.email }}</td><td>{{ invite.account.number|default:'—' }} · {{ invite.account.plot }}</td><td>{{ invite.get_role_display }}</td><td>{{ invite.expires_at|date:'d.m.Y H:i' }}</td>
+      <td>{% if can_revoke_invite %}<form method="post" action="{% url 'staff_workspace:access_revoke_invite' invite.pk %}">{% csrf_token %}<button class="ws-danger-action" type="submit">Отозвать</button></form>{% else %}—{% endif %}</td>
+    </tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}<div class="ws-empty"><strong>Активных приглашений нет.</strong><p>Использованные, просроченные и отозванные ссылки не считаются активными.</p></div>{% endif %}
+</section>
+
+<section class="ws-section" id="active-resets">
+  <div class="ws-section-head"><h2>Ссылки восстановления</h2><span>{{ active_resets|length }}</span></div>
+  {% if active_resets %}
+  <div class="ws-table-wrap" tabindex="0" role="region" aria-label="Активные ссылки восстановления">
+    <table class="ws-table"><thead><tr><th>Учётная запись</th><th>До</th><th>Действие</th></tr></thead><tbody>
+    {% for reset in active_resets %}<tr>
+      <td>{{ reset.user.username }}{% if reset.user.email %} · {{ reset.user.email }}{% endif %}</td><td>{{ reset.expires_at|date:'d.m.Y H:i' }}</td>
+      <td>{% if can_revoke_reset %}<form method="post" action="{% url 'staff_workspace:access_revoke_reset' reset.pk %}">{% csrf_token %}<button class="ws-danger-action" type="submit">Отозвать</button></form>{% else %}—{% endif %}</td>
+    </tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}<div class="ws-empty"><strong>Активных ссылок восстановления нет.</strong><p>Новые ссылки создаются из карточки действующего доступа.</p></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
