@@ -1,0 +1,25 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Опросы правления{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Правление · предварительный контур</p><h1>Опросы правления</h1><p>Внутренние неофициальные опросы для подготовки решений. Это не общее собрание, не кворум и не юридически значимое электронное голосование.</p></div>
+  {% if can_create_poll %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:governance_create' %}">Новый опрос</a></div>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Последние опросы</h2><span>{{ poll_rows|length }}</span></div>
+  {% if poll_rows %}<div class="ws-action-list">
+    {% for row in poll_rows %}
+      <a class="ws-action-row" href="{% url 'staff_workspace:governance_detail' row.poll.pk %}">
+        <span><strong>{{ row.poll.title }}</strong><br><small>{% if row.poll.is_open %}Открыт{% else %}Завершён{% endif %} · вопросов {{ row.question_count }} · ответили {{ row.responded_count }}/{{ row.eligible_count }}{% if row.pending_count %} · ждём {{ row.pending_count }}{% endif %}</small></span>
+        <span class="ws-chevron" aria-hidden="true">›</span>
+      </a>
+    {% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Предварительных опросов пока нет</strong><p>Создайте первый внутренний опрос, если нужно собрать позицию членов правления.</p></div>{% endif %}
+</section>
+
+<section class="ws-section ws-muted-panel">
+  <h2>Граница применения</h2>
+  <p>Голоса, комментарии и история сохраняются для внутренней работы. Контур не вычисляет кворум, не создаёт электронную подпись и не объявляет юридический результат.</p>
+</section>
+{% endblock %}
