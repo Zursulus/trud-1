@@ -1,0 +1,59 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Доступ {{ access.account.number|default:access.account.pk }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступ жителей</a><span>›</span><span>{{ access.account.number|default:'Без номера' }}</span></nav>
+<section class="ws-object-head">
+  <div>
+    <p class="ws-eyebrow">Действующий доступ</p>
+    <h1>{{ access.account.number|default:'Без номера' }} · {{ access.account.plot }}</h1>
+    <p>{{ access.user.username }}{% if access.user.email %} · {{ access.user.email }}{% endif %}</p>
+  </div>
+</section>
+
+{% if reset_url %}
+<section class="ws-section">
+  <div class="ws-banner ws-banner-warning"><strong>Одноразовая ссылка восстановления создана.</strong><br>Скопируйте её сейчас. Исходный токен после ухода со страницы восстановить нельзя.</div>
+  <div class="ws-finance-form"><label for="reset-url">Ссылка восстановления</label><input id="reset-url" value="{{ reset_url }}" readonly></div>
+</section>
+{% endif %}
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Основание</span><strong style="font-size:16px">{{ access.get_role_display }}</strong></div>
+  <div class="ws-summary"><span>С</span><strong style="font-size:16px">{{ access.starts|date:'d.m.Y' }}</strong></div>
+  <div class="ws-summary"><span>До</span><strong style="font-size:16px">{% if access.ends %}{{ access.ends|date:'d.m.Y' }}{% else %}Действует{% endif %}</strong></div>
+  <div class="ws-summary"><span>Подтверждён</span><strong style="font-size:16px">{{ access.verified_at|date:'d.m.Y H:i' }}</strong></div>
+</div>
+
+{% if can_end_access or can_issue_reset %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Безопасные действия</h2><span>История не удаляется</span></div>
+  <div class="ws-card-grid">
+    {% if can_end_access %}
+    <div class="ws-finance-form">
+      <h3>Завершить доступ</h3>
+      <p class="ws-finance-note">Запись останется в истории; меняется только дата окончания.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="end">{{ end_form.as_p }}<button class="ws-danger-action" type="submit">Завершить доступ</button></form>
+    </div>
+    {% endif %}
+    {% if can_issue_reset %}
+    <div class="ws-finance-form">
+      <h3>Восстановить пароль</h3>
+      <p class="ws-finance-note">Будет создана новая одноразовая ссылка по существующим правилам eligibility/token.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reset"><button class="ws-primary" type="submit">Создать ссылку восстановления</button></form>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>История ссылок восстановления</h2><span>{{ resets|length }}</span></div>
+  {% if resets %}
+  <div class="ws-table-wrap" tabindex="0" role="region" aria-label="История ссылок восстановления">
+    <table class="ws-table"><thead><tr><th>Создано / срок</th><th>Использовано</th><th>Отозвано</th></tr></thead><tbody>
+      {% for reset in resets %}<tr><td>до {{ reset.expires_at|date:'d.m.Y H:i' }}</td><td>{{ reset.used_at|date:'d.m.Y H:i'|default:'—' }}</td><td>{% if reset.revoked %}Да{% else %}Нет{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}<div class="ws-empty"><strong>Ссылок восстановления ещё не создавали.</strong></div>{% endif %}
+</section>
+{% endblock %}
