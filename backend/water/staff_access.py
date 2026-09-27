@@ -189,9 +189,11 @@ def request_detail(request, request_id):
     approve_form = AccessRequestApproveForm(
         request.POST if request.method == "POST" and request.POST.get("action") == "approve" else None,
         initial={"email": request_obj.email, "role": "owner"},
+        prefix="approve",
     )
     reject_form = AccessRequestRejectForm(
         request.POST if request.method == "POST" and request.POST.get("action") == "reject" else None,
+        prefix="reject",
     )
     invite_url = None
 
