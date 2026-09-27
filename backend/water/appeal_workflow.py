@@ -42,7 +42,6 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
             appeal.responded_by = actor
             appeal._history_user = actor
             appeal._change_reason = "Итоговый ответ правления и решение обращения"
-            appeal.full_clean()
             appeal.save()
             if document:
                 ResidentAppealAttachment.objects.create(
@@ -75,7 +74,6 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
                 "in_progress": "Правление продолжило работу по обращению",
                 "awaiting_resident": "Правление запросило уточнение у жителя",
             }[target]
-            appeal.full_clean()
             appeal.save()
         return appeal, message
 
@@ -86,12 +84,11 @@ def close_resolved_appeal(*, appeal_id, actor):
         appeal = ResidentAppeal.objects.select_for_update().get(pk=appeal_id)
         if appeal.status == "closed":
             return appeal
-        if appeal.status != "resolved":
-            raise ValidationError("Закрыть можно только уже решённое обращение.")
+        if appeal.status != "resolved" or not appeal.response.strip():
+            raise ValidationError("Закрыть можно только уже решённое обращение с итоговым ответом.")
         appeal.status = "closed"
         appeal._history_user = actor
         appeal._change_reason = "Решённое обращение закрыто правлением"
-        appeal.full_clean()
         appeal.save()
         return appeal
 
