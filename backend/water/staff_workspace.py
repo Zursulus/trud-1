@@ -34,19 +34,43 @@ def _controller_group_ids(user, on_date=None):
     ).values_list("group_id", flat=True)
 
 
+def _active_controller_account_ids(user, on_date=None):
+    on_date = on_date or timezone.localdate()
+    return Membership.objects.filter(
+        group_id__in=_controller_group_ids(user, on_date),
+        starts__lte=on_date,
+        account__archived=False,
+    ).filter(
+        Q(ends__isnull=True) | Q(ends__gt=on_date),
+    ).values("account_id")
+
+
 def scoped_accounts(user):
     """Return only accounts the current staff user may inspect in /work/."""
     if user.is_superuser or user.has_perm("water.view_account"):
         return Account.objects.all()
     if user.has_perm("water.use_controller_workspace"):
-        group_ids = _controller_group_ids(user)
-        account_ids = Membership.objects.filter(
-            group_id__in=group_ids,
-            starts__lte=timezone.localdate(),
-        ).filter(
-            Q(ends__isnull=True) | Q(ends__gt=timezone.localdate()),
-        ).values("account_id")
-        return Account.objects.filter(pk__in=Subquery(account_ids))
+        return Account.objects.filter(pk__in=Subquery(_active_controller_account_ids(user)))
+    raise PermissionDenied
+
+
+def scoped_water_meters(user, on_date=None):
+    """Return active meters visible to this staff role without widening its scope."""
+    on_date = on_date or timezone.localdate()
+    meters = Meter.objects.filter(
+        Q(commissioned_on__isnull=True) | Q(commissioned_on__lte=on_date),
+    ).filter(
+        Q(retired_on__isnull=True) | Q(retired_on__gte=on_date),
+    )
+    if user.is_superuser or user.has_perm("water.view_meter"):
+        return meters
+    if user.has_perm("water.use_controller_workspace"):
+        group_ids = _controller_group_ids(user, on_date)
+        account_ids = _active_controller_account_ids(user, on_date)
+        return meters.filter(
+            Q(kind="line", group_id__in=group_ids)
+            | Q(kind="individual", account_id__in=Subquery(account_ids))
+        )
     raise PermissionDenied
 
 
@@ -84,13 +108,29 @@ def dashboard(request):
 
     attention = []
     if request.user.has_perm("water.change_controllerreadingsubmission"):
-        count = ControllerReadingSubmission.objects.filter(status="pending").count()
+        count = ControllerReadingSubmission.objects.filter(status="pending").exclude(
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+        ).count()
         if count:
             attention.append({
-                "label": "Показания на проверке",
+                "label": "Показания на финальной проверке",
                 "count": count,
-                "url": reverse("admin:water_controllerreadingsubmission_changelist")
-                + "?status__exact=pending",
+                "url": reverse("staff_workspace:water"),
+            })
+    elif context["can_use_controller_workspace"]:
+        account_ids = _active_controller_account_ids(request.user)
+        count = ControllerReadingSubmission.objects.filter(
+            source=ControllerReadingSubmission.SOURCE_RESIDENT,
+            status="pending",
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            meter__kind="individual",
+            meter__account_id__in=Subquery(account_ids),
+        ).count()
+        if count:
+            attention.append({
+                "label": "Наблюдения жителей на сверке",
+                "count": count,
+                "url": reverse("staff_workspace:water"),
             })
     if context["can_view_appeals"]:
         count = ResidentAppeal.objects.filter(status__in=OPEN_APPEAL_STATES).count()
@@ -135,6 +175,65 @@ def account_list(request):
     page = Paginator(accounts, 30).get_page(request.GET.get("page"))
     context.update({"q": q, "page": page})
     return TemplateResponse(request, "water/work/accounts.html", context)
+
+
+def water_dashboard(request):
+    context = _base_context(request, section="water")
+    if not context["can_view_water"]:
+        raise PermissionDenied
+
+    today = timezone.localdate()
+    meters = scoped_water_meters(request.user, today)
+    meter_ids = meters.values("pk")
+    context.update({
+        "meter_count": meters.count(),
+        "today_reading_count": Reading.objects.filter(
+            meter_id__in=Subquery(meter_ids), date=today,
+        ).count(),
+        "can_enter_readings": request.user.is_superuser or request.user.has_perm("water.add_reading"),
+        "can_capture_observation": request.user.is_superuser
+        or request.user.has_perm("water.add_controllerreadingsubmission"),
+        "can_moderate_submissions": request.user.is_superuser
+        or request.user.has_perm("water.change_controllerreadingsubmission"),
+        "can_review_readings": request.user.is_superuser or request.user.has_perm("water.view_reading"),
+        "can_view_meters": request.user.is_superuser or request.user.has_perm("water.view_meter"),
+        "can_view_balance": request.user.is_superuser or all(
+            request.user.has_perm(permission)
+            for permission in ("water.view_reading", "water.view_meter", "water.view_watergroup")
+        ),
+    })
+
+    if context["can_use_controller_workspace"] and not context["can_moderate_submissions"]:
+        account_ids = _active_controller_account_ids(request.user, today)
+        line_review_qs = ControllerReadingSubmission.objects.filter(
+            source=ControllerReadingSubmission.SOURCE_RESIDENT,
+            status="pending",
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            meter__kind="individual",
+            meter__account_id__in=Subquery(account_ids),
+        ).select_related("meter", "meter__account").order_by("-submitted_at", "-id")
+        context.update({
+            "controller_line_count": _controller_group_ids(request.user, today).count(),
+            "own_pending_count": ControllerReadingSubmission.objects.filter(
+                submitted_by=request.user, status="pending",
+            ).count(),
+            "line_review_count": line_review_qs.count(),
+            "line_review_items": list(line_review_qs[:12]),
+        })
+    elif context["can_moderate_submissions"]:
+        pending = ControllerReadingSubmission.objects.filter(status="pending")
+        final_review_qs = pending.exclude(
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+        ).select_related("meter", "meter__account").order_by("-submitted_at", "-id")
+        context.update({
+            "final_review_count": final_review_qs.count(),
+            "line_review_waiting_count": pending.filter(
+                line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            ).count(),
+            "final_review_items": list(final_review_qs[:12]),
+        })
+
+    return TemplateResponse(request, "water/work/water.html", context)
 
 
 def _meter_rows(user, account):
@@ -206,4 +305,5 @@ def account_detail(request, account_id):
 workspace_dashboard = admin.site.admin_view(dashboard)
 workspace_search = admin.site.admin_view(search)
 workspace_accounts = admin.site.admin_view(account_list)
+workspace_water = admin.site.admin_view(water_dashboard)
 workspace_account = admin.site.admin_view(account_detail)
