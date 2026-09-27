@@ -26,10 +26,11 @@ class WaterConfig(AppConfig):
         admin.site.enable_nav_sidebar = False
 
         # AdminConfig performs autodiscovery before WaterConfig.ready() in the
-        # configured application order. Apply the PII boundary only after the
-        # original ModelAdmin classes have been registered.
+        # configured application order. Apply the PII boundary and workflow-aware
+        # access administration only after the original ModelAdmin classes exist.
         from . import privacy_admin  # noqa: F401
         from . import access_request_admin  # noqa: F401
+        from . import access_management_admin  # noqa: F401
         from . import portal_permissions_admin  # noqa: F401
         from . import finance_admin  # noqa: F401
         from . import controller_scope_admin  # noqa: F401
