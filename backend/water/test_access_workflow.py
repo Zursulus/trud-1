@@ -96,7 +96,7 @@ class AccessWorkflowTests(TestCase):
         self.assertEqual(ResidentInvite.objects.count(), 1)
 
     def test_rejection_requires_reason_and_is_immutable(self):
-        with self.assertRaisesMessage(ValidationError, 'Причина отклонения обязательна'):
+        with self.assertRaisesMessage(ValidationError, 'Причина отклонения: обязательно заполнить'):
             reject_access_request(self.request.pk, decision_note='  ', actor=self.actor)
         decided = reject_access_request(
             self.request.pk, decision_note='Основание не подтверждено', actor=self.actor,
