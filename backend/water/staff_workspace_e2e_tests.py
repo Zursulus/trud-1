@@ -83,6 +83,20 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
             self._assert_no_blocking_accessibility(page, f"{label} account")
+
+            work_tab = page.locator(".ws-bottom-nav").get_by_role("link", name="Работа", exact=True)
+            work_tab.click()
+            page.wait_for_url("**/work/tasks/")
+            page.wait_for_load_state("networkidle")
+            self.assertTrue(page.get_by_role("heading", name="Рабочая очередь", exact=True).is_visible())
+            active_work_tab = page.locator('.ws-bottom-nav a[aria-current="page"]')
+            self.assertEqual(active_work_tab.get_attribute("href"), "/work/tasks/")
+            self.assertTrue(page.get_by_role("link", name="Документы и публикации", exact=True).is_visible())
+            self.assertTrue(page.evaluate(
+                "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+            ))
+            self._assert_no_blocking_accessibility(page, f"{label} work")
+
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
         finally:
