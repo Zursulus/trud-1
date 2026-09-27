@@ -69,7 +69,7 @@ class StaffWorkspaceTests(TestCase):
         Reading.objects.create(meter=cls.meter_a, date=cls.today - timedelta(days=1), value=Decimal("123.456"))
 
         period = BillingPeriod.objects.create(
-            starts=cls.today - timedelta(days=31), ends=cls.today - timedelta(days=1), status="approved",
+            starts=cls.today - timedelta(days=31), ends=cls.today - timedelta(days=1), status="open",
         )
         Charge.objects.create(
             account=cls.account_a, period=period, kind="service", amount=Decimal("1000.00"), status="approved",
