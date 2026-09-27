@@ -38,8 +38,8 @@ class StaffWorkspaceDocumentsTests(TestCase):
             phone="+7 900 999-88-77",
         )
         cls.other_account = Account.objects.create(number="DOC-002", plot="Другой участок")
-        cls.category = DocumentCategory.objects.create(name="Квитанция", sort_order=10)
-        cls.public_category = PublicDocumentCategory.objects.create(name="Протоколы", sort_order=10)
+        cls.category = DocumentCategory.objects.create(name="WS84 Квитанция", sort_order=10)
+        cls.public_category = PublicDocumentCategory.objects.create(name="WS84 Протоколы", sort_order=10)
 
     def setUp(self):
         self._media = TemporaryDirectory()
@@ -114,6 +114,7 @@ class StaffWorkspaceDocumentsTests(TestCase):
         item = self.make_account_document()
         original_file = item.document.name
         original_account = item.account_id
+        original_title = item.title
         self.login(self.admin_user)
         url = f"/work/documents/accounts/{item.pk}/"
         without_reason = self.client.post(
@@ -128,7 +129,9 @@ class StaffWorkspaceDocumentsTests(TestCase):
             },
         )
         self.assertEqual(without_reason.status_code, 200)
-        self.assertContains(without_reason, "обязательно", html=False)
+        self.assertIn("change_reason", without_reason.context["form"].errors)
+        item.refresh_from_db()
+        self.assertEqual(item.title, original_title)
 
         changed = self.client.post(
             url,
