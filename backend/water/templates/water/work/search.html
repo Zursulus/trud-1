@@ -10,7 +10,7 @@
 </section>
 
 <form class="ws-search-form" method="get" action="{% url 'staff_workspace:search' %}" role="search">
-  <label for="workspace-search">Номер счёта, участок, адрес или счётчик</label>
+  <label for="workspace-search">Номер счёта или участок{% if can_view_land_plots %}, адрес{% endif %}{% if can_view_water %} или счётчик{% endif %}</label>
   <div class="ws-search-line">
     <input id="workspace-search" name="q" type="search" value="{{ q }}" maxlength="160" autocomplete="off" placeholder="Например: 143 или Садовая 42" autofocus>
     <button class="ws-primary" type="submit">Найти</button>
@@ -30,7 +30,7 @@
           <div>
             <span class="ws-result-type">Участок / лицевой счёт</span>
             <strong>{{ account.plot|default:'Участок не указан' }}</strong>
-            <p>Л/с {{ account.number|default:'не присвоен' }}{% if account.land_plots.all %}{% for plot in account.land_plots.all %}{% if forloop.first %} · {{ plot.label }}{% endif %}{% endfor %}{% endif %}</p>
+            <p>Л/с {{ account.number|default:'не присвоен' }}{% if can_view_land_plots %}{% for plot in account.land_plots.all %}{% if forloop.first %} · {{ plot.label }}{% endif %}{% endfor %}{% endif %}</p>
           </div>
           {% if account.archived %}<span class="ws-badge ws-badge-muted">Архив</span>{% else %}<span class="ws-chevron" aria-hidden="true">›</span>{% endif %}
         </a>
@@ -39,14 +39,14 @@
   {% else %}
     <div class="ws-empty">
       <strong>Ничего не найдено</strong>
-      <p>Проверьте номер или адрес. Поиск намеренно не показывает объекты вне вашего рабочего scope.</p>
+      <p>Проверьте запрос. Поиск намеренно не показывает объекты и поля вне вашего рабочего scope.</p>
     </div>
   {% endif %}
 </section>
 {% else %}
 <section class="ws-section ws-muted-panel">
   <h2>Как искать</h2>
-  <p>Введите номер лицевого счёта, обозначение/адрес участка или номер индивидуального счётчика.</p>
+  <p>Введите номер лицевого счёта или рабочее обозначение участка{% if can_view_land_plots %}, адрес{% endif %}{% if can_view_water %} или номер индивидуального счётчика{% endif %}.</p>
 </section>
 {% endif %}
 {% endblock %}
