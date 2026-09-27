@@ -11,9 +11,8 @@ from water.models import User
 class Command(BaseCommand):
     help = (
         'Disable MFA for one user and revoke their active sessions. '
-        'Use only after verifying the employee identity. Ordinary staff may '
-        'continue password-only; a technical superuser must set up OTP again '
-        'before regaining Django Admin access.'
+        'Use only after verifying the employee identity. Any staff account, '
+        'including a technical superuser, may continue password-only.'
     )
 
     def add_arguments(self, parser):
