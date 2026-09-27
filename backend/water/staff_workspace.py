@@ -13,10 +13,13 @@ from .controller_scope import ControllerLineAccess
 from .models import (
     Account,
     AccountDocument,
+    BillingPeriod,
+    Charge,
     ControllerReadingSubmission,
     LandPlot,
     Membership,
     Meter,
+    Payment,
     Reading,
     ResidentAccess,
     ResidentAppeal,
@@ -74,6 +77,13 @@ def scoped_water_meters(user, on_date=None):
 
 
 def _capabilities(user):
+    finance_workspace_permissions = (
+        "water.view_account",
+        "water.view_billingperiod",
+        "water.view_charge",
+        "water.view_payment",
+        "water.view_paymentallocation",
+    )
     return {
         "can_view_accounts": user.is_superuser
         or user.has_perm("water.view_account")
@@ -85,6 +95,8 @@ def _capabilities(user):
         or user.has_perm("water.use_controller_workspace"),
         "can_view_finance": user.is_superuser
         or (user.has_perm("water.view_charge") and user.has_perm("water.view_payment")),
+        "can_use_finance_workspace": user.is_superuser
+        or all(user.has_perm(permission) for permission in finance_workspace_permissions),
         "can_view_appeals": user.is_superuser or user.has_perm("water.view_residentappeal"),
         "can_view_documents": user.is_superuser or user.has_perm("water.view_accountdocument"),
         "can_view_access": user.is_superuser or user.has_perm("water.view_residentaccess"),
@@ -138,6 +150,28 @@ def dashboard(request):
                 "label": "Открытые обращения",
                 "count": count,
                 "url": reverse("staff_workspace:appeals") + "?state=open",
+            })
+    if context["can_use_finance_workspace"]:
+        draft_count = Charge.objects.filter(status="draft").count()
+        if draft_count:
+            attention.append({
+                "label": "Черновики начислений на проверке",
+                "count": draft_count,
+                "url": reverse("staff_workspace:finance"),
+            })
+        pending_count = Payment.objects.filter(status="pending").count()
+        if pending_count:
+            attention.append({
+                "label": "Оплаты на проверке",
+                "count": pending_count,
+                "url": reverse("staff_workspace:finance_payments") + "?state=pending",
+            })
+        calculated_periods = BillingPeriod.objects.filter(status="calculated").count()
+        if calculated_periods:
+            attention.append({
+                "label": "Рассчитанные периоды ждут завершения",
+                "count": calculated_periods,
+                "url": reverse("staff_workspace:finance"),
             })
     context["attention"] = attention
     return TemplateResponse(request, "water/work/dashboard.html", context)
