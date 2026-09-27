@@ -91,7 +91,7 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             self.assertTrue(page.get_by_role("heading", name="Рабочая очередь", exact=True).is_visible())
             active_work_tab = page.locator('.ws-bottom-nav a[aria-current="page"]')
             self.assertEqual(active_work_tab.get_attribute("href"), "/work/tasks/")
-            self.assertTrue(page.get_by_role("link", name="Документы и публикации", exact=True).is_visible())
+            self.assertTrue(page.locator('a.ws-card[href="/work/documents/"]').is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
