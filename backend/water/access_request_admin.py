@@ -1,17 +1,15 @@
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django.utils import timezone
 from django.utils.html import format_html
 
 from .access_requests import ResidentAccessRequest
+from .access_workflow import approve_access_request, reject_access_request
 from .models import Account, ResidentAccess
-from .portal import issue_invite
 from .privacy_admin import PrivateRegistryPermissionMixin
 
 
@@ -109,28 +107,18 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
         invite_url = None
         if request.method == 'POST' and form.is_valid():
             try:
-                with transaction.atomic():
-                    locked = ResidentAccessRequest.objects.select_for_update().get(pk=obj.pk)
-                    if locked.status != ResidentAccessRequest.STATUS_NEW:
-                        raise ValidationError('По этой заявке решение уже принято.')
-                    invite, raw = issue_invite(
-                        form.cleaned_data['account'],
-                        form.cleaned_data['email'],
-                        form.cleaned_data['role'],
-                        actor=request.user,
-                    )
-                    locked.status = ResidentAccessRequest.STATUS_APPROVED
-                    locked.matched_account = form.cleaned_data['account']
-                    locked.approved_role = form.cleaned_data['role']
-                    locked.decision_note = form.cleaned_data['decision_note'].strip()
-                    locked.decided_by = request.user
-                    locked.decided_at = timezone.now()
-                    locked.invite = invite
-                    locked.save()
-                    invite_url = request.build_absolute_uri(reverse('resident_invite', args=[raw]))
-                    obj = locked
+                obj, invite, raw = approve_access_request(
+                    obj.pk,
+                    account=form.cleaned_data['account'],
+                    email=form.cleaned_data['email'],
+                    role=form.cleaned_data['role'],
+                    decision_note=form.cleaned_data['decision_note'],
+                    actor=request.user,
+                )
             except ValidationError as error:
                 form.add_error(None, '; '.join(error.messages))
+            else:
+                invite_url = request.build_absolute_uri(reverse('resident_invite', args=[raw]))
 
         context = {
             **self.admin_site.each_context(request),
@@ -153,15 +141,11 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
         form = AccessRequestRejectForm(request.POST or None)
         if request.method == 'POST' and form.is_valid():
             try:
-                with transaction.atomic():
-                    locked = ResidentAccessRequest.objects.select_for_update().get(pk=obj.pk)
-                    if locked.status != ResidentAccessRequest.STATUS_NEW:
-                        raise ValidationError('По этой заявке решение уже принято.')
-                    locked.status = ResidentAccessRequest.STATUS_REJECTED
-                    locked.decision_note = form.cleaned_data['decision_note'].strip()
-                    locked.decided_by = request.user
-                    locked.decided_at = timezone.now()
-                    locked.save()
+                reject_access_request(
+                    obj.pk,
+                    decision_note=form.cleaned_data['decision_note'],
+                    actor=request.user,
+                )
             except ValidationError as error:
                 form.add_error(None, '; '.join(error.messages))
             else:
