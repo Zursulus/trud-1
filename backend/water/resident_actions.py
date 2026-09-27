@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -10,26 +8,21 @@ from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
+from .appeal_security import (
+    APPEAL_ATTACHMENT_HELP,
+    enforce_resident_submission_limits,
+    record_form_upload_rejection,
+    register_resident_submission_attempt,
+    validate_appeal_attachment,
+)
 from .appeal_workflow import appeal_conversation_events, latest_board_event_at
 from .models import AppealCategory, ResidentAppeal, ResidentAppealMessage
 from .portal import resident_guard
 from .portal_permissions import CAP_APPEALS, resolved_access
-from .resident_models import (
-    APPEAL_ATTACHMENT_EXTENSIONS,
-    APPEAL_ATTACHMENT_MAX_BYTES,
-    ResidentAppealAttachment,
-    ResidentAppealViewState,
-)
+from .resident_models import ResidentAppealAttachment, ResidentAppealViewState
 
 
-def validate_appeal_attachment(upload):
-    if not upload:
-        return upload
-    if upload.size > APPEAL_ATTACHMENT_MAX_BYTES:
-        raise forms.ValidationError('Файл должен быть не больше 10 МБ.')
-    if Path(upload.name).suffix.lower() not in APPEAL_ATTACHMENT_EXTENSIONS:
-        raise forms.ValidationError('Разрешены только PDF, JPG и PNG.')
-    return upload
+FILE_ACCEPT = '.pdf,.jpg,.jpeg,.png,.docx,.xlsx'
 
 
 class ResidentAppealCreateForm(forms.Form):
@@ -38,8 +31,9 @@ class ResidentAppealCreateForm(forms.Form):
     message = forms.CharField(label='Сообщение', max_length=5000, widget=forms.Textarea(attrs={'rows': 7}))
     attachment = forms.FileField(
         label='Вложение', required=False,
-        help_text='Необязательно. PDF, JPG или PNG до 10 МБ.',
+        help_text=f'Необязательно. {APPEAL_ATTACHMENT_HELP}',
         validators=[validate_appeal_attachment],
+        widget=forms.ClearableFileInput(attrs={'accept': FILE_ACCEPT}),
     )
 
     def __init__(self, *args, **kwargs):
@@ -51,8 +45,9 @@ class ResidentAppealReplyForm(forms.Form):
     body = forms.CharField(label='Ваше сообщение', max_length=5000, widget=forms.Textarea(attrs={'rows': 5}))
     attachment = forms.FileField(
         label='Вложение', required=False,
-        help_text='Необязательно. PDF, JPG или PNG до 10 МБ.',
+        help_text=f'Необязательно. {APPEAL_ATTACHMENT_HELP}',
         validators=[validate_appeal_attachment],
+        widget=forms.ClearableFileInput(attrs={'accept': FILE_ACCEPT}),
     )
 
 
@@ -72,6 +67,41 @@ def _own_appeal(request, account_id, appeal_id):
     return access, appeal
 
 
+def _prepare_resident_post(request, form, *, account, appeal=None, creating=False):
+    """Apply cheap burst guard first, then expensive file inspection and DB quotas."""
+    try:
+        register_resident_submission_attempt(request, request.user)
+    except ValidationError as error:
+        form.add_error(None, error)
+        return False
+
+    if not form.is_valid():
+        record_form_upload_rejection(
+            form=form,
+            field_name='attachment',
+            request=request,
+            actor=request.user,
+            account=account,
+            appeal=appeal,
+        )
+        return False
+
+    upload = form.cleaned_data.get('attachment')
+    try:
+        enforce_resident_submission_limits(
+            request=request,
+            user=request.user,
+            account=account,
+            appeal=appeal,
+            upload=upload,
+            creating=creating,
+        )
+    except ValidationError as error:
+        form.add_error(None, error)
+        return False
+    return True
+
+
 @csrf_protect
 @never_cache
 def create_appeal(request, account_id):
@@ -80,7 +110,9 @@ def create_appeal(request, account_id):
         return denied
     access = _access(request, account_id)
     form = ResidentAppealCreateForm(request.POST or None, request.FILES or None)
-    if request.method == 'POST' and form.is_valid():
+    if request.method == 'POST' and _prepare_resident_post(
+        request, form, account=access.account, creating=True,
+    ):
         try:
             with transaction.atomic():
                 appeal = ResidentAppeal(
@@ -118,7 +150,9 @@ def resident_appeal(request, account_id, appeal_id):
         return denied
     access, appeal = _own_appeal(request, account_id, appeal_id)
     form = ResidentAppealReplyForm(request.POST or None, request.FILES or None)
-    if request.method == 'POST' and form.is_valid():
+    if request.method == 'POST' and _prepare_resident_post(
+        request, form, account=access.account, appeal=appeal,
+    ):
         try:
             with transaction.atomic():
                 locked = ResidentAppeal.objects.select_for_update().get(pk=appeal.pk)
