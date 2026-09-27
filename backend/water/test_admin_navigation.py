@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
@@ -30,6 +31,18 @@ class AdminNavigationTests(TestCase):
     def test_admin_uses_simplified_dashboard_without_sidebar(self):
         self.assertEqual(admin.site.index_template, 'admin/water/index.html')
         self.assertFalse(admin.site.enable_nav_sidebar)
+
+    def test_admin_header_exposes_two_factor_management(self):
+        self.login_as(self.manager)
+        response = self.client.get('/admin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '2FA / безопасность')
+        self.assertContains(response, reverse('two_factor:profile'))
+
+        profile = self.client.get(reverse('two_factor:profile'))
+        self.assertEqual(profile.status_code, 200)
+        self.assertContains(profile, reverse('two_factor:disable'))
+        self.assertNotContains(profile, 'Provide a template named')
 
     def test_manager_sees_operational_workflows_but_not_private_registry(self):
         self.login_as(self.manager)
