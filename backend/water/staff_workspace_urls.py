@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import staff_access, staff_appeals, staff_finance, staff_more, staff_workspace
+from . import staff_access, staff_appeals, staff_documents, staff_finance, staff_more, staff_workspace
 
 
 app_name = "staff_workspace"
@@ -36,6 +36,23 @@ urlpatterns = [
         staff_access.workspace_access_revoke_reset,
         name="access_revoke_reset",
     ),
+    path("documents/", staff_documents.workspace_documents, name="documents"),
+    path("documents/accounts/new/", staff_documents.workspace_account_document_create, name="account_document_create"),
+    path("documents/accounts/<int:document_id>/", staff_documents.workspace_account_document, name="account_document"),
+    path(
+        "documents/accounts/<int:document_id>/download/",
+        staff_documents.workspace_account_document_download,
+        name="account_document_download",
+    ),
+    path("documents/public/new/", staff_documents.workspace_public_document_create, name="public_document_create"),
+    path("documents/public/<int:document_id>/", staff_documents.workspace_public_document, name="public_document"),
+    path(
+        "documents/public/<int:document_id>/download/",
+        staff_documents.workspace_public_document_download,
+        name="public_document_download",
+    ),
+    path("documents/news/new/", staff_documents.workspace_news_create, name="news_create"),
+    path("documents/news/<int:news_id>/", staff_documents.workspace_news, name="news"),
     path("more/", staff_more.workspace_more, name="more"),
     path("accounts/<int:account_id>/", staff_workspace.workspace_account, name="account"),
 ]

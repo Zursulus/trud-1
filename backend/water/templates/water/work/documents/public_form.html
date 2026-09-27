@@ -1,0 +1,24 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{% if mode == 'create' %}Новый публичный документ{% else %}{{ item.title }}{% endif %}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:documents' %}">Документы</a><span>›</span><span>{% if mode == 'create' %}Новый публичный документ{% else %}{{ item.title }}{% endif %}</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Публичный контур</p><h1>{% if mode == 'create' %}Публичный документ{% else %}{{ item.title }}{% endif %}</h1><p>Публикация разрешена только после отдельного подтверждения отсутствия закрытых данных.</p></div></section>
+
+{% if item %}
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Статус</span><strong style="font-size:16px">{% if item.is_published and item.public_checked %}Опубликован{% else %}Черновик{% endif %}</strong></div>
+  <div class="ws-summary"><span>Файл</span><strong style="font-size:16px">{{ item.original_name }}</strong><p>{{ item.file_size|filesizeformat }}</p></div>
+  <div class="ws-summary"><span>Проверка</span><strong style="font-size:16px">{% if item.published_by %}{{ item.published_by.username }}{% else %}—{% endif %}</strong><p>{% if item.published_at %}{{ item.published_at|date:'d.m.Y H:i' }}{% endif %}</p></div>
+</div>
+<div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:public_document_download' item.pk %}">Скачать текущий файл</a></div>
+{% endif %}
+
+<section class="ws-section"><div class="ws-finance-form">
+  {% if mode == 'edit' and not can_change %}
+    <div class="ws-banner ws-banner-warning">У вас есть право просмотра, но нет права изменять публикацию.</div>
+  {% else %}
+    <form method="post"{% if mode == 'create' %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">{% if mode == 'create' %}Сохранить документ{% else %}Сохранить изменения{% endif %}</button></form>
+    {% if mode == 'edit' %}<p class="ws-finance-note">Загруженный файл не заменяется. Если нужен новый файл, создайте новую публикацию. При каждом сохранении опубликованной версии privacy-проверка подтверждается заново.</p>{% endif %}
+  {% endif %}
+</div></section>
+{% endblock %}

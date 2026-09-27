@@ -7,6 +7,7 @@
   {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Обращения</strong><p>Очередь, диалоги и решения.</p></a>{% endif %}
   {% if can_use_finance_workspace %}<a class="ws-card" href="{% url 'staff_workspace:finance' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Финансы</strong><p>Начисления, оплаты, распределение и баланс.</p></a>{% endif %}
   {% if can_use_access_workspace %}<a class="ws-card" href="{% url 'staff_workspace:access' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Доступ жителей</strong><p>Заявки, приглашения, действующие доступы и восстановление.</p></a>{% endif %}
+  {% if perms.water.view_accountdocument or perms.public_site.view_publicdocument or perms.public_site.view_publicnews %}<a class="ws-card" href="{% url 'staff_workspace:documents' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Документы и контент</strong><p>Документы жителей, публичные документы и новости сайта.</p></a>{% endif %}
   <a class="ws-card" href="{{ admin_url }}"><span class="ws-card-kicker">Служебное</span><strong>Django Admin</strong><p>Технические справочники и редкие операции.</p></a>
 </div>
 {% endblock %}
