@@ -13,6 +13,14 @@
   <div class="ws-summary"><span>Версия</span><strong>{{ poll.version }}</strong><p>Используется для защиты от одновременного изменения.</p></div>
 </div>
 
+{% if can_edit %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Параметры открытого опроса</h2><span>вопросы здесь не редактируются</span></div>
+  <form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="edit">{{ edit_form.as_p }}<button class="ws-secondary" type="submit">Сохранить параметры</button></form>
+  <p><small>Через рабочую базу можно уточнить только название, пояснение и срок ответа. Вопросы, голоса, комментарии и аудит здесь не переписываются.</small></p>
+</section>
+{% endif %}
+
 {% for row in question_rows %}
 <section class="ws-section">
   <div class="ws-section-head"><h2>{{ row.question.order }}. {{ row.question.text }}</h2><span>голосов {{ row.votes|length }}</span></div>
