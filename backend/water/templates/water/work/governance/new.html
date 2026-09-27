@@ -1,0 +1,7 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Новый опрос правления{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:governance' %}">Опросы правления</a><span aria-hidden="true">›</span><span>Новый</span></nav>
+<section class="ws-page-head ws-page-head-compact"><div><p class="ws-eyebrow">Правление · предварительный контур</p><h1>Новый опрос</h1><p>Вопросы создаются сразу в заданном порядке. Это внутренний неофициальный опрос, а не юридически значимое голосование.</p></div></section>
+<form class="ws-finance-form" method="post">{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">Создать опрос</button></form>
+{% endblock %}
