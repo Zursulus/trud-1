@@ -45,8 +45,8 @@
 .ws-composer-panel button { min-height: 38px; padding: 0 10px; border: 1px solid var(--ws-line); border-radius: 9px; background: #fff; color: var(--ws-text); font: inherit; cursor: pointer; }
 .ws-emoji-panel button { min-width: 40px; padding: 0; font-size: 20px; }
 .ws-quick-replies button { font-size: 13px; }
-.ws-composer.is-enhanced .ws-native-file-field input[type="file"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-.ws-composer.is-enhanced .ws-native-file-field > label { display: none; }
+.ws-composer.is-enhanced .ws-native-file-field input[type="file"],
+.ws-composer.is-enhanced .ws-native-file-field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .ws-selected-file { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 10px 12px; border: 1px solid #cbded6; border-radius: 12px; background: #f2f8f5; }
 .ws-selected-file[hidden] { display: none; }
 .ws-selected-file > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
