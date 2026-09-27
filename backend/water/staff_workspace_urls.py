@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import staff_access, staff_appeals, staff_finance, staff_more, staff_workspace
+from . import staff_access, staff_appeals, staff_finance, staff_more, staff_security, staff_workspace
 
 
 app_name = "staff_workspace"
@@ -36,6 +36,7 @@ urlpatterns = [
         staff_access.workspace_access_revoke_reset,
         name="access_revoke_reset",
     ),
+    path("security/", staff_security.workspace_security, name="security"),
     path("more/", staff_more.workspace_more, name="more"),
     path("accounts/<int:account_id>/", staff_workspace.workspace_account, name="account"),
 ]
