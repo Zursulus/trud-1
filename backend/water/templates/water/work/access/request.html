@@ -1,0 +1,55 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Заявка доступа №{{ request_obj.pk }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступ жителей</a><span>›</span><span>Заявка №{{ request_obj.pk }}</span></nav>
+<section class="ws-object-head">
+  <div><p class="ws-eyebrow">Приватная заявка</p><h1>{{ request_obj.full_name }}</h1><p>{{ request_obj.get_status_display }} · получена {{ request_obj.submitted_at|date:'d.m.Y H:i' }}</p></div>
+</section>
+
+{% if invite_url %}
+<section class="ws-section">
+  <div class="ws-banner ws-banner-warning"><strong>Одноразовая ссылка создана.</strong><br>Скопируйте её сейчас и передайте проверенному адресату. После ухода со страницы исходный токен восстановить нельзя.</div>
+  <div class="ws-finance-form"><label for="invite-url">Приглашение</label><input id="invite-url" value="{{ invite_url }}" readonly></div>
+</section>
+{% endif %}
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Email</span><strong style="font-size:16px">{{ request_obj.email }}</strong></div>
+  <div class="ws-summary"><span>Телефон</span><strong style="font-size:16px">{{ request_obj.phone|default:'—' }}</strong></div>
+  <div class="ws-summary"><span>Участок / адрес</span><strong style="font-size:16px">{{ request_obj.plot_hint }}</strong></div>
+  <div class="ws-summary"><span>Заявленное основание</span><strong style="font-size:16px">{{ request_obj.get_claimed_role_display }}</strong></div>
+</div>
+
+{% if request_obj.message %}<section class="ws-section"><div class="ws-muted-panel"><h2>Комментарий заявителя</h2><p>{{ request_obj.message|linebreaksbr }}</p></div></section>{% endif %}
+
+{% if request_obj.status != 'new' %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Зафиксированное решение</h2></div>
+  <div class="ws-card-grid">
+    <div class="ws-card"><span class="ws-card-kicker">Статус</span><strong>{{ request_obj.get_status_display }}</strong><p>{{ request_obj.decision_note|default:'Без служебного комментария' }}</p></div>
+    {% if request_obj.matched_account %}<div class="ws-card"><span class="ws-card-kicker">Проверенный счёт</span><strong>{{ request_obj.matched_account.number|default:'Без номера' }}</strong><p>{{ request_obj.matched_account.plot }} · {{ request_obj.get_approved_role_display }}</p></div>{% endif %}
+    <div class="ws-card"><span class="ws-card-kicker">Аудит</span><strong>{{ request_obj.decided_at|date:'d.m.Y H:i' }}</strong><p>{{ request_obj.decided_by.username|default:'—' }}</p></div>
+  </div>
+</section>
+{% elif can_change_access_request %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Решение по заявке</h2><span>Исходная заявка неизменяема</span></div>
+  {% if can_approve_access_request %}
+  <div class="ws-finance-form">
+    <h3>Проверить и одобрить</h3>
+    <p class="ws-finance-note">Одобрение создаёт только одноразовое приглашение. Доступ появится после активации жителем.</p>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve">{{ approve_form.as_p }}<button class="ws-primary" type="submit">Одобрить и создать приглашение</button></form>
+  </div>
+  {% else %}
+  <div class="ws-banner ws-banner-warning">Вы можете проверить и отклонить заявку, но для одобрения требуется также полномочие Администратора ТСН на создание приглашения.</div>
+  {% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-finance-form">
+    <h3>Отклонить заявку</h3>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reject">{{ reject_form.as_p }}<button class="ws-danger-action" type="submit">Отклонить и зафиксировать причину</button></form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
