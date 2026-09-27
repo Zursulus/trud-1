@@ -1,0 +1,68 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Главная{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Рабочий стол</p>
+    <h1>Что требует внимания</h1>
+    <p>Сначала действия, затем реестры и технические разделы.</p>
+  </div>
+  <a class="ws-primary" href="{% url 'staff_workspace:search' %}">Найти участок или счёт</a>
+</section>
+
+{% if attention %}
+<section class="ws-section" aria-labelledby="attention-title">
+  <div class="ws-section-head">
+    <h2 id="attention-title">Требует действия</h2>
+  </div>
+  <div class="ws-action-list">
+    {% for item in attention %}
+      <a class="ws-action-row" href="{{ item.url }}">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.count }}</strong>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<section class="ws-empty ws-section">
+  <strong>Нет срочных очередей</strong>
+  <p>В доступных вам процессах сейчас нет элементов, требующих отдельного действия.</p>
+</section>
+{% endif %}
+
+<section class="ws-section" aria-labelledby="quick-title">
+  <div class="ws-section-head"><h2 id="quick-title">Быстрый доступ</h2></div>
+  <div class="ws-card-grid">
+    <a class="ws-card" href="{% url 'staff_workspace:search' %}">
+      <span class="ws-card-kicker">Поиск</span>
+      <strong>Найти объект</strong>
+      <p>Лицевой счёт, участок, адрес или номер счётчика.</p>
+    </a>
+    <a class="ws-card" href="{% url 'staff_workspace:accounts' %}">
+      <span class="ws-card-kicker">Реестр</span>
+      <strong>Участки и счета</strong>
+      <p>{{ account_count }} доступно в вашем рабочем scope.</p>
+    </a>
+    {% if can_use_controller_workspace %}
+      <a class="ws-card" href="{% url 'water_controller_workspace' %}">
+        <span class="ws-card-kicker">Вода</span>
+        <strong>Мои линии</strong>
+        <p>Внести и сверить показания только по закреплённым линиям.</p>
+      </a>
+    {% elif can_view_water %}
+      <a class="ws-card" href="{% url 'admin:water_reading_changelist' %}">
+        <span class="ws-card-kicker">Вода</span>
+        <strong>Журнал показаний</strong>
+        <p>Пока открывается существующий проверенный workflow.</p>
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="ws-section ws-muted-panel">
+  <h2>Технические функции</h2>
+  <p>Django Admin сохранён как резервный служебный интерфейс. Ежедневные сценарии постепенно переносятся сюда отдельными vertical slices.</p>
+  <a class="ws-secondary" href="{{ admin_url }}">Открыть служебную админку</a>
+</section>
+{% endblock %}
