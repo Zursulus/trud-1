@@ -34,33 +34,20 @@ Push в GitHub не равен deploy.
 
 Цель — создать отдельную «Рабочую базу» сотрудников на `/work/`, оставив `/admin/` техническим fallback.
 
-Foundation первого vertical slice смержен в `feature/water-admin` через PR #69:
+Завершённые slices в `feature/water-admin`:
 
-- отдельный `/work/` shell и role-adapted navigation;
-- глобальный поиск;
-- read-only карточка «Участок / лицевой счёт» с центром `Account`;
-- server-side permission/object scope;
-- PII regression boundaries;
-- query budgets;
-- Chromium + WebKit mobile/desktop critical flow и accessibility gate.
-
-Water Hub смержен через PR #70:
-
-- `/work/water/` как единая role-adapted точка входа;
-- корректное разделение controller line review и финальной модерации;
-- server-side controller scope;
-- отсутствие новых write-paths;
-- Chromium + WebKit mobile smoke и accessibility gate.
+- PR #69 — foundation: shell, поиск, карточка Account, permission/object scope, PII boundaries, query budgets, browser/accessibility gate;
+- PR #70 — Water Hub: role-adapted water queue, controller line scope, существующие audited write-workflows;
+- PR #71 — Appeals: очередь, единый диалог, private attachments, общий `appeal_workflow`, state transitions и read-only capability.
 
 Эти изменения пока не считаются production-выпуском: push/merge не равен deploy.
 
 Утверждённый порядок следующих slices:
 
-1. Appeals;
-2. Finance;
-3. Access;
-4. Documents/content;
-5. Governance/polls.
+1. Finance;
+2. Access;
+3. Documents/content;
+4. Governance/polls.
 
 Непосредственный риск по диску снят 27.09.2026: использование root filesystem снижено с 87% до 71% удалением только воспроизводимых RDC/npm/Puppeteer caches. Retention и alerting остаются отдельным эксплуатационным улучшением.
 
@@ -75,24 +62,28 @@ Water Hub смержен через PR #70:
 - Обычный staff workspace не расширяет границу персональных данных.
 - Каждый vertical slice — отдельная атомарная branch/PR/release единица.
 
-## Текущий vertical slice: Appeals staff workflow
+## Текущий vertical slice: Finance staff workflow
 
-**`/work/appeals/` → очередь → диалог → ответ/смена состояния через общий application layer.**
+**`/work/finance/` → период → draft review → approved charges → payment review → allocation → balance/history.**
 
 Минимальный результат:
 
-- отдельная очередь обращений с server-side фильтрами `open/new/waiting/resolved/all`, поиском и переходом из карточки лицевого счёта;
-- карточка обращения показывает единый хронологический диалог жителя и правления с закрытыми вложениями;
-- ordinary staff UI не показывает username/email автора обращения и не расширяет границу ПД;
-- пользователь только с `view_residentappeal` получает read-only режим; оператор воды и закрытый реестр не получают раздел автоматически;
-- ответ правления, ожидание уточнения, итоговое решение и закрытие выполняются через общий транзакционный `appeal_workflow`, а не отдельную копию логики в `/work/`;
-- старый admin conversation workflow использует тот же application layer и остаётся техническим fallback;
-- итоговый ответ хранится совместимо с существующим `ResidentAppeal.response` и не дублируется в кабинете жителя;
-- вложения остаются private/no-store и скачиваются только после server-side проверки permission;
-- queue/detail имеют bounded query counts;
-- критический mobile flow проходит Chromium + WebKit, accessibility gate и проверку отсутствия horizontal overflow.
+- отдельный Finance Hub с очередями черновиков начислений, оплат на проверке и подтверждённых оплат с нераспределённым остатком;
+- расчёт/пересчёт периода использует существующий `billing.calculate_period`, а новый `finance_workflow` добавляет permission/concurrency guards для операций рабочего интерфейса;
+- draft начисления рассматриваются поштучно и могут быть только утверждены либо отменены; период нельзя утвердить, пока остаются draft;
+- расчётный период проходит `open/calculated → approved → closed` с server-side guards;
+- новая оплата создаётся только как `pending`, затем отдельно подтверждается; архивный лицевой счёт не принимает новые оплаты;
+- подтверждённая оплата распределяется через существующий `billing.allocate_payment`, без копии правил allocation;
+- reversal не стирает историю распределений: отменённая оплата перестаёт уменьшать долг, но audit/history сохраняются;
+- карточка лицевого счёта ведёт в рабочую финансовую карточку с начислениями, оплатами и балансом; printable/CSV statement остаётся доступен как служебный отчёт;
+- тарифы, BillingPolicy/BillingAssignment и редкие ручные корректировки остаются technical fallback, пока для них нет отдельного ежедневного workflow;
+- Finance доступен только finance capability; оператор воды, контролёр и закрытый реестр не получают раздел автоматически;
+- ordinary workspace не показывает `Account.contact_name`, `phone`, `Person` или иные закрытые ПД;
+- mobile navigation нормализуется до пяти пунктов: Главная / Работа / Поиск / Участки / Ещё; специализированные разделы доступны через «Ещё» и desktop sidebar;
+- dashboard/period/payments имеют bounded query counts;
+- критический mobile flow проходит Chromium + WebKit, accessibility gate и отсутствие horizontal overflow.
 
-После завершения Appeals следующий vertical slice — **Finance staff workflow**.
+После завершения Finance следующий vertical slice — **Access staff workflow**.
 
 Полные продуктовые acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
 
