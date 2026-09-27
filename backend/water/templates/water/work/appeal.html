@@ -1,4 +1,4 @@
-{% extends 'water/work/base.html' %}
+{% extends 'water/work/base.html' %}{% load static %}
 {% block title %}Обращение №{{ appeal.pk }}{% endblock %}
 {% block content %}
 <nav class="ws-breadcrumbs" aria-label="Хлебные крошки">
@@ -31,7 +31,7 @@
       {% if event.attachments %}
       <div class="ws-attachments" aria-label="Вложения">
         {% for item in event.attachments %}
-        <a href="{% url 'staff_workspace:appeal_attachment' item.pk %}">{{ item.original_name }} · {{ item.file_size|filesizeformat }}</a>
+        <a class="ws-attachment-card" href="{% url 'staff_workspace:appeal_attachment' item.pk %}"><span aria-hidden="true">📎</span><span><strong>{{ item.original_name }}</strong><small>{{ item.file_size|filesizeformat }}</small></span></a>
         {% endfor %}
       </div>
       {% endif %}
@@ -41,29 +41,56 @@
 </section>
 
 {% if can_reply %}
-<section class="ws-section ws-form-panel">
+<section class="ws-section ws-form-panel" id="reply">
   <div class="ws-section-head"><h2>Ответить жителю</h2></div>
-  <form class="ws-form" method="post" enctype="multipart/form-data">
+  <form class="ws-form ws-composer" method="post" enctype="multipart/form-data" data-appeal-composer>
     {% csrf_token %}
     <input type="hidden" name="action" value="reply">
     {{ form.non_field_errors }}
-    <div class="ws-field">
+    <div class="ws-field ws-composer-body">
       <label for="{{ form.body.id_for_label }}">{{ form.body.label }}</label>
       {{ form.body }}
       {{ form.body.errors }}
     </div>
-    <div class="ws-field">
+
+    <div class="ws-composer-tools" aria-label="Инструменты ответа">
+      <button class="ws-composer-tool" type="button" data-file-trigger>＋ Вложить</button>
+      <button class="ws-composer-tool" type="button" data-panel-target="emoji" aria-expanded="false">😊</button>
+      <button class="ws-composer-tool" type="button" data-panel-target="quick" aria-expanded="false">⚡ Быстрый ответ</button>
+    </div>
+
+    <div class="ws-composer-panel" data-composer-panel="emoji" hidden aria-label="Смайлики">
+      {% for emoji in '👍 ✅ 🙏 🙂 😊 👌 ❗ ❓ 📎 📌'.split %}<button type="button" data-insert-text="{{ emoji }}">{{ emoji }}</button>{% endfor %}
+    </div>
+
+    <div class="ws-composer-panel ws-quick-replies" data-composer-panel="quick" hidden aria-label="Быстрые ответы">
+      <button type="button" data-insert-text="Принято, спасибо.">Принято, спасибо</button>
+      <button type="button" data-insert-text="Документы получили.">Документы получили</button>
+      <button type="button" data-insert-text="Уточните, пожалуйста, информацию.">Нужно уточнение</button>
+      <button type="button" data-insert-text="Вопрос передан в работу.">Передано в работу</button>
+      <button type="button" data-insert-text="Проверим и сообщим результат.">Проверим</button>
+      <button type="button" data-insert-text="Благодарим за обращение.">Благодарим</button>
+    </div>
+
+    <div class="ws-field ws-native-file-field">
       <label for="{{ form.document.id_for_label }}">{{ form.document.label }}</label>
       {{ form.document }}
-      {% if form.document.help_text %}<small>{{ form.document.help_text }}</small>{% endif %}
+      {% if form.document.help_text %}<small>{{ form.document.help_text }} Файл проходит автоматическую проверку безопасности.</small>{% endif %}
       {{ form.document.errors }}
     </div>
+
+    <div class="ws-selected-file" data-file-summary hidden>
+      <span aria-hidden="true">📎</span>
+      <span><strong data-file-name></strong><small data-file-meta></small></span>
+      <button type="button" data-file-remove aria-label="Убрать выбранный файл">×</button>
+    </div>
+
     <div class="ws-field">
       <label for="{{ form.next_status.id_for_label }}">{{ form.next_status.label }}</label>
       {{ form.next_status }}
       {{ form.next_status.errors }}
     </div>
-    <button class="ws-primary" type="submit">Отправить сообщение</button>
+    <button class="ws-primary ws-composer-send" type="submit">Отправить сообщение</button>
   </form>
 </section>
 {% elif appeal.status == 'resolved' and can_manage_appeals %}
@@ -89,4 +116,5 @@
   <a class="ws-secondary" href="{% url 'admin:water_residentappeal_change' appeal.pk %}">Открыть служебную карточку</a>
 </section>
 {% endif %}
+<script src="{% static 'water/staff-appeal-composer.js' %}" defer></script>
 {% endblock %}
