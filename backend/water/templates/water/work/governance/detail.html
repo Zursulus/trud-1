@@ -1,0 +1,59 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{{ poll.title }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:governance' %}">Опросы правления</a><span aria-hidden="true">›</span><span>{{ poll.title }}</span></nav>
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Правление · предварительный контур</p><h1>{{ poll.title }}</h1><p>{{ poll.description|default:'Без дополнительного пояснения.' }}</p></div>
+  {% if can_close %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="close"><input type="hidden" name="version" value="{{ poll.version }}"><button class="ws-primary" type="submit">Закрыть опрос</button></form>{% endif %}
+</section>
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Статус</span><strong>{% if poll.is_open %}Открыт{% else %}Завершён{% endif %}</strong><p>Срок ответа {{ poll.closes_at|date:'d.m.Y H:i' }}</p></div>
+  <div class="ws-summary"><span>Членов правления на старте</span><strong>{{ eligible_count }}</strong><p>{% if eligible_names %}{{ eligible_names|join:', ' }}{% else %}Нет активных участников.{% endif %}</p></div>
+  <div class="ws-summary"><span>Версия</span><strong>{{ poll.version }}</strong><p>Используется для защиты от одновременного изменения.</p></div>
+</div>
+
+{% if can_edit %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Параметры открытого опроса</h2><span>вопросы здесь не редактируются</span></div>
+  <form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="edit">{{ edit_form.as_p }}<button class="ws-secondary" type="submit">Сохранить параметры</button></form>
+  <p><small>Через рабочую базу можно уточнить только название, пояснение и срок ответа. Вопросы, голоса, комментарии и аудит здесь не переписываются.</small></p>
+</section>
+{% endif %}
+
+{% for row in question_rows %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>{{ row.question.order }}. {{ row.question.text }}</h2><span>голосов {{ row.votes|length }}</span></div>
+  <div class="ws-summary-grid">
+    <div class="ws-summary"><span>За</span><strong>{{ row.counts.for }}</strong></div>
+    <div class="ws-summary"><span>Против</span><strong>{{ row.counts.against }}</strong></div>
+    <div class="ws-summary"><span>Воздержались</span><strong>{{ row.counts.abstain }}</strong></div>
+  </div>
+  {% if row.votes %}<div class="ws-action-list">
+    {% for vote in row.votes %}<div class="ws-action-row"><span><strong>{{ vote.user.get_full_name|default:vote.user.username }}</strong><br><small>{{ vote.get_choice_display }}{% if vote.comment %} · {{ vote.comment }}{% endif %}</small></span></div>{% endfor %}
+  </div>{% endif %}
+  {% if row.not_voted %}<div class="ws-empty"><strong>Ещё не ответили</strong><p>{{ row.not_voted|join:', ' }}</p></div>{% endif %}
+  {% if row.comments %}<div class="ws-muted-panel"><strong>Обсуждение</strong>{% for comment in row.comments %}<p><strong>{{ comment.author.get_full_name|default:comment.author.username }}:</strong> {{ comment.body }}</p>{% endfor %}</div>{% endif %}
+</section>
+{% endfor %}
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Протокол после опроса</h2></div>
+  {% if protocol %}
+    <div class="ws-empty"><strong>{{ protocol.original_name }}</strong><p>{{ protocol.file_size }} байт · загружен {{ protocol.uploaded_at|date:'d.m.Y H:i' }}. Сохранённый файл нельзя заменить через рабочую базу.</p><a class="ws-secondary" href="{% url 'board_poll_protocol' poll.pk %}">Скачать протокол</a></div>
+  {% elif can_upload_protocol %}
+    <form class="ws-finance-form" method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="upload_protocol">{{ protocol_form.as_p }}<button class="ws-primary" type="submit">Прикрепить протокол</button></form>
+  {% else %}
+    <div class="ws-empty"><strong>Протокол пока не прикреплён</strong><p>Файл PDF/DOCX можно связать после завершения опроса при наличии соответствующего права.</p></div>
+  {% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Неизменяемая история</h2><span>{{ audit_events|length }} событий</span></div>
+  {% if audit_events %}<div class="ws-action-list">
+    {% for event in audit_events %}<div class="ws-action-row"><span><strong>{{ event.created_at|date:'d.m.Y H:i' }} · {{ event.get_action_display }}</strong><br><small>{{ event.summary|default:event.target_type }}{% if event.actor %} · {{ event.actor.get_full_name|default:event.actor.username }}{% endif %}</small></span></div>{% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Событий нет</strong></div>{% endif %}
+</section>
+
+<section class="ws-section ws-muted-panel"><h2>Важно</h2><p>Это предварительный внутренний опрос. Он не является общим собранием, не подтверждает кворум, не создаёт электронную подпись и сам по себе не образует юридически обязательное решение.</p></section>
+{% endblock %}
