@@ -1,0 +1,50 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Финансы{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Финансы</h1><p>Расчёт начислений, проверка оплат, распределение и баланс.</p></div>
+  <div class="ws-actions">
+    <a class="ws-secondary" href="{% url 'staff_workspace:finance_payments' %}">Оплаты</a>
+    {% if can_add_payment %}<a class="ws-primary" href="{% url 'staff_workspace:finance_payment_create' %}">Внести оплату</a>{% endif %}
+  </div>
+</section>
+
+<div class="ws-summary-grid">
+  <a class="ws-summary{% if draft_charge_count %} ws-summary-attention{% endif %}" href="#periods">
+    <span>Черновики начислений</span><strong>{{ draft_charge_count }}</strong><p>{{ draft_charge_amount }} ₽ ждут решения.</p>
+  </a>
+  <a class="ws-summary{% if pending_payment_count %} ws-summary-attention{% endif %}" href="{% url 'staff_workspace:finance_payments' %}?state=pending">
+    <span>Оплаты на проверке</span><strong>{{ pending_payment_count }}</strong><p>{{ pending_payment_amount }} ₽.</p>
+  </a>
+  <a class="ws-summary{% if unallocated_payment_count %} ws-summary-attention{% endif %}" href="{% url 'staff_workspace:finance_payments' %}?state=unallocated">
+    <span>Не распределено</span><strong>{{ unallocated_payment_count }}</strong><p>Подтверждённые оплаты с остатком.</p>
+  </a>
+</div>
+
+<section class="ws-section" id="periods">
+  <div class="ws-section-head"><h2>Расчётные периоды</h2><span>{{ periods|length }} последних</span></div>
+  {% if periods %}<div class="ws-action-list">
+    {% for period in periods %}
+    <a class="ws-action-row" href="{% url 'staff_workspace:finance_period' period.pk %}">
+      <span><strong>{{ period.starts|date:'d.m.Y' }}–{{ period.ends|date:'d.m.Y' }}</strong><br><small>{{ period.get_status_display }}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
+    </a>
+    {% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Расчётных периодов пока нет</strong><p>Создание правил и периодов остаётся в служебном интерфейсе.</p></div>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Последние оплаты</h2><a href="{% url 'staff_workspace:finance_payments' %}">Все оплаты</a></div>
+  {% if recent_payments %}<div class="ws-action-list">
+    {% for payment in recent_payments %}
+    <a class="ws-action-row" href="{% url 'staff_workspace:finance_payment' payment.pk %}">
+      <span><strong>{{ payment.amount }} ₽ · {{ payment.account.plot|default:payment.account.number }}</strong><br><small>{{ payment.paid_on|date:'d.m.Y' }} · {{ payment.get_status_display }}{% if payment.status == 'confirmed' and payment.remaining > 0 %} · остаток {{ payment.remaining }} ₽{% endif %}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
+    </a>
+    {% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Оплат пока нет</strong><p>Новая оплата сначала попадает на проверку.</p></div>{% endif %}
+</section>
+
+<section class="ws-section ws-muted-panel">
+  <h2>Правила и тарифы</h2><p>Настройка расчётных правил, тарифов и редкие ручные корректировки остаются техническими операциями.</p>
+  {% if perms.water.view_billingpolicy %}<a class="ws-secondary" href="{% url 'admin:water_billingpolicy_changelist' %}">Открыть служебные настройки</a>{% endif %}
+</section>
+{% endblock %}

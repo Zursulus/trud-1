@@ -85,7 +85,7 @@
   <div class="ws-finance-line"><span>Утверждено начислений</span><strong>{{ finance.charges }} ₽</strong></div>
   <div class="ws-finance-line"><span>Подтверждено оплат</span><strong>{{ finance.payments }} ₽</strong></div>
   <div class="ws-finance-line ws-finance-total"><span>Баланс</span><strong>{{ finance.balance }} ₽</strong></div>
-  <div class="ws-actions"><a class="ws-secondary" href="{% url 'admin:water_account_statement' account.pk %}">Открыть финансовую карточку</a></div>
+  <div class="ws-actions">{% if can_use_finance_workspace %}<a class="ws-primary" href="{% url 'staff_workspace:finance_account' account.pk %}">Открыть финансовую карточку</a>{% else %}<a class="ws-secondary" href="{% url 'admin:water_account_statement' account.pk %}">Открыть финансовую карточку</a>{% endif %}</div>
 </section>
 {% endif %}
 
