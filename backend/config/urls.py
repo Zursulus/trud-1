@@ -39,6 +39,7 @@ class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
 admin.site.__class__ = MainAdminOTPOnlySite
 
 urlpatterns = [
+    path('work/', include('water.staff_workspace_urls')),
     path('admin/deployment-status/', deployment_status, name='deployment_status'),
     path('admin/water/passwords/', admin.site.admin_view(password_admin.password_access_admin), name='water_password_access_admin'),
     path('admin/public/content/', public_views.public_content, name='public_content'),
