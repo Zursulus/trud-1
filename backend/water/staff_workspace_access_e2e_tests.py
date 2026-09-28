@@ -10,7 +10,7 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from playwright.sync_api import sync_playwright
 
 from .access_requests import ResidentAccessRequest
-from .models import Account, ResidentAccess, ResidentInvite, User
+from .models import Account, Person, ResidentAccess, ResidentInvite, User
 
 
 class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
@@ -22,6 +22,8 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
             Group.objects.get(name="Закрытый реестр членов ТСН"),
         )
         self.account = Account.objects.create(number="ACCESS-E2E", plot="Тестовый участок Access E2E")
+        self.chromium_person = Person.objects.create(full_name="Житель Chromium", email="grant-chromium@example.test")
+        self.webkit_person = Person.objects.create(full_name="Житель WebKit", email="grant-webkit@example.test")
         self.chromium_request = self._request("chromium")
         self.webkit_request = self._request("webkit")
 
@@ -53,7 +55,7 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
         ]
         self.assertEqual(blocking, [], f"{label}: {blocking}")
 
-    def _exercise(self, browser, label, session_cookie, request_id):
+    def _exercise(self, browser, label, session_cookie, request_id, person_id, email):
         context = browser.new_context(viewport={"width": 390, "height": 844})
         context.add_cookies([{
             "name": settings.SESSION_COOKIE_NAME,
@@ -71,6 +73,19 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(response.status, 200)
             self.assertTrue(page.get_by_role("heading", name="Доступ жителей", exact=True).is_visible())
             self.assertEqual(page.locator(".ws-bottom-nav a").count(), 5)
+
+            page.get_by_role("link", name="Выдать доступ", exact=True).click()
+            page.wait_for_load_state("networkidle")
+            self.assertTrue(page.get_by_role("heading", name="Выдать доступ жителю", exact=True).is_visible())
+            page.locator("#id_person").select_option(str(person_id))
+            page.locator("#id_account").select_option(str(self.account.pk))
+            page.locator("#id_email").fill(email)
+            page.locator("#id_basis").fill(f"E2E проверка прав {label}")
+            page.locator("#id_can_submit_water").check()
+            page.get_by_role("button", name="Создать одноразовое приглашение", exact=True).click()
+            page.wait_for_load_state("networkidle")
+            self.assertTrue(page.locator("#invite-url").input_value())
+            self._assert_no_blocking_accessibility(page, f"{label} granular invite")
 
             page.goto(f"{self.live_server_url}/work/access/requests/{request_id}/", wait_until="networkidle")
             self.assertTrue(page.get_by_text("+7 900 555-44-33", exact=True).is_visible())
@@ -100,12 +115,18 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             chromium = playwright.chromium.launch(headless=True)
             try:
-                self._exercise(chromium, "Chromium mobile", session_cookie, chromium_id)
+                self._exercise(
+                    chromium, "Chromium mobile", session_cookie, chromium_id,
+                    self.chromium_person.pk, self.chromium_person.email,
+                )
             finally:
                 chromium.close()
             webkit = playwright.webkit.launch(headless=True)
             try:
-                self._exercise(webkit, "WebKit mobile", session_cookie, webkit_id)
+                self._exercise(
+                    webkit, "WebKit mobile", session_cookie, webkit_id,
+                    self.webkit_person.pk, self.webkit_person.email,
+                )
             finally:
                 webkit.close()
 
@@ -114,4 +135,5 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(self.chromium_request.status, ResidentAccessRequest.STATUS_APPROVED)
         self.assertEqual(self.webkit_request.status, ResidentAccessRequest.STATUS_APPROVED)
         self.assertEqual(ResidentInvite.objects.filter(access_request__in=[self.chromium_request, self.webkit_request]).count(), 2)
+        self.assertEqual(ResidentInvite.objects.filter(person__isnull=False).count(), 2)
         self.assertEqual(ResidentAccess.objects.count(), 0)

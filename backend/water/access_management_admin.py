@@ -139,8 +139,24 @@ class ResidentInviteAdmin(RecordedAdmin):
     list_display = ('email', 'account', 'role', 'expires_at', 'used_at', 'revoked')
     list_filter = ('revoked', 'role', 'expires_at', 'used_at')
     search_fields = ('email', 'account__number', 'account__plot')
-    readonly_fields = ('account', 'email', 'role', 'token_hash', 'expires_at', 'used_at', 'revoked')
+    readonly_fields = (
+        'account', 'email', 'role', 'person', 'basis', 'verified_by',
+        'can_view_account', 'can_view_finance', 'can_submit_water',
+        'can_view_documents', 'can_use_appeals', 'can_represent',
+        'token_hash', 'expires_at', 'used_at', 'revoked',
+    )
     actions = ('revoke_invites',)
+
+    def get_fields(self, request, obj=None):
+        fields = [
+            'account', 'email', 'role',
+            'can_view_account', 'can_view_finance', 'can_submit_water',
+            'can_view_documents', 'can_use_appeals', 'can_represent',
+            'token_hash', 'expires_at', 'used_at', 'revoked',
+        ]
+        if request.user.is_superuser or request.user.has_perm('water.access_private_registry'):
+            fields[3:3] = ['person', 'basis', 'verified_by']
+        return fields
 
     def has_add_permission(self, request):
         return False
