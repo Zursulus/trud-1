@@ -138,8 +138,6 @@ _CAPS = [
     cap("governance.audit.view", "Просмотр аудита правления", (S.ALL,), require_mfa=True),
     cap("governance.membership.manage", "Управление составом правления", (S.PERSON, S.ALL), require_mfa=True, maker_checker=True),
 
-    cap("security.alert.view", "Просмотр сигналов безопасности", (S.ALL,), require_mfa=True),
-    cap("security.alert.review", "Обработка сигнала безопасности", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("system.import.stage", "Предварительный импорт", (S.ALL,), require_mfa=True),
     cap("system.import.apply", "Применение импорта", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("system.user.manage", "Управление логинами", (S.ALL,), require_mfa=True, maker_checker=True),
@@ -226,9 +224,6 @@ ROLE_TEMPLATES = {
             "governance.poll.close", "governance.protocol.add", "governance.audit.view",
             "governance.membership.manage",
         )),
-        role("security_reviewer", 1, "Безопасность", (S.ALL,), (
-            "security.alert.view", "security.alert.review",
-        )),
         role("auditor", 1, "Ревизор / аудитор", (S.ALL,), (
             "accounts.view", "plots.view", "water.view", "water.meters.view",
             "water.reading.view", "water.balance.view", "water.export",
@@ -261,7 +256,7 @@ ROLE_TEMPLATES = {
             "registry.view", "registry.contacts.view", "registry.edit", "registry.export",
             "governance.board.view", "governance.poll.create", "governance.poll.edit",
             "governance.poll.close", "governance.protocol.add", "governance.audit.view",
-            "governance.membership.manage", "security.alert.view", "security.alert.review",
+            "governance.membership.manage",
             "system.import.stage", "system.import.apply",
         )),
     ]

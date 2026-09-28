@@ -126,8 +126,6 @@ LEGACY_PERMISSION_REQUIREMENTS = {
     "governance.protocol.add": ("water.add_boardprotocol",),
     "governance.audit.view": ("water.view_boardauditevent",),
     "governance.membership.manage": ("water.change_boardmembership",),
-    "security.alert.view": ("water.view_securityalert",),
-    "security.alert.review": ("water.change_securityalert",),
     "system.import.stage": ("water.add_importbatch",),
     "system.import.apply": ("water.change_importbatch",),
 }

@@ -425,7 +425,6 @@ class StaffAccessV2Tests(TestCase):
             ('appeals_operator', '/work/appeals/'),
             ('account_documents', '/work/documents/'),
             ('governance_secretary', '/work/governance/'),
-            ('security_reviewer', '/work/security/'),
             ('private_registry', '/admin/water/person/'),
         ]
         for index, (role_code, path) in enumerate(cases, start=1):
