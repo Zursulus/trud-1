@@ -18,8 +18,11 @@ class AccessPolicyRegistryTests(SimpleTestCase):
         controller = ROLE_TEMPLATES["controller"]
         self.assertIn("water.observation.review_line", senior.capabilities)
         self.assertNotIn("water.observation.review_line", controller.capabilities)
+        self.assertIn("water.line_submission.submit", senior.capabilities)
+        self.assertNotIn("water.line_submission.submit", controller.capabilities)
         self.assertIn("water.observation.submit", controller.capabilities)
         self.assertNotIn("water.observation.submit", senior.capabilities)
+        self.assertNotIn("water.reading.submit_official", senior.capabilities)
 
     def test_line_roles_do_not_leak_finance_registry_or_access_admin(self):
         forbidden_prefixes = ("finance.", "registry.", "access.")
