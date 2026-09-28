@@ -10,7 +10,9 @@ from django.utils import timezone
 from .access_requests import ResidentAccessRequest
 from .appeal_workflow import OPEN_APPEAL_STATES
 from .billing import account_totals
-from .controller_scope import ControllerLineAccess
+from .access_policy import ScopeType
+from .access_resolver import can, can_any, scopes_for
+from .access_scope import ScopeRef, scoped_accounts as accounts_in_scope
 from .models import (
     Account,
     AccountDocument,
@@ -27,14 +29,23 @@ from .models import (
 )
 
 
+def _group_ids_for_capability(user, capability, on_date=None):
+    ids = set()
+    for scope in scopes_for(user, capability, on_date=on_date):
+        if scope.type == ScopeType.ALL:
+            return list(WaterGroup.objects.values_list("id", flat=True))
+        if scope.type == ScopeType.WATER_GROUP:
+            ids.add(scope.object_id)
+        elif scope.type == ScopeType.SUPPLY_NODE:
+            ids.update(WaterGroup.objects.filter(node_id=scope.object_id).values_list("id", flat=True))
+    return sorted(ids)
+
+
 def _controller_group_ids(user, on_date=None):
-    on_date = on_date or timezone.localdate()
-    return ControllerLineAccess.objects.filter(
-        user=user,
-        starts__lte=on_date,
-    ).filter(
-        Q(ends__isnull=True) | Q(ends__gt=on_date),
-    ).values_list("group_id", flat=True)
+    # "controller workspace" is the line-senior workflow, not independent controller capture.
+    ids = set(_group_ids_for_capability(user, "water.line_submission.submit", on_date))
+    ids.update(_group_ids_for_capability(user, "water.observation.review_line", on_date))
+    return sorted(ids)
 
 
 def _active_controller_account_ids(user, on_date=None):
@@ -49,69 +60,82 @@ def _active_controller_account_ids(user, on_date=None):
 
 
 def scoped_accounts(user):
-    """Return only accounts the current staff user may inspect in /work/."""
-    if user.is_superuser or user.has_perm("water.view_account"):
+    """Return only accounts covered by accounts.view scopes."""
+    scopes = scopes_for(user, "accounts.view")
+    if any(scope.type == ScopeType.ALL for scope in scopes):
         return Account.objects.all()
-    if user.has_perm("water.use_controller_workspace"):
-        return Account.objects.filter(pk__in=Subquery(_active_controller_account_ids(user)))
-    raise PermissionDenied
+    ids = set()
+    for scope in scopes:
+        ids.update(accounts_in_scope(scope).values_list("id", flat=True))
+    if not ids:
+        raise PermissionDenied
+    return Account.objects.filter(pk__in=ids)
 
 
 def scoped_water_meters(user, on_date=None):
-    """Return active meters visible to this staff role without widening its scope."""
+    """Return active meters covered by water.meters.view scopes."""
     on_date = on_date or timezone.localdate()
     meters = Meter.objects.filter(
         Q(commissioned_on__isnull=True) | Q(commissioned_on__lte=on_date),
     ).filter(
         Q(retired_on__isnull=True) | Q(retired_on__gte=on_date),
     )
-    if user.is_superuser or user.has_perm("water.view_meter"):
+    scopes = scopes_for(user, "water.meters.view", on_date=on_date)
+    if any(scope.type == ScopeType.ALL for scope in scopes):
         return meters
-    if user.has_perm("water.use_controller_workspace"):
-        group_ids = _controller_group_ids(user, on_date)
-        account_ids = _active_controller_account_ids(user, on_date)
-        return meters.filter(
-            Q(kind="line", group_id__in=group_ids)
-            | Q(kind="individual", account_id__in=Subquery(account_ids))
-        )
-    raise PermissionDenied
+    query = Q(pk__in=[])
+    for scope in scopes:
+        if scope.type == ScopeType.SUPPLY_NODE:
+            query |= Q(node_id=scope.object_id)
+        elif scope.type == ScopeType.WATER_GROUP:
+            account_ids = accounts_in_scope(scope, on_date).values("id")
+            query |= Q(group_id=scope.object_id) | Q(account_id__in=Subquery(account_ids))
+        elif scope.type == ScopeType.ACCOUNT:
+            query |= Q(account_id=scope.object_id)
+    if not scopes:
+        raise PermissionDenied
+    return meters.filter(query).distinct()
 
 
 def _capabilities(user):
     finance_workspace_permissions = (
-        "water.view_account",
-        "water.view_billingperiod",
-        "water.view_charge",
-        "water.view_payment",
-        "water.view_paymentallocation",
+        "water.view_account", "water.view_billingperiod", "water.view_charge",
+        "water.view_payment", "water.view_paymentallocation",
     )
     can_review_access_requests = user.is_superuser or (
         user.has_perm("water.access_private_registry")
         and user.has_perm("water.view_residentaccessrequest")
-    )
+    ) or can_any(user, "access.request.review")
     access_management_permissions = (
-        "water.view_residentaccess",
-        "water.view_residentinvite",
-        "water.view_residentpasswordreset",
+        "water.view_residentaccess", "water.view_residentinvite", "water.view_residentpasswordreset",
     )
     can_manage_access = user.is_superuser or all(
         user.has_perm(permission) for permission in access_management_permissions
-    )
+    ) or can_any(user, "access.view")
+    line_senior = can_any(user, "water.line_submission.submit") or can_any(user, "water.observation.review_line")
     return {
-        "can_view_accounts": user.is_superuser
-        or user.has_perm("water.view_account")
-        or user.has_perm("water.use_controller_workspace"),
-        "can_view_land_plots": user.is_superuser or user.has_perm("water.view_landplot"),
-        "can_use_controller_workspace": user.has_perm("water.use_controller_workspace"),
-        "can_view_water": user.is_superuser
-        or user.has_perm("water.view_meter")
-        or user.has_perm("water.use_controller_workspace"),
-        "can_view_finance": user.is_superuser
-        or (user.has_perm("water.view_charge") and user.has_perm("water.view_payment")),
-        "can_use_finance_workspace": user.is_superuser
-        or all(user.has_perm(permission) for permission in finance_workspace_permissions),
-        "can_view_appeals": user.is_superuser or user.has_perm("water.view_residentappeal"),
-        "can_view_documents": user.is_superuser or user.has_perm("water.view_accountdocument"),
+        "can_view_accounts": can_any(user, "accounts.view"),
+        "can_view_land_plots": can_any(user, "plots.view"),
+        "can_use_controller_workspace": line_senior,
+        "can_view_water": can_any(user, "water.view"),
+        "can_view_finance": can_any(user, "finance.view"),
+        "can_use_finance_workspace": can_any(user, "finance.view") or (
+            user.is_superuser or all(user.has_perm(permission) for permission in finance_workspace_permissions)
+        ),
+        "can_view_appeals": can_any(user, "appeals.view"),
+        "can_view_account_documents": can_any(user, "documents.account.view"),
+        "can_view_public_documents": can_any(user, "documents.public.view"),
+        "can_view_news": can_any(user, "news.view"),
+        "can_view_documents": (
+            can_any(user, "documents.account.view")
+            or can_any(user, "documents.public.view")
+            or can_any(user, "news.view")
+        ),
+        "can_view_governance": can_any(user, "governance.board.view"),
+        "can_view_registry": can_any(user, "registry.view"),
+        "can_manage_finance_policy": can_any(user, "finance.policy.manage"),
+        "can_view_reading_history": can_any(user, "water.reading.view"),
+        "can_edit_accounts": can_any(user, "accounts.edit"),
         "can_view_access": can_manage_access,
         "can_review_access_requests": can_review_access_requests,
         "can_manage_access": can_manage_access,
@@ -129,12 +153,12 @@ def _base_context(request, *, section):
 
 
 def dashboard(request):
-    accounts = scoped_accounts(request.user)
     context = _base_context(request, section="home")
+    accounts = scoped_accounts(request.user) if context["can_view_accounts"] else Account.objects.none()
     context["account_count"] = accounts.count()
 
     attention = []
-    if request.user.has_perm("water.change_controllerreadingsubmission"):
+    if can_any(request.user, "water.observation.finalize"):
         count = ControllerReadingSubmission.objects.filter(status="pending").exclude(
             line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
         ).count()
@@ -244,22 +268,24 @@ def water_dashboard(request):
     today = timezone.localdate()
     meters = scoped_water_meters(request.user, today)
     meter_ids = meters.values("pk")
+    balance_scopes = scopes_for(request.user, "water.balance.view", on_date=today)
     context.update({
         "meter_count": meters.count(),
         "today_reading_count": Reading.objects.filter(
             meter_id__in=Subquery(meter_ids), date=today,
         ).count(),
-        "can_enter_readings": request.user.is_superuser or request.user.has_perm("water.add_reading"),
-        "can_capture_observation": request.user.is_superuser
-        or request.user.has_perm("water.add_controllerreadingsubmission"),
-        "can_moderate_submissions": request.user.is_superuser
-        or request.user.has_perm("water.change_controllerreadingsubmission"),
-        "can_review_readings": request.user.is_superuser or request.user.has_perm("water.view_reading"),
-        "can_view_meters": request.user.is_superuser or request.user.has_perm("water.view_meter"),
-        "can_view_balance": request.user.is_superuser or all(
-            request.user.has_perm(permission)
-            for permission in ("water.view_reading", "water.view_meter", "water.view_watergroup")
+        "can_enter_readings": can_any(request.user, "water.reading.submit_official"),
+        "can_capture_observation": can_any(request.user, "water.observation.submit"),
+        "can_moderate_submissions": can_any(request.user, "water.observation.finalize"),
+        "can_review_readings": can_any(request.user, "water.reading.view"),
+        "can_view_readings_global": any(
+            scope.type == ScopeType.ALL for scope in scopes_for(request.user, "water.reading.view", on_date=today)
         ),
+        "can_view_meters": can_any(request.user, "water.meters.view"),
+        "can_view_meters_global": any(
+            scope.type == ScopeType.ALL for scope in scopes_for(request.user, "water.meters.view", on_date=today)
+        ),
+        "can_view_balance": any(scope.type in (ScopeType.ALL, ScopeType.SUPPLY_NODE) for scope in balance_scopes),
     })
 
     if context["can_use_controller_workspace"] and not context["can_moderate_submissions"]:
@@ -272,7 +298,7 @@ def water_dashboard(request):
             meter__account_id__in=Subquery(account_ids),
         ).select_related("meter", "meter__account").order_by("-submitted_at", "-id")
         context.update({
-            "controller_line_count": _controller_group_ids(request.user, today).count(),
+            "controller_line_count": len(_controller_group_ids(request.user, today)),
             "own_pending_count": ControllerReadingSubmission.objects.filter(
                 submitted_by=request.user, status="pending",
             ).count(),
@@ -280,7 +306,9 @@ def water_dashboard(request):
             "line_review_items": list(line_review_qs[:12]),
         })
     elif context["can_moderate_submissions"]:
-        pending = ControllerReadingSubmission.objects.filter(status="pending")
+        pending = ControllerReadingSubmission.objects.filter(
+            status="pending", meter_id__in=Subquery(meter_ids),
+        )
         final_review_qs = pending.exclude(
             line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
         ).select_related("meter", "meter__account").order_by("-submitted_at", "-id")
@@ -324,8 +352,10 @@ def account_detail(request, account_id):
         ).filter(
             Q(ends__isnull=True) | Q(ends__gt=today)
         ).select_related("group", "group__node")
-        if not (request.user.is_superuser or request.user.has_perm("water.view_membership")):
-            membership_qs = membership_qs.filter(group_id__in=_controller_group_ids(request.user, today))
+        if not can(request.user, "water.topology.view", scope=ScopeRef(ScopeType.ACCOUNT, account.pk), on_date=today):
+            membership_qs = membership_qs.none()
+        elif not any(scope.type == ScopeType.ALL for scope in scopes_for(request.user, "water.topology.view", on_date=today)):
+            membership_qs = membership_qs.filter(group_id__in=_group_ids_for_capability(request.user, "water.topology.view", today))
         memberships = list(membership_qs)
 
     land_plots = []

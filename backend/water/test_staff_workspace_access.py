@@ -343,12 +343,12 @@ class StaffWorkspaceAccessTests(TestCase):
         grant.refresh_from_db()
         self.assertEqual(grant.ends, end_on)
 
-    def test_staff_opening_resident_cabinet_gets_explanation_instead_of_bare_403(self):
+    def test_staff_without_personal_grant_gets_normal_no_access_explanation(self):
         self.login(self.admin_user)
         response = self.client.get("/admin/cabinet/")
         self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "Сейчас вы вошли как сотрудник", status_code=403)
-        self.assertContains(response, "режиме инкогнито", status_code=403)
+        self.assertContains(response, "Доступ к участку не найден", status_code=403)
+        self.assertNotContains(response, "Сейчас вы вошли как сотрудник", status_code=403)
 
     def test_access_pages_have_bounded_query_counts(self):
         self.login(self.dual_user)

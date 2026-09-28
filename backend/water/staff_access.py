@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
+from .access_resolver import can_any
 from .access_workflow import (
     approve_access_request,
     end_portal_grant,
@@ -20,6 +21,7 @@ from .access_workflow import (
     reject_access_request,
     revoke_invite,
     revoke_password_reset,
+    update_portal_grant_rights,
 )
 from .models import Account, Person, ResidentAccess, ResidentInvite, ResidentPasswordReset
 from .portal import issue_granular_invite
@@ -117,19 +119,37 @@ class EndAccessForm(forms.Form):
         return value
 
 
+class PortalGrantRightsForm(forms.Form):
+    can_view_account = forms.BooleanField(label="Видеть участок и базовые данные", required=False)
+    can_view_finance = forms.BooleanField(label="Видеть начисления и оплаты", required=False)
+    can_submit_water = forms.BooleanField(label="Передавать показания воды", required=False)
+    can_view_documents = forms.BooleanField(label="Видеть документы лицевого счёта", required=False)
+    can_use_appeals = forms.BooleanField(label="Создавать и читать свои обращения", required=False)
+    can_represent = forms.BooleanField(label="Совершать представительские действия", required=False)
+
+    def clean(self):
+        data = super().clean()
+        if any(data.get(name) for name in (
+            "can_view_finance", "can_submit_water", "can_view_documents",
+            "can_use_appeals", "can_represent",
+        )) and not data.get("can_view_account"):
+            self.add_error("can_view_account", "Специальные права требуют базового доступа к участку.")
+        return data
+
+
 def _can(user, permission):
     return user.is_superuser or user.has_perm(permission)
 
 
 def _can_review_requests(user):
-    return user.is_superuser or (
+    return user.is_superuser or can_any(user, "access.request.review") or (
         user.has_perm("water.access_private_registry")
         and user.has_perm("water.view_residentaccessrequest")
     )
 
 
 def _can_change_requests(user):
-    return user.is_superuser or (
+    return user.is_superuser or can_any(user, "access.request.decide") or (
         user.has_perm("water.access_private_registry")
         and user.has_perm("water.change_residentaccessrequest")
     )
@@ -141,17 +161,20 @@ def _can_manage_access(user):
         "water.view_residentinvite",
         "water.view_residentpasswordreset",
     )
-    return user.is_superuser or all(user.has_perm(permission) for permission in required)
+    return user.is_superuser or can_any(user, "access.view") or all(
+        user.has_perm(permission) for permission in required
+    )
 
 
 def _can_issue_granular_invite(user):
-    return _can_review_requests(user) and _can(user, "water.add_residentinvite")
+    return can_any(user, "access.invite.issue") or (
+        _can_review_requests(user) and _can(user, "water.add_residentinvite")
+    )
 
 
 def _can_manage_grants(user):
-    return user.is_superuser or (
-        _can_manage_access(user)
-        and user.has_perm("water.view_portalgrant")
+    return user.is_superuser or can_any(user, "access.grant.view") or (
+        _can_manage_access(user) and user.has_perm("water.view_portalgrant")
     )
 
 
@@ -188,7 +211,7 @@ def access_dashboard(request):
     context.update({
         "can_review_access_requests": can_review,
         "can_manage_access": can_manage,
-        "can_approve_access_requests": can_review and _can(request.user, "water.add_residentinvite"),
+        "can_approve_access_requests": can_review and (_can(request.user, "water.add_residentinvite") or can_any(request.user, "access.invite.issue")),
         "can_issue_granular_invite": _can_issue_granular_invite(request.user),
         "q": q,
         "request_state": request_state,
@@ -256,15 +279,17 @@ def access_dashboard(request):
                 .select_related("user")
                 .order_by("expires_at", "id")[:30]
             ),
-            "can_revoke_invite": _can(request.user, "water.change_residentinvite"),
-            "can_revoke_reset": _can(request.user, "water.change_residentpasswordreset"),
+            "can_revoke_invite": _can(request.user, "water.change_residentinvite") or can_any(request.user, "access.invite.revoke"),
+            "can_revoke_reset": _can(request.user, "water.change_residentpasswordreset") or can_any(request.user, "access.password_reset.revoke"),
         })
 
     return TemplateResponse(request, "water/work/access/dashboard.html", context)
 
 
 def person_create_for_access(request):
-    if not _can_issue_granular_invite(request.user) or not _can(request.user, "water.add_person"):
+    if not _can_issue_granular_invite(request.user) or not (
+        _can(request.user, "water.add_person") or can_any(request.user, "access.person.create")
+    ):
         raise PermissionDenied
     form = PersonCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -331,19 +356,39 @@ def grant_detail(request, grant_id):
         request.POST if request.method == "POST" and request.POST.get("action") == "end" else None,
         access=grant,
     )
+    rights_form = PortalGrantRightsForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "rights" else None,
+        initial={
+            "can_view_account": grant.can_view_account,
+            "can_view_finance": grant.can_view_finance,
+            "can_submit_water": grant.can_submit_water,
+            "can_view_documents": grant.can_view_documents,
+            "can_use_appeals": grant.can_use_appeals,
+            "can_represent": grant.can_represent,
+        },
+    )
     reset_url = None
     if request.method == "POST":
         action = request.POST.get("action") or ""
         try:
-            if action == "end":
-                if not _can(request.user, "water.change_portalgrant"):
+            if action == "rights":
+                if not (_can(request.user, "water.change_portalgrant") or can_any(request.user, "access.grant.edit")):
+                    raise PermissionDenied
+                if rights_form.is_valid():
+                    update_portal_grant_rights(
+                        grant.pk, actor=request.user, **rights_form.cleaned_data
+                    )
+                    messages.success(request, "Набор личных прав обновлён; предыдущая версия сохранена в истории.")
+                    return HttpResponseRedirect(reverse("staff_workspace:grant_detail", args=[grant.pk]))
+            elif action == "end":
+                if not (_can(request.user, "water.change_portalgrant") or can_any(request.user, "access.grant.end")):
                     raise PermissionDenied
                 if end_form.is_valid():
                     end_portal_grant(grant.pk, ends_on=end_form.cleaned_data["ends_on"], actor=request.user)
                     messages.success(request, "Доступ завершён датой; запись и история сохранены.")
                     return HttpResponseRedirect(reverse("staff_workspace:grant_detail", args=[grant.pk]))
             elif action == "reset":
-                if not _can(request.user, "water.add_residentpasswordreset"):
+                if not (_can(request.user, "water.add_residentpasswordreset") or can_any(request.user, "access.password_reset.issue")):
                     raise PermissionDenied
                 _reset, raw = issue_grant_password_reset(grant.pk, actor=request.user)
                 reset_url = request.build_absolute_uri(reverse("resident_password_reset", args=[raw]))
@@ -359,10 +404,12 @@ def grant_detail(request, grant_id):
         "grant": grant,
         "identity": identity,
         "end_form": end_form,
+        "rights_form": rights_form,
         "reset_url": reset_url,
         "can_see_person": _can_review_requests(request.user),
-        "can_end_access": _can(request.user, "water.change_portalgrant") and grant.ends is None,
-        "can_issue_reset": bool(identity) and _can(request.user, "water.add_residentpasswordreset") and grant.ends is None,
+        "can_edit_rights": (_can(request.user, "water.change_portalgrant") or can_any(request.user, "access.grant.edit")) and grant.ends is None,
+        "can_end_access": (_can(request.user, "water.change_portalgrant") or can_any(request.user, "access.grant.end")) and grant.ends is None,
+        "can_issue_reset": bool(identity) and (_can(request.user, "water.add_residentpasswordreset") or can_any(request.user, "access.password_reset.issue")) and grant.ends is None,
         "resets": list(
             ResidentPasswordReset.objects.filter(user=identity.user).order_by("-id")[:12]
         ) if identity else [],
@@ -377,7 +424,7 @@ def request_detail(request, request_id):
         pk=request_id,
     )
     can_change = _can_change_requests(request.user)
-    can_approve = can_change and _can(request.user, "water.add_residentinvite")
+    can_approve = can_change and (_can(request.user, "water.add_residentinvite") or can_any(request.user, "access.invite.issue"))
     approve_form = AccessRequestApproveForm(
         request.POST if request.method == "POST" and request.POST.get("action") == "approve" else None,
         initial={"email": request_obj.email, "role": "owner"},
@@ -453,7 +500,7 @@ def access_detail(request, access_id):
         action = request.POST.get("action") or ""
         try:
             if action == "end":
-                if not _can(request.user, "water.change_residentaccess"):
+                if not (_can(request.user, "water.change_residentaccess") or can_any(request.user, "access.grant.end")):
                     raise PermissionDenied
                 if end_form.is_valid():
                     end_resident_access(
@@ -464,7 +511,7 @@ def access_detail(request, access_id):
                     messages.success(request, "Доступ завершён датой; запись и история сохранены.")
                     return HttpResponseRedirect(reverse("staff_workspace:access_detail", args=[access.pk]))
             elif action == "reset":
-                if not _can(request.user, "water.add_residentpasswordreset"):
+                if not (_can(request.user, "water.add_residentpasswordreset") or can_any(request.user, "access.password_reset.issue")):
                     raise PermissionDenied
                 _reset, raw = issue_access_password_reset(access.pk, actor=request.user)
                 reset_url = request.build_absolute_uri(reverse("resident_password_reset", args=[raw]))
@@ -480,8 +527,8 @@ def access_detail(request, access_id):
         "access": access,
         "end_form": end_form,
         "reset_url": reset_url,
-        "can_end_access": _can(request.user, "water.change_residentaccess") and access.ends is None,
-        "can_issue_reset": _can(request.user, "water.add_residentpasswordreset") and access.ends is None,
+        "can_end_access": (_can(request.user, "water.change_residentaccess") or can_any(request.user, "access.grant.end")) and access.ends is None,
+        "can_issue_reset": (_can(request.user, "water.add_residentpasswordreset") or can_any(request.user, "access.password_reset.issue")) and access.ends is None,
         "resets": list(
             ResidentPasswordReset.objects.filter(user=access.user)
             .order_by("-id")[:12]
@@ -492,7 +539,7 @@ def access_detail(request, access_id):
 
 def revoke_invite_view(request, invite_id):
     _require_access_management(request)
-    if request.method != "POST" or not _can(request.user, "water.change_residentinvite"):
+    if request.method != "POST" or not (_can(request.user, "water.change_residentinvite") or can_any(request.user, "access.invite.revoke")):
         raise PermissionDenied
     invite = get_object_or_404(ResidentInvite, pk=invite_id)
     try:
@@ -506,7 +553,7 @@ def revoke_invite_view(request, invite_id):
 
 def revoke_reset_view(request, reset_id):
     _require_access_management(request)
-    if request.method != "POST" or not _can(request.user, "water.change_residentpasswordreset"):
+    if request.method != "POST" or not (_can(request.user, "water.change_residentpasswordreset") or can_any(request.user, "access.password_reset.revoke")):
         raise PermissionDenied
     reset = get_object_or_404(ResidentPasswordReset, pk=reset_id)
     try:

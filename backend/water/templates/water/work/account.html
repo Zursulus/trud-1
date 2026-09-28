@@ -74,7 +74,7 @@
   {% endif %}
   <div class="ws-actions">
     {% if can_use_controller_workspace %}<a class="ws-secondary" href="{% url 'water_controller_workspace' %}">Открыть мои линии</a>{% endif %}
-    {% if request.user.is_superuser or perms.water.view_reading %}<a class="ws-secondary" href="{% url 'admin:water_reading_changelist' %}?meter__account__id__exact={{ account.pk }}">Журнал показаний</a>{% endif %}
+    {% if can_view_reading_history %}<a class="ws-secondary" href="{% url 'admin:water_reading_changelist' %}?meter__account__id__exact={{ account.pk }}">Журнал показаний</a>{% endif %}
   </div>
 </section>
 {% endif %}
@@ -94,8 +94,8 @@
   <div class="ws-section-head"><h2>Связанные процессы</h2></div>
   <div class="ws-action-list">
     {% if can_view_appeals %}<a class="ws-action-row" href="{% url 'staff_workspace:appeals' %}?state=open&account={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
-    {% if can_view_documents %}<a class="ws-action-row" href="{% url 'admin:water_accountdocument_changelist' %}?account__id__exact={{ account.pk }}"><span>Документы лицевого счёта</span><strong>{{ documents_count }}</strong></a>{% endif %}
-    {% if can_view_access %}<a class="ws-action-row" href="{% url 'admin:water_residentaccess_changelist' %}?account__id__exact={{ account.pk }}"><span>Активные доступы кабинета</span><strong>{{ access_count }}</strong></a>{% endif %}
+    {% if can_view_account_documents %}<a class="ws-action-row" href="{% url 'staff_workspace:documents' %}?q={{ account.number|default:account.plot|urlencode }}"><span>Документы лицевого счёта</span><strong>{{ documents_count }}</strong></a>{% endif %}
+    {% if can_view_access %}<a class="ws-action-row" href="{% url 'staff_workspace:access' %}?q={{ account.number|default:account.plot|urlencode }}"><span>Активные доступы кабинета</span><strong>{{ access_count }}</strong></a>{% endif %}
   </div>
 </section>
 {% endif %}
@@ -103,6 +103,6 @@
 <section class="ws-section ws-muted-panel">
   <h2>Служебная карточка</h2>
   <p>Исправления реестра выполняются через существующий audited workflow; рабочие процессы постепенно переносятся в этот интерфейс.</p>
-  {% if perms.water.change_account %}<a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Открыть в Django Admin</a>{% endif %}
+  {% if can_edit_accounts %}<a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Открыть в Django Admin</a>{% endif %}
 </section>
 {% endblock %}

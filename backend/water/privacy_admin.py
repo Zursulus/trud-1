@@ -15,8 +15,20 @@ PRIVATE_REGISTRY_PERMISSION = 'water.access_private_registry'
 LEGACY_ACCOUNT_PII_FIELDS = ('contact_name', 'phone')
 
 
+def _v2_registry(user, capability):
+    from .access_policy import ScopeType
+    from .access_resolver import can
+    from .access_scope import ScopeRef
+    return can(user, capability, scope=ScopeRef(ScopeType.ALL))
+
+
 def has_private_registry_access(user):
-    return bool(user.is_superuser or user.has_perm(PRIVATE_REGISTRY_PERMISSION))
+    return bool(
+        user.is_superuser
+        or user.has_perm(PRIVATE_REGISTRY_PERMISSION)
+        or _v2_registry(user, 'registry.view')
+        or _v2_registry(user, 'registry.contacts.view')
+    )
 
 
 def take_registered_admin(model):
@@ -31,16 +43,24 @@ class PrivateRegistryPermissionMixin:
     """Require the explicit sensitive-data permission in addition to model perms."""
 
     def has_module_permission(self, request):
-        return has_private_registry_access(request.user) and super().has_module_permission(request)
+        if not has_private_registry_access(request.user):
+            return False
+        return _v2_registry(request.user, 'registry.view') or super().has_module_permission(request)
 
     def has_view_permission(self, request, obj=None):
-        return has_private_registry_access(request.user) and super().has_view_permission(request, obj)
+        if not has_private_registry_access(request.user):
+            return False
+        return _v2_registry(request.user, 'registry.view') or super().has_view_permission(request, obj)
 
     def has_add_permission(self, request):
-        return has_private_registry_access(request.user) and super().has_add_permission(request)
+        if not has_private_registry_access(request.user):
+            return False
+        return _v2_registry(request.user, 'registry.edit') or super().has_add_permission(request)
 
     def has_change_permission(self, request, obj=None):
-        return has_private_registry_access(request.user) and super().has_change_permission(request, obj)
+        if not has_private_registry_access(request.user):
+            return False
+        return _v2_registry(request.user, 'registry.edit') or super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
         return False

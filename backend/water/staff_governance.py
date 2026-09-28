@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .board_poll_views import _eligible_users, _user_label
+from .access_resolver import can_any
 from .board_polls import (
     BoardAuditEvent,
     BoardPoll,
@@ -99,12 +100,12 @@ class BoardProtocolUploadForm(forms.Form):
     document = forms.FileField(label="Протокол PDF или DOCX")
 
 
-def _can(user, permission):
-    return user.is_superuser or user.has_perm(permission)
+def _can(user, capability):
+    return user.is_superuser or can_any(user, capability)
 
 
 def _require_governance_view(request):
-    if not request.user.is_staff or not _can(request.user, "water.view_boardpoll"):
+    if not request.user.is_staff or not _can(request.user, "governance.board.view"):
         raise PermissionDenied
 
 
@@ -149,7 +150,7 @@ def _audit_events(poll):
 
 def _poll_detail_context(request, poll, *, edit_form=None, protocol_form=None):
     eligible = _eligible_users(poll)
-    can_change = _can(request.user, "water.change_boardpoll") and poll.is_open
+    can_change = _can(request.user, "governance.poll.edit") and poll.is_open
     context = _base_context(request, section="governance")
     context.update({
         "poll": poll,
@@ -159,10 +160,10 @@ def _poll_detail_context(request, poll, *, edit_form=None, protocol_form=None):
         "protocol": BoardProtocol.objects.filter(poll=poll).first(),
         "edit_form": edit_form or BoardPollEditForm(poll=poll),
         "protocol_form": protocol_form or BoardProtocolUploadForm(),
-        "audit_events": _audit_events(poll),
+        "audit_events": _audit_events(poll) if _can(request.user, "governance.audit.view") else [],
         "can_edit": can_change,
-        "can_close": can_change,
-        "can_upload_protocol": _can(request.user, "water.add_boardprotocol") and not poll.is_open,
+        "can_close": _can(request.user, "governance.poll.close") and poll.is_open,
+        "can_upload_protocol": _can(request.user, "governance.protocol.add") and not poll.is_open,
     })
     return context
 
@@ -189,14 +190,14 @@ def governance_dashboard(request):
     context = _base_context(request, section="governance")
     context.update({
         "poll_rows": rows,
-        "can_create_poll": _can(request.user, "water.add_boardpoll") and _can(request.user, "water.add_boardquestion"),
+        "can_create_poll": _can(request.user, "governance.poll.create"),
     })
     return TemplateResponse(request, "water/work/governance/dashboard.html", context)
 
 
 def governance_create(request):
     _require_governance_view(request)
-    if not (_can(request.user, "water.add_boardpoll") and _can(request.user, "water.add_boardquestion")):
+    if not (_can(request.user, "governance.poll.create")):
         raise PermissionDenied
     form = BoardPollCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -236,7 +237,7 @@ def governance_detail(request, poll_id):
     if request.method == "POST":
         action = request.POST.get("action") or ""
         if action == "edit":
-            if not _can(request.user, "water.change_boardpoll"):
+            if not _can(request.user, "governance.poll.edit"):
                 raise PermissionDenied
             edit_form = BoardPollEditForm(request.POST, poll=poll)
             if edit_form.is_valid():
@@ -260,7 +261,7 @@ def governance_detail(request, poll_id):
                     return HttpResponseRedirect(reverse("staff_workspace:governance_detail", args=[poll.pk]))
 
         elif action == "close":
-            if not _can(request.user, "water.change_boardpoll"):
+            if not _can(request.user, "governance.poll.close"):
                 raise PermissionDenied
             try:
                 submitted_version = int(request.POST.get("version", ""))
@@ -284,7 +285,7 @@ def governance_detail(request, poll_id):
             return HttpResponseRedirect(reverse("staff_workspace:governance_detail", args=[poll.pk]))
 
         elif action == "upload_protocol":
-            if not _can(request.user, "water.add_boardprotocol"):
+            if not _can(request.user, "governance.protocol.add"):
                 raise PermissionDenied
             if poll.is_open or BoardProtocol.objects.filter(poll=poll).exists():
                 raise PermissionDenied

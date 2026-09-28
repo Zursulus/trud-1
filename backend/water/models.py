@@ -941,8 +941,6 @@ class ResidentAppeal(RecordedModel):
         ordering = ['-opened_at', '-id']
 
     def clean(self):
-        if self.author_id and self.author.is_staff:
-            raise ValidationError({'author': 'Автором обращения должен быть житель.'})
         if self.author_id and self.account_id:
             access = ResidentAccess.objects.filter(
                 user_id=self.author_id, account_id=self.account_id, starts__lte=self.opened_at.date(),

@@ -51,8 +51,6 @@ class ResidentNumberSlot(models.Model):
             raise ValidationError({'purpose': 'Номер 333 зарезервирован для тестовой учётной записи.'})
         if self.purpose == self.PURPOSE_TEST and self.number != TEST_RESIDENT_NUMBER:
             raise ValidationError({'number': 'Тестовая учётная запись использует номер 333.'})
-        if self.user_id and self.user.is_staff:
-            raise ValidationError({'user': 'Номер жителя нельзя назначать сотруднику административной части.'})
 
     def save(self, *args, **kwargs):
         if self.user_id and not self.assigned_at:

@@ -18,12 +18,13 @@ class ResidentNumberReservationTests(TestCase):
         self.assertEqual(test_slot.purpose, 'test')
         self.assertIsNone(test_slot.user_id)
 
-    def test_test_slot_rejects_staff_user(self):
-        user = User.objects.create_user(username='staff-test', password='irrelevant-password', is_staff=True)
-        slot = ResidentNumberSlot.objects.get(pk=333)
+    def test_staff_flag_does_not_block_resident_number_assignment(self):
+        user = User.objects.create_user(username='staff-resident-test', password='irrelevant-password', is_staff=True)
+        slot = ResidentNumberSlot.objects.get(pk=1)
         slot.user = user
-        with self.assertRaisesMessage(Exception, 'Номер жителя нельзя назначать сотруднику'):
-            slot.save()
+        slot.save()
+        slot.refresh_from_db()
+        self.assertEqual(slot.user, user)
 
     def test_provision_command_requires_synthetic_account(self):
         with self.assertRaises(CommandError):

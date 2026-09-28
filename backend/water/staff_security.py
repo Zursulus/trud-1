@@ -6,16 +6,17 @@ from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
+from .access_resolver import can_any
 from .security_models import SecurityAlert
 from .staff_workspace import _base_context
 
 
 def _can_view(user):
-    return user.is_superuser or user.has_perm("water.view_securityalert")
+    return user.is_superuser or can_any(user, "security.alert.view")
 
 
 def _can_change(user):
-    return user.is_superuser or user.has_perm("water.change_securityalert")
+    return user.is_superuser or can_any(user, "security.alert.review")
 
 
 def security_alerts(request):

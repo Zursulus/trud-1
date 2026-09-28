@@ -7,6 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 
+from .access_resolver import can_any
 from .appeal_security import (
     APPEAL_ATTACHMENT_HELP,
     record_form_upload_rejection,
@@ -29,7 +30,7 @@ class BoardAppealMessageForm(forms.Form):
 
 @never_cache
 def manage_appeal_attachments(request, appeal_id):
-    if not request.user.has_perm('water.change_residentappeal'):
+    if not request.user.is_staff or not can_any(request.user, 'appeals.reply'):
         raise PermissionDenied
     appeal = get_object_or_404(ResidentAppeal.objects.select_related('account', 'author'), pk=appeal_id)
     can_reply = appeal.status not in ('resolved', 'closed')
@@ -76,7 +77,7 @@ def manage_appeal_attachments(request, appeal_id):
 
 @never_cache
 def download_appeal_attachment(request, attachment_id):
-    if not request.user.has_perm('water.view_residentappeal'):
+    if not request.user.is_staff or not can_any(request.user, 'appeals.attachment.view'):
         raise PermissionDenied
     attachment = get_object_or_404(ResidentAppealAttachment.objects.select_related('appeal'), pk=attachment_id)
     try:

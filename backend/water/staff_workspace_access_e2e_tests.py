@@ -71,10 +71,10 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/access/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            self.assertTrue(page.get_by_role("heading", name="Доступ жителей", exact=True).is_visible())
+            self.assertTrue(page.get_by_role("heading", name="Доступы и полномочия", exact=True).is_visible())
             self.assertEqual(page.locator(".ws-bottom-nav a").count(), 5)
 
-            page.get_by_role("link", name="Выдать доступ", exact=True).click()
+            page.get_by_role("link", name="Выдать доступ жителю", exact=True).click()
             page.wait_for_load_state("networkidle")
             self.assertTrue(page.get_by_role("heading", name="Выдать доступ жителю", exact=True).is_visible())
             page.locator("#id_person").select_option(str(person_id))

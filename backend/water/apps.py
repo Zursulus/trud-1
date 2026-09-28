@@ -19,6 +19,7 @@ class WaterConfig(AppConfig):
         # Security policy is registered only after attachment/security models exist.
         from . import appeal_security  # noqa: F401
         from . import portal_permissions
+        from . import access_control  # noqa: F401
         portal_permissions.install_model_permission_validators()
         # Рабочая админка должна показывать сначала несколько понятных сценариев,
         # а не полный технический список моделей. Полная структура остаётся
