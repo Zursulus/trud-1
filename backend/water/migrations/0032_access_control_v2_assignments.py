@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('water', '0031_merge_0029_security_alert_0030_granular_resident_invite'),
+        ('water', '0030_granular_resident_invite'),
     ]
 
     operations = [
