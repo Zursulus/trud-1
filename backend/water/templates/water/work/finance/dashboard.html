@@ -45,6 +45,6 @@
 
 <section class="ws-section ws-muted-panel">
   <h2>Правила и тарифы</h2><p>Настройка расчётных правил, тарифов и редкие ручные корректировки остаются техническими операциями.</p>
-  {% if perms.water.view_billingpolicy %}<a class="ws-secondary" href="{% url 'admin:water_billingpolicy_changelist' %}">Открыть служебные настройки</a>{% endif %}
+  {% if can_manage_finance_policy %}<a class="ws-secondary" href="{% url 'admin:water_billingpolicy_changelist' %}">Открыть служебные настройки</a>{% endif %}
 </section>
 {% endblock %}

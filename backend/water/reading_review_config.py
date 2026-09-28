@@ -12,6 +12,9 @@ from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from .access_policy import ScopeType
+from .access_resolver import scopes_for
+from .access_scope import scope_covers_meter
 from .models import Reading
 from .reading_admin_tools import (
     XLSX_HEADERS,
@@ -76,12 +79,26 @@ def audit_readings_with_threshold(threshold):
     return result
 
 
-def reading_review_view(request):
-    if not request.user.has_perm('water.view_reading'):
-        raise PermissionDenied
 
+
+def _scoped_rows(user, rows, capability):
+    scopes = scopes_for(user, capability)
+    if not scopes:
+        raise PermissionDenied
+    if any(scope.type == ScopeType.ALL for scope in scopes):
+        return rows
+    visible = []
+    for row in rows:
+        reading = row['reading']
+        if any(scope_covers_meter(scope, reading.meter_id, reading.date) for scope in scopes):
+            visible.append(row)
+    return visible
+
+def reading_review_view(request):
     threshold, threshold_error = _parse_threshold(request.GET.get('threshold'))
-    rows = audit_readings_with_threshold(threshold)
+    rows = _scoped_rows(
+        request.user, audit_readings_with_threshold(threshold), 'water.reading.view',
+    )
     flagged = [row for row in rows if row['review']]
     threshold_text = _threshold_text(threshold)
     context = {
@@ -93,7 +110,7 @@ def reading_review_view(request):
         'review_count': len(flagged),
         'critical_count': sum(1 for row in flagged if row['severity'] == 'critical'),
         'controller_count': sum(1 for row in rows if row['controller_count']),
-        'can_export': request.user.has_perm('water.export_reading'),
+        'can_export': bool(scopes_for(request.user, 'water.export')),
         'can_reassign': request.user.is_superuser,
         'threshold': threshold_text,
         'threshold_query': threshold_text,
@@ -104,14 +121,13 @@ def reading_review_view(request):
 
 
 def export_readings_xlsx(request):
-    if not request.user.has_perm('water.export_reading'):
-        raise PermissionDenied
-
     threshold, threshold_error = _parse_threshold(request.GET.get('threshold'))
     if threshold_error:
         return HttpResponse(threshold_error, status=400, content_type='text/plain; charset=utf-8')
 
-    rows = audit_readings_with_threshold(threshold)
+    rows = _scoped_rows(
+        request.user, audit_readings_with_threshold(threshold), 'water.export',
+    )
     flagged = [row for row in rows if row['review']]
     controller_count = sum(1 for row in rows if row['controller_count'])
     imported_count = sum(

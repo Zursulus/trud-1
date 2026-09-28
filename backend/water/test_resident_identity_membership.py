@@ -44,14 +44,15 @@ class ResidentIdentityTests(TestCase):
                 basis='Конфликтующая тестовая связь',
             )
 
-    def test_staff_login_cannot_become_resident_identity(self):
-        with self.assertRaises(ValidationError):
-            ResidentIdentity.objects.create(
-                user=self.staff,
-                person=self.person,
-                verified_by=self.staff,
-                basis='Недопустимая тестовая связь',
-            )
+    def test_staff_login_can_share_verified_person_identity(self):
+        identity = ResidentIdentity.objects.create(
+            user=self.staff,
+            person=self.person,
+            verified_by=self.staff,
+            basis='Подтверждённая совмещённая роль',
+        )
+        self.assertEqual(identity.person, self.person)
+        self.assertTrue(identity.user.is_staff)
 
     def test_identity_verifier_must_be_staff(self):
         verifier = User.objects.create_user(username='not-a-verifier')

@@ -1,0 +1,25 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Люди и полномочия{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступы</a><span>›</span><span>Люди и полномочия</span></nav>
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Единый контур Person</p><h1>Люди и полномочия</h1><p>Один человек может одновременно быть жителем, старшим линии, контролёром, членом ТСН и правления. Роли не подменяют бизнес-статусы.</p></div>
+  {% if can_manage_assignments %}<a class="ws-primary" href="{% url 'staff_workspace:access_person_create' %}">Новый человек</a>{% endif %}
+</section>
+<form class="ws-search-form" method="get">
+  <label for="people-q">Найти человека</label>
+  <div class="ws-search-line"><input id="people-q" name="q" value="{{ q }}" autocomplete="off" placeholder="ФИО{% if can_view_contacts %}, email или телефон{% endif %}"><button class="ws-primary" type="submit">Найти</button></div>
+</form>
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Люди</h2><span>{{ rows|length }}</span></div>
+  {% if rows %}<div class="ws-result-list">
+  {% for row in rows %}
+    <a class="ws-result" href="{% url 'staff_workspace:access_person' row.person.pk %}">
+      <div><span class="ws-result-type">Person #{{ row.person.pk }}{% if row.identity %} · {{ row.identity.user.username }}{% else %} · без логина{% endif %}</span>
+      <strong>{{ row.person.full_name }}</strong>
+      <p>{% if row.tags %}{{ row.tags|join:' · ' }}{% else %}Нет активных ролей/статусов{% endif %}{% if can_view_contacts and row.person.email %} · {{ row.person.email }}{% endif %}</p></div><span class="ws-chevron">›</span>
+    </a>
+  {% endfor %}
+  </div>{% else %}<div class="ws-empty"><strong>Ничего не найдено.</strong><p>Измените запрос или создайте карточку человека.</p></div>{% endif %}
+</section>
+{% endblock %}

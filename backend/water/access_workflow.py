@@ -118,3 +118,29 @@ def issue_grant_password_reset(grant_id, *, actor):
     if identity is None:
         raise ValidationError('К этому доступу ещё не привязан активированный кабинет жителя.')
     return issue_password_reset(identity.user, actor=actor)
+
+
+@transaction.atomic
+def update_portal_grant_rights(grant_id, *, actor, can_view_account, can_view_finance,
+                               can_submit_water, can_view_documents, can_use_appeals,
+                               can_represent):
+    """Change only the capability snapshot of an active explicit resident grant."""
+    grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    today = timezone.localdate()
+    if grant.ends is not None and grant.ends <= today:
+        raise ValidationError('Завершённый доступ нельзя расширять или изменять.')
+    fields = {
+        'can_view_account': bool(can_view_account),
+        'can_view_finance': bool(can_view_finance),
+        'can_submit_water': bool(can_submit_water),
+        'can_view_documents': bool(can_view_documents),
+        'can_use_appeals': bool(can_use_appeals),
+        'can_represent': bool(can_represent),
+    }
+    for name, value in fields.items():
+        setattr(grant, name, value)
+    grant._history_user = actor
+    grant._change_reason = 'Изменён явный набор личных прав жителя'
+    grant.full_clean()
+    grant.save(update_fields=list(fields))
+    return grant

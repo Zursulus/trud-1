@@ -263,58 +263,27 @@ Exceptional historical correction remains highly privileged and separately audit
 
 ## 7. Voting and governance
 
-A person can participate in several independent electorates at the same time.
+For Access Control V2, voting scope is deliberately limited to the already implemented **preliminary, non-official board polls**.
 
-Examples:
+A person may simultaneously be an ordinary resident and an active board member using the same `Person`/login. Resident access and board participation remain independent contexts.
 
-- ordinary personal/resident context;
-- TSN-member voting context;
-- board-member voting context;
-- chair context.
+### 7.1 Preliminary board polls
 
-They must use the same login/Person identity, not separate accounts.
+Eligibility comes only from active `BoardMembership`. Being `is_staff`, a TSN member, owner, line senior or controller does not make a person eligible to vote in a board poll.
 
-### 7.1 Board voting
+`BoardMembership` is Person-centric in V2 while keeping the current User link for compatibility with existing votes. The existing board poll remains explicitly non-official: it is not a general meeting, does not establish quorum and does not itself create a legally binding resolution.
 
-Board eligibility comes from active BoardMembership at the event snapshot date.
+Existing safeguards remain:
 
-Target BoardMembership should be Person-centric. Current User-based membership is migrated/adapted through verified identity.
+- only active board members can open and vote in the board poll;
+- one current response per question/user, with changes preserved in audit while the poll is open;
+- closed polls cannot be changed;
+- question meaning cannot be rewritten after votes exist;
+- protocol attachment remains a separate post-poll action.
 
-### 7.2 TSN/general-member voting
+### 7.2 Out of scope
 
-This is a distinct electorate. Eligibility is based on the explicit rule of that voting event (normally active TsnMembership, but the system must not hard-code assumptions that belong to the charter/event type).
-
-### 7.3 Voting snapshot
-
-Each voting event freezes its electorate at an explicit snapshot time/date so later membership changes do not rewrite who was entitled to vote at opening.
-
-Target concepts:
-
-- VotingEvent / electorate type;
-- EligibilitySnapshot(Person, basis);
-- questions/options;
-- Vote with `voter_person` (whose legal/organizational vote) and `cast_by_user` (who authenticated);
-- capacity: self / authorized proxy where allowed;
-- linked delegation/proxy record when used;
-- immutable audit.
-
-Uniqueness is on `(question, voter_person)`, preventing double voting if the same person tries through different contexts.
-
-### 7.4 Proxy voting
-
-Do not reuse generic delegation automatically for board/member voting. Voting proxy must be a dedicated policy/record and is disabled unless the relevant governance rules explicitly permit it.
-
-If enabled, record:
-
-- whose vote;
-- who cast it;
-- exact event/scope;
-- legal/organizational basis;
-- validity;
-- whether the principal already voted;
-- full audit.
-
-Board voting and TSN-member voting can have different proxy rules.
+General meeting / resident / TSN-member voting is **postponed and is not part of Issue #99**. V2 must not introduce `VotingEvent`, TSN-member electorate snapshots, resident ballots or voting proxies now. Generic account delegation never grants a vote in the board poll.
 
 ## 8. Capability catalog
 
@@ -412,7 +381,6 @@ Names below are the target semantic API; exact implementation names may be adjus
 - `governance.protocol.add`
 - `governance.audit.view`
 - `governance.membership.manage`
-- `governance.member_vote` (event entitlement)
 
 ### Security / system
 
@@ -501,7 +469,7 @@ Evaluation order:
 4. hard restrictions/suspensions;
 5. direct V2 assignments;
 6. validated delegations;
-7. workflow entitlements (board/member electorate etc.);
+7. workflow entitlements (active BoardMembership for the preliminary board poll);
 8. compatibility adapters (PortalGrant, ResidentAccess, ControllerLineAccess, Django Groups) during migration;
 9. otherwise deny.
 
@@ -669,9 +637,8 @@ Phase 5 — delegation
 
 Phase 6 — governance
 - make board membership Person-centric;
-- introduce electorate snapshots and Person-based vote identity;
-- add TSN-member voting as separate electorate when required;
-- optional dedicated vote proxy only after explicit governance policy.
+- preserve the existing preliminary `BoardPoll` / `BoardVote` workflow and audit semantics;
+- keep general/member voting and any voting proxy explicitly out of scope until a separate project is approved.
 
 Phase 7 — module migration
 - finance, appeals, documents, registry, access, governance, security, import/export switch to resolver one module at a time;
@@ -689,8 +656,8 @@ The design is not complete unless all scenarios work without separate logins or 
 1. Ordinary resident sees only Account A; finance off, water on.
 2. Same resident is line senior for Group X and automatically sees only active accounts in X for line work.
 3. Same person is controller for Group Y but cannot perform senior review there.
-4. Same person is board member and can vote in board event while retaining normal resident portal access.
-5. Same person is also a TSN member and can participate in a separate member electorate without confusing the two ballots.
+4. Same person is a board member and can vote in the existing preliminary board poll while retaining normal resident portal access.
+5. Same person may be a TSN member, but that fact does not create any general/member ballot in V2.
 6. Resident delegates water submission for Account A to another verified person for one month; finance remains private.
 7. Delegator’s source authority ends early; delegated access stops immediately and history remains.
 8. Account moves from Group X to Group Z; senior X loses operational scope for that account on effective date and senior Z gains it without editing either senior assignment.
@@ -713,7 +680,7 @@ Before implementation is considered designed:
 - all current entities are mapped to facts, entitlements, assignments or compatibility adapters;
 - line senior/controller are separate;
 - resident + service roles coexist on one Person/User;
-- board/member voting contexts are distinct;
+- board preliminary polling remains independent from resident access; general/member voting is postponed;
 - delegation semantics and non-delegable rights are explicit;
 - migration preserves current production access and history;
 - tests cover all acceptance scenarios above.

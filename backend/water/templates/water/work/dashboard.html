@@ -36,7 +36,7 @@
 <section class="ws-section" aria-labelledby="quick-title">
   <div class="ws-section-head"><h2 id="quick-title">Быстрый доступ</h2></div>
   <div class="ws-card-grid">
-    <a class="ws-card" href="{% url 'staff_workspace:search' %}">
+    {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:search' %}">
       <span class="ws-card-kicker">Поиск</span>
       <strong>Найти объект</strong>
       <p>Лицевой счёт, участок, адрес или номер счётчика.</p>
@@ -45,7 +45,7 @@
       <span class="ws-card-kicker">Реестр</span>
       <strong>Участки и счета</strong>
       <p>{{ account_count }} доступно в вашем рабочем scope.</p>
-    </a>
+    </a>{% endif %}
     {% if can_use_controller_workspace %}
       <a class="ws-card" href="{% url 'water_controller_workspace' %}">
         <span class="ws-card-kicker">Вода</span>
@@ -53,10 +53,10 @@
         <p>Внести и сверить показания только по закреплённым линиям.</p>
       </a>
     {% elif can_view_water %}
-      <a class="ws-card" href="{% url 'admin:water_reading_changelist' %}">
+      <a class="ws-card" href="{% url 'staff_workspace:water' %}">
         <span class="ws-card-kicker">Вода</span>
-        <strong>Журнал показаний</strong>
-        <p>Пока открывается существующий проверенный workflow.</p>
+        <strong>Работа с водой</strong>
+        <p>Доступные действия и данные ограничены вашим scope.</p>
       </a>
     {% endif %}
   </div>

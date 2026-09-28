@@ -1,0 +1,51 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{{ person.full_name }} · Полномочия{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступы</a><span>›</span><a href="{% url 'staff_workspace:access_people' %}">Люди</a><span>›</span><span>{{ person.full_name }}</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Person #{{ person.pk }}</p><h1>{{ person.full_name }}</h1><p>{% if identity %}Логин: {{ identity.user.username }}{% if identity.user.is_staff %} · служебный вход включён{% endif %}{% else %}Логин ещё не связан{% endif %}{% if can_view_contacts and person.email %} · {{ person.email }}{% endif %}{% if can_view_contacts and person.phone %} · {{ person.phone }}{% endif %}</p></div></section>
+
+<div class="ws-summary-grid">
+  <div class="ws-summary"><span>Личные доступы</span><strong>{{ grants|length }}</strong><p>Явные права на лицевые счета.</p></div>
+  <div class="ws-summary"><span>Служебные назначения</span><strong>{{ assignment_rows|length }}</strong><p>Роли V2 с областью и сроком.</p></div>
+  <div class="ws-summary"><span>Членство ТСН</span><strong>{{ tsn_memberships|length }}</strong><p>Бизнес-статус, не permission.</p></div>
+  <div class="ws-summary"><span>Правление</span><strong>{{ board_memberships|length }}</strong><p>Отдельный электорат и история.</p></div>
+</div>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Личность и вход</h2><span>Identity ≠ полномочия</span></div>
+  {% if identity %}<div class="ws-action-row"><span><strong>{{ identity.user.username }}</strong><br><small>{% if can_view_contacts %}{{ identity.user.email|default:'email не указан' }} · {% endif %}подтверждено {{ identity.verified_at|date:'d.m.Y H:i' }} · {{ identity.basis }}</small></span></div>{% else %}<div class="ws-empty"><strong>Учётная запись не связана.</strong><p>Person может существовать без логина; права не должны зависеть от email или совпадения ФИО.</p></div>{% endif %}
+  {% if can_manage_identity %}<details class="ws-section"><summary>{% if identity %}Сменить связанный логин{% else %}Связать существующий логин{% endif %}</summary><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="identity">{{ identity_form.as_p }}<button class="ws-primary" type="submit">Подтвердить связь</button></form></details>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Факты о человеке</h2><span>не выдают доступ автоматически</span></div>
+  <h3>Участки / представительство</h3>
+  {% if plot_relations %}<div class="ws-action-list">{% for rel in plot_relations %}<div class="ws-action-row"><span><strong>{{ rel.get_role_display }} · {{ rel.plot }}</strong><br><small>{{ rel.starts|date:'d.m.Y' }} — {% if rel.ends %}{{ rel.ends|date:'d.m.Y' }}{% else %}по настоящее время{% endif %}{% if rel.document %} · {{ rel.document }}{% endif %}</small></span></div>{% endfor %}</div>{% else %}<p>Связей с участками нет.</p>{% endif %}
+  <h3>Членство ТСН</h3>
+  {% if tsn_memberships %}<div class="ws-action-list">{% for item in tsn_memberships %}<div class="ws-action-row"><span><strong>{{ item.starts|date:'d.m.Y' }} — {% if item.ends %}{{ item.ends|date:'d.m.Y' }}{% else %}действует{% endif %}</strong><br><small>{{ item.decision_ref }}{% if item.end_reason %} · {{ item.get_end_reason_display }}{% endif %}</small></span></div>{% endfor %}</div>{% else %}<p>Членство ТСН не зафиксировано.</p>{% endif %}
+  <h3>Правление</h3>
+  {% if board_memberships %}<div class="ws-action-list">{% for item in board_memberships %}<div class="ws-action-row"><span><strong>{{ item.get_role_display }}</strong><br><small>{{ item.starts|date:'d.m.Y' }} — {% if item.ends %}{{ item.ends|date:'d.m.Y' }}{% else %}действует{% endif %}{% if item.basis %} · {{ item.basis }}{% endif %}</small></span></div>{% endfor %}</div>{% else %}<p>В составе правления не числится.</p>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Личные права жителя</h2><span>{{ grants|length }}</span></div>
+  {% if grants %}<div class="ws-result-list">{% for grant in grants %}<a class="ws-result" href="{% url 'staff_workspace:grant_detail' grant.pk %}"><div><span class="ws-result-type">{{ grant.starts|date:'d.m.Y' }} — {% if grant.ends %}{{ grant.ends|date:'d.m.Y' }}{% else %}действует{% endif %}</span><strong>{{ grant.account.number|default:'Без номера' }} · {{ grant.account.plot }}</strong><p>Базовые{% if grant.can_view_finance %} · финансы{% endif %}{% if grant.can_submit_water %} · вода{% endif %}{% if grant.can_view_documents %} · документы{% endif %}{% if grant.can_use_appeals %} · обращения{% endif %}{% if grant.can_represent %} · представительство{% endif %}</p></div><span class="ws-chevron">›</span></a>{% endfor %}</div>{% else %}<div class="ws-empty"><strong>Явных личных прав нет.</strong><p>Владение, членство и identity сами по себе доступ к кабинету не создают.</p></div>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Служебные назначения V2</h2><span>{{ assignment_rows|length }}</span></div>
+  {% if assignment_rows %}<div class="ws-action-list">{% for row in assignment_rows %}<div class="ws-action-row"><div><span><strong>{{ row.assignment.role_label }} · {{ row.scope_label }}</strong><br><small>{% if row.active %}Действует{% elif row.assignment.revoked_at %}Отозвано {{ row.assignment.revoked_at|date:'d.m.Y H:i' }}{% else %}Не действует сегодня{% endif %} · с {{ row.assignment.starts|date:'d.m.Y' }}{% if row.assignment.ends %} до {{ row.assignment.ends|date:'d.m.Y' }}{% endif %} · {{ row.assignment.basis }}</small><br><small>{{ row.capability_labels|join:' · ' }}</small>{% if row.account_count %}<br><small><strong>Подотчётных счетов сегодня: {{ row.account_count }}</strong>{% for account in row.accounts %} · {{ account.number|default:account.plot }}{% endfor %}</small>{% endif %}</span>{% if row.active and can_manage_assignments %}<details><summary>Настроить функции роли</summary><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="edit_assignment"><input type="hidden" name="assignment_id" value="{{ row.assignment.pk }}">{% for item in row.allowed_capabilities %}<label><input type="checkbox" name="capabilities" value="{{ item.code }}"{% if item.enabled %} checked{% endif %}> {{ item.label }}</label>{% endfor %}<label>Основание изменения<input name="reason" maxlength="300" required></label><button class="ws-primary" type="submit">Сохранить функции</button></form></details>{% endif %}</div>{% if row.active and can_manage_assignments %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="revoke_assignment"><input type="hidden" name="assignment_id" value="{{ row.assignment.pk }}"><input name="revoke-reason" maxlength="300" required placeholder="Причина завершения"><button class="ws-danger-action" type="submit">Завершить</button></form>{% endif %}</div>{% endfor %}</div>{% else %}<div class="ws-empty"><strong>Служебных назначений V2 нет.</strong><p>Житель может оставаться обычным жителем без служебных ролей.</p></div>{% endif %}
+  {% if can_manage_assignments %}<details class="ws-section"><summary>Добавить служебную роль</summary><p>Выберите роль и её реальную область. Для роли линии укажите линию; дома подтянутся из действующей топологии автоматически.</p><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="assign">{{ assignment_form.as_p }}<button class="ws-primary" type="submit">Выдать назначение</button></form></details>{% endif %}
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Передача личных полномочий</h2><span>делегирование</span></div>
+  <h3>Передал другим</h3>
+  {% if outgoing_delegations %}<div class="ws-action-list">{% for item in outgoing_delegations %}<div class="ws-action-row"><span><strong>{{ item.delegate.full_name }}</strong><br><small>Счёт #{{ item.scope_object_id }} · {{ item.capabilities|join:', ' }} · {{ item.starts|date:'d.m.Y' }}{% if item.ends %}—{{ item.ends|date:'d.m.Y' }}{% endif %}{% if item.revoked_at %} · отозвано{% endif %}</small></span>{% if not item.revoked_at and can_review_delegations %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="revoke_delegation"><input type="hidden" name="delegation_id" value="{{ item.pk }}"><input name="revoke-reason" maxlength="300" required placeholder="Причина отзыва"><button class="ws-danger-action" type="submit">Отозвать</button></form>{% endif %}</div>{% endfor %}</div>{% else %}<p>Ничего не передавал.</p>{% endif %}
+  <h3>Получил от других</h3>
+  {% if incoming_delegations %}<div class="ws-action-list">{% for item in incoming_delegations %}<div class="ws-action-row"><span><strong>{{ item.delegator.full_name }}</strong><br><small>Счёт #{{ item.scope_object_id }} · {{ item.capabilities|join:', ' }}{% if item.revoked_at %} · отозвано{% endif %}</small></span></div>{% endfor %}</div>{% else %}<p>Делегированных прав нет.</p>{% endif %}
+  {% if can_review_delegations %}<details class="ws-section"><summary>Зафиксировать передачу полномочий</summary><p>Передать можно только прямые личные права, которыми этот Person реально располагает, и не дольше срока исходного права. Переделегирование запрещено.</p><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="delegate">{{ delegation_form.as_p }}<button class="ws-primary" type="submit">Подтвердить делегирование</button></form></details>{% endif %}
+</section>
+
+{% if legacy_line_accesses or legacy_accesses %}<section class="ws-section ws-muted-panel"><div class="ws-section-head"><h2>Legacy, ожидает миграции</h2></div>{% for item in legacy_line_accesses %}<p><strong>Старший / контролёр (старый тип):</strong> {{ item.group }} · {{ item.starts|date:'d.m.Y' }}{% if item.ends %}—{{ item.ends|date:'d.m.Y' }}{% endif %}</p>{% endfor %}{% for item in legacy_accesses %}<p><strong>Доступ жителя (старый тип):</strong> {{ item.account }} · {{ item.get_role_display }}</p>{% endfor %}</section>{% endif %}
+{% endblock %}

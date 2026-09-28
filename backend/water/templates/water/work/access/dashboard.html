@@ -4,10 +4,10 @@
 <section class="ws-page-head">
   <div>
     <p class="ws-eyebrow">Рабочий процесс</p>
-    <h1>Доступ жителей</h1>
-    <p>Заявки, приглашения, действующие доступы и восстановление пароля — с раздельной границей ПД.</p>
+    <h1>Доступы и полномочия</h1>
+    <p>Люди, личные доступы, служебные роли, делегирования и восстановление — с раздельной границей ПД.</p>
   </div>
-  {% if can_issue_granular_invite %}<a class="ws-primary" href="{% url 'staff_workspace:access_invite' %}">Выдать доступ</a>{% endif %}
+  {% if can_issue_granular_invite %}<div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:access_people' %}">Люди и полномочия</a><a class="ws-primary" href="{% url 'staff_workspace:access_invite' %}">Выдать доступ жителю</a></div>{% endif %}
 </section>
 
 <div class="ws-summary-grid">

@@ -59,7 +59,7 @@
       <p>Заявки, выдача доступа и восстановление кабинета.</p>
     </a>
     {% endif %}
-    {% if perms.water.view_accountdocument or perms.public_site.view_publicdocument or perms.public_site.view_publicnews %}
+    {% if can_view_documents %}
     <a class="ws-card" href="{% url 'staff_workspace:documents' %}">
       <span class="ws-card-kicker">Документы</span>
       <strong>Документы и публикации</strong>

@@ -256,8 +256,8 @@ def models_q_active(today):
 def resident_guard(request):
     if not request.user.is_authenticated:
         return HttpResponseRedirect(f'{reverse("resident_login")}?next={request.path}')
-    if request.user.is_staff:
-        return TemplateResponse(request, 'water/portal/staff_forbidden.html', status=403)
+    # Staff authentication remains protected by the staff/MFA login flow, but once
+    # authenticated the same Person may also use explicitly granted resident access.
     return None
 
 
@@ -286,7 +286,7 @@ def register_invite(request, token):
 
     email_users = User.objects.filter(email__iexact=invite.email).order_by('pk')
     if email_users.exists():
-        existing_users = email_users.filter(is_staff=False, is_active=True)
+        existing_users = email_users.filter(is_active=True)
         if email_users.count() != 1 or existing_users.count() != 1:
             return TemplateResponse(request, 'water/portal/invite_existing.html', {
                 'invite': invite, 'ambiguous': True,
@@ -294,7 +294,7 @@ def register_invite(request, token):
         existing = existing_users.first()
         if not request.user.is_authenticated:
             return TemplateResponse(request, 'water/portal/invite_existing.html', {'invite': invite})
-        if request.user.is_staff or request.user.pk != existing.pk:
+        if request.user.pk != existing.pk:
             return TemplateResponse(request, 'water/portal/invite_existing.html', {
                 'invite': invite, 'wrong_user': True,
             }, status=403)
@@ -307,7 +307,7 @@ def register_invite(request, token):
                     user = User.objects.select_for_update().get(pk=existing.pk)
                     if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
                         return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
-                    if user.is_staff or not user.is_active or user.email.lower() != locked.email.lower():
+                    if not user.is_active or user.email.lower() != locked.email.lower():
                         return TemplateResponse(request, 'water/portal/invite_existing.html', {
                             'invite': locked, 'ambiguous': True,
                         }, status=409)

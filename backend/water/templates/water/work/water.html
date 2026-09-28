@@ -84,14 +84,14 @@
         <strong>Проверка аномалий</strong>
         <p>Скачки, обратная хронология и другие сигналы для ручной сверки.</p>
       </a>
-      <a class="ws-card" href="{% url 'admin:water_reading_changelist' %}">
+      {% if can_view_readings_global %}<a class="ws-card" href="{% url 'admin:water_reading_changelist' %}">
         <span class="ws-card-kicker">История</span>
         <strong>Журнал показаний</strong>
         <p>Все утверждённые показания и история учёта.</p>
-      </a>
+      </a>{% endif %}
     {% endif %}
 
-    {% if can_view_meters %}
+    {% if can_view_meters_global %}
       <a class="ws-card" href="{% url 'admin:water_meter_changelist' %}">
         <span class="ws-card-kicker">Приборы</span>
         <strong>Счётчики</strong>

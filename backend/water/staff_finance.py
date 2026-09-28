@@ -12,6 +12,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 
+from .access_resolver import can_any
 from .billing import account_totals
 from .finance_workflow import (
     allocate_confirmed_payment,
@@ -48,19 +49,12 @@ class PaymentCreateForm(forms.Form):
 
 
 def _require_finance_view(request):
-    required = (
-        "water.view_account",
-        "water.view_billingperiod",
-        "water.view_charge",
-        "water.view_payment",
-        "water.view_paymentallocation",
-    )
-    if not request.user.is_staff or not (request.user.is_superuser or all(request.user.has_perm(p) for p in required)):
+    if not request.user.is_staff or not can_any(request.user, "finance.view"):
         raise PermissionDenied
 
 
-def _can(user, permission):
-    return user.is_superuser or user.has_perm(permission)
+def _can(user, capability):
+    return user.is_superuser or can_any(user, capability)
 
 
 def _payments_with_remaining(queryset):
@@ -93,7 +87,7 @@ def finance_dashboard(request):
             _payments_with_remaining(Payment.objects.select_related("account"))
             .order_by("-paid_on", "-id")[:8]
         ),
-        "can_add_payment": _can(request.user, "water.add_payment"),
+        "can_add_payment": _can(request.user, "finance.payment.create"),
     })
     return TemplateResponse(request, "water/work/finance/dashboard.html", context)
 
@@ -149,12 +143,10 @@ def period_detail(request, period_id):
         "draft_count": draft_count,
         "approved_amount": sum((charge.amount for charge in charges if charge.status == "approved"), Decimal("0.00")),
         "draft_amount": sum((charge.amount for charge in charges if charge.status == "draft"), Decimal("0.00")),
-        "can_calculate": all(_can(request.user, perm) for perm in (
-            "water.change_billingperiod", "water.add_charge", "water.change_charge"
-        )) and period.status not in ("approved", "closed"),
-        "can_change_charge": _can(request.user, "water.change_charge"),
-        "can_approve_period": _can(request.user, "water.change_billingperiod") and period.status == "calculated" and draft_count == 0,
-        "can_close_period": _can(request.user, "water.change_billingperiod") and period.status == "approved",
+        "can_calculate": _can(request.user, "finance.period.calculate") and period.status not in ("approved", "closed"),
+        "can_change_charge": (_can(request.user, "finance.charge.approve") or _can(request.user, "finance.charge.cancel")),
+        "can_approve_period": _can(request.user, "finance.period.approve") and period.status == "calculated" and draft_count == 0,
+        "can_close_period": _can(request.user, "finance.period.close") and period.status == "approved",
     })
     return TemplateResponse(request, "water/work/finance/period.html", context)
 
@@ -188,14 +180,14 @@ def payment_list(request):
         "payment_state": state,
         "q": q,
         "page": page,
-        "can_add_payment": _can(request.user, "water.add_payment"),
+        "can_add_payment": _can(request.user, "finance.payment.create"),
     })
     return TemplateResponse(request, "water/work/finance/payments.html", context)
 
 
 def payment_create(request):
     _require_finance_view(request)
-    if not _can(request.user, "water.add_payment"):
+    if not _can(request.user, "finance.payment.create"):
         raise PermissionDenied
     form = PaymentCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -249,9 +241,9 @@ def payment_detail(request, payment_id):
         "allocations": allocations,
         "allocated_total": allocated_total,
         "remaining": remaining,
-        "can_confirm": _can(request.user, "water.change_payment") and payment.status == "pending",
-        "can_allocate": _can(request.user, "water.add_paymentallocation") and payment.status == "confirmed" and remaining > 0,
-        "can_reverse": _can(request.user, "water.change_payment") and payment.status == "confirmed",
+        "can_confirm": _can(request.user, "finance.payment.confirm") and payment.status == "pending",
+        "can_allocate": _can(request.user, "finance.payment.allocate") and payment.status == "confirmed" and remaining > 0,
+        "can_reverse": _can(request.user, "finance.payment.reverse") and payment.status == "confirmed",
     })
     return TemplateResponse(request, "water/work/finance/payment.html", context)
 

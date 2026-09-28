@@ -52,12 +52,15 @@ class BoardPollTests(TestCase):
             {'action': 'vote', 'question_id': self.question.pk, 'choice': choice, 'comment': comment},
         )
 
-    def test_only_board_member_or_staff_can_open_board_workspace(self):
+    def test_only_board_members_can_open_board_workspace_even_if_user_is_staff(self):
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get('/admin/cabinet/board/').status_code, 403)
         self.client.force_login(self.member)
         self.assertEqual(self.client.get('/admin/cabinet/board/').status_code, 200)
+
         self.client.force_login(self.staff)
+        self.assertEqual(self.client.get('/admin/cabinet/board/').status_code, 403)
+        BoardMembership.objects.create(user=self.staff, role='member', starts=date(2026, 1, 1))
         self.assertEqual(self.client.get('/admin/cabinet/board/').status_code, 200)
 
     def test_vote_is_one_row_and_changes_are_audited(self):

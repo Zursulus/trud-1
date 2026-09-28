@@ -1,5 +1,6 @@
 from django.db.models import Count, Q
 
+from .access_resolver import can_any
 from .security_models import SecurityAlert
 
 
@@ -11,7 +12,7 @@ def security_alerts(request):
             "security_alert_count": 0,
             "security_critical_count": 0,
         }
-    can_view = user.is_superuser or user.has_perm("water.view_securityalert")
+    can_view = user.is_superuser or can_any(user, "security.alert.view")
     if not can_view:
         return {
             "can_view_security_alerts": False,

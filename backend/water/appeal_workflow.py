@@ -2,6 +2,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from .access_resolver import can_any
 from .models import ResidentAppeal
 from .resident_models import ResidentAppealAttachment, ResidentAppealBoardMessage
 
@@ -11,8 +12,8 @@ FINAL_APPEAL_STATES = ("resolved", "closed")
 STAFF_REPLY_STATES = ("in_progress", "awaiting_resident", "resolved")
 
 
-def _require_change_permission(actor):
-    if not actor.is_staff or not actor.has_perm("water.change_residentappeal"):
+def _require_capability(actor, capability):
+    if not actor.is_staff or not can_any(actor, capability):
         raise PermissionDenied
 
 
@@ -23,7 +24,11 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
     the resident portal and existing audited admin records. Non-final replies use the
     immutable ResidentAppealBoardMessage stream.
     """
-    _require_change_permission(actor)
+    _require_capability(actor, "appeals.reply")
+    if document:
+        _require_capability(actor, "appeals.attachment.manage")
+    if next_status is not None:
+        _require_capability(actor, "appeals.status.change")
     text = (body or "").strip()
     if not text:
         raise ValidationError("Введите сообщение жителю.")
@@ -79,7 +84,7 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
 
 
 def close_resolved_appeal(*, appeal_id, actor):
-    _require_change_permission(actor)
+    _require_capability(actor, "appeals.close")
     with transaction.atomic():
         appeal = ResidentAppeal.objects.select_for_update().get(pk=appeal_id)
         if appeal.status == "closed":
