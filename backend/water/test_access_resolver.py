@@ -22,7 +22,7 @@ class AccessResolverTests(TestCase):
     def setUp(self):
         self.node = SupplyNode.objects.create(name=f"Узел {self._testMethodName}")
         self.group = WaterGroup.objects.create(name=f"Линия {self._testMethodName}", node=self.node)
-        self.account = Account.objects.create(number=f"A-{self._testMethodName}", plot="Дом")
+        self.account = Account.objects.create(number="A-1", plot="Дом")
         Membership.objects.create(account=self.account, group=self.group, starts=date(2026, 1, 1))
 
     def test_granular_portal_grant_explains_person_account_authority(self):
