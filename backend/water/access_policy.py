@@ -64,6 +64,7 @@ _CAPS = [
     cap("water.meters.view", "Просмотр счётчиков", (S.ACCOUNT, S.WATER_GROUP, S.SUPPLY_NODE, S.ALL)),
     cap("water.reading.view", "Просмотр журнала показаний", (S.ACCOUNT, S.WATER_GROUP, S.SUPPLY_NODE, S.ALL)),
     cap("water.reading.submit_official", "Внесение официальных показаний", (S.WATER_GROUP, S.SUPPLY_NODE, S.ALL)),
+    cap("water.line_submission.submit", "Подача показаний старшим линии на проверку", (S.WATER_GROUP,)),
     cap("water.observation.submit", "Контрольное наблюдение", (S.WATER_GROUP, S.SUPPLY_NODE, S.ALL)),
     cap("water.observation.review_line", "Проверка показаний жителей старшим линии", (S.WATER_GROUP,)),
     cap("water.observation.finalize", "Финальная модерация показаний", (S.SUPPLY_NODE, S.ALL), require_mfa=True, maker_checker=True),
@@ -161,12 +162,12 @@ ROLE_TEMPLATES = {
         )),
         role("line_senior", 1, "Старший линии", (S.WATER_GROUP,), (
             "accounts.view", "water.view", "water.meters.view", "water.reading.view",
-            "water.topology.view", "water.reading.submit_official",
+            "water.topology.view", "water.line_submission.submit",
             "water.observation.review_line", "water.balance.view",
         )),
         role("line_deputy", 1, "Заместитель старшего линии", (S.WATER_GROUP,), (
             "accounts.view", "water.view", "water.meters.view", "water.reading.view",
-            "water.topology.view", "water.reading.submit_official",
+            "water.topology.view", "water.line_submission.submit",
             "water.observation.review_line", "water.balance.view",
         )),
         role("controller", 1, "Контролёр", (S.WATER_GROUP, S.SUPPLY_NODE), (
@@ -175,7 +176,7 @@ ROLE_TEMPLATES = {
         )),
         role("water_operator", 1, "Оператор воды", (S.SUPPLY_NODE, S.ALL), (
             "accounts.view", "water.view", "water.meters.view", "water.reading.view",
-            "water.topology.view", "water.reading.submit_official", "water.observation.submit",
+            "water.topology.view", "water.reading.submit_official",
             "water.balance.view", "water.export",
         )),
         role("water_moderator", 1, "Модератор воды", (S.SUPPLY_NODE, S.ALL), (
