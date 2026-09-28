@@ -14,54 +14,102 @@
 6. Drive / Library — исходные Excel и крупные/закрытые артефакты.
 7. Linear — read-only исторический архив работ до перехода на GitHub Issues.
 
-## Состояние продукта — 27 сентября 2026
+## Состояние продукта — 28 сентября 2026
 
-Ядро рабочей системы реализовано: реестр участков/людей/связей, водоучёт и баланс, безопасный импорт, роли/object scope/MFA, закрытый реестр ПД, кабинет жителя, обращения/документы/доступы, начисления/оплаты/долги, опросы правления, публичный контент, backup/recovery, guarded deploy/rollback и CI с browser E2E/accessibility.
+Ядро рабочей системы реализовано: реестр участков/людей/связей, водоучёт и баланс, безопасный импорт, закрытый реестр ПД, кабинет жителя, обращения, документы, начисления/оплаты/долги, предварительные опросы правления, публичный контент, backup/recovery, guarded deploy/rollback и CI с browser E2E/accessibility.
 
-## Текущая фаза: Staff Workspace
+Staff Workspace v1 завершён. Все семь запланированных vertical slices работают через `/work/`; `/admin/` остаётся техническим fallback.
 
-Цель — отдельная ежедневная «Рабочая база» сотрудников на `/work/`; `/admin/` остаётся техническим fallback.
+Доступы после исходного Access-slice развиты до единой Person-centric модели Access Control V2:
 
-Последовательно реализованы vertical slices:
+`Identity → Assignment → Capabilities → Scope → Validity → Audit`
+
+Один человек может одновременно иметь личный кабинет и несколько служебных назначений с разными scope. Бизнес-статусы человека сами по себе права не создают. Подробности и инварианты: `docs/ACCESS_CONTROL_V2.md`.
+
+## Staff Workspace v1 — завершённая фаза
+
+Цель фазы — отдельная ежедневная «Рабочая база» сотрудников на `/work/` без удаления технического Django Admin.
+
+Реализованные vertical slices:
 
 1. Foundation / Search / Account — PR #69.
 2. Water — PR #70.
 3. Appeals — PR #71.
 4. Finance — PR #72.
-5. Access — PR #79; Production Done на SHA `cdcdb638f46188677cf097aa0205c8e81485f0cc`.
-6. Documents/content — Issue #84 / PR #85; implementation/release evidence хранится в GitHub, production не смешивать с заблокированным security release #80.
+5. Access — PR #79.
+6. Documents/content — Issue #84 / PR #85.
+7. Governance/polls — Issue #89 / PR #91.
 
-Следующий продуктовый slice после завершения Documents/content:
+После v1 доступ был дополнительно развит отдельными завершёнными задачами:
 
-7. Governance/polls.
+- Issue #97 / PR #98 — точечные права жителя через `ResidentIdentity + PortalGrant`; Production Done.
+- Issue #99 / PR #100 — единый Access Control V2; Production Done.
+- PR #101 — канонический migration graph, совместимый с production, где security migration пока не установлена.
 
-Полные продуктовые границы и acceptance criteria: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
+Полные продуктовые границы Staff Workspace v1: `docs/STAFF-WORKSPACE-ARCHITECTURE.md`.
+
+Нового «восьмого slice» из старой последовательности нет. Следующее существенное направление должно возникать из отдельной READY-задачи с реальным пользователем/процессом и acceptance criteria, а не из продолжения нумерации v1.
 
 ## Release baseline
 
-Текущий подтверждённый production SHA: `3e489e19ebca3126c846535a7095c46198315bf8` — Access плюс отдельный production hotfix возврата из старого Django Admin в `/work/` (#82/#83).
+Текущий подтверждённый production SHA:
 
-Production и integration сейчас намеренно расходятся: integration содержит merged security hardening PR #81, который нельзя выпускать обычным deploy до снятия инфраструктурного blocker #80. Следующие slices считаются Production Done только после установки разрешённого точного target SHA и отдельной production verification.
+`0b71d78240eb30a00f5d3d210d89e9afee4e65fd`
+
+Это controlled production release Issue #99, построенный от предыдущего production без заблокированного security-контура #80. В production применена `water.0032_access_control_v2_assignments`; deployment marker и HTTP smoke подтверждены после установки.
+
+Текущий integration `feature/water-admin` намеренно не равен production: в integration присутствует ранее merged security hardening PR #81 / Issue #80, включая `SecurityAlert` и ClamAV prerequisite. После PR #101 канонический migration graph допускает безопасное последующее объединение ветвей миграций, но **integration HEAD всё равно нельзя выкатывать wholesale**, пока не снят инфраструктурный blocker #80 и не выполнен отдельный release gate.
 
 ### Security hardening #80 — BLOCKED_BY_INFRA_CAPACITY
 
-PR #81 merged в integration, но production release отложен. На текущем production-сервере при проверке было около 960 MiB RAM, 0 swap и около 2.7 ГБ свободного диска; постоянный ClamAV daemon в этот ресурсный контур без отдельного инфраструктурного решения не устанавливать. Fail-closed защиту не ослаблять ради deploy.
+PR #81 merged в integration, но production release отложен. Реализованы безопасные PDF/JPG/PNG/DOCX/XLSX, структурная проверка OOXML, anti-spam/rate limits, SecurityAlert и fail-closed malware scan.
 
-Blocked #80 не должен останавливать независимую продуктовую разработку, но любой будущий production release обязан явно исключать #81 либо сначала безопасно снять этот blocker.
+Текущий production-хост не имеет безопасного ресурсного запаса для постоянного локального ClamAV daemon в ранее проверенной конфигурации. Требование fail-closed не ослаблять ради deploy.
 
-## Будущие / внешне заблокированные направления
+Снять blocker можно только одним из двух путей:
 
-### Банковский обмен ВТБ
+1. увеличить production capacity и пройти prerequisite/smoke локального scanner;
+2. отдельно спроектировать, защитить и проверить private/authenticated scanner architecture.
 
-GitHub Issue #74. Начинать только после получения реального формата/образца банка. Сначала read-only parser/dry-run, затем правила сопоставления/idempotency/audit, затем controlled import подтверждённых платежей. Формат не придумывать.
+До этого #80 остаётся открытым, а будущие production releases обязаны явно исключать его изменения.
 
-### Юридически значимые процедуры
+## Текущая продуктовая очередь: внешние / инфраструктурные gates
 
-GitHub Issue #75 хранит необходимость получить и проверить актуальный зарегистрированный устав до автоматизации процессов, которые действительно от него зависят. Внутренние неофициальные опросы правления этим не блокируются.
+На 28.09.2026 среди канонических открытых задач Труд-1 нет READY leaf, которую можно честно довести до Production Done без нового внешнего входа.
 
-### Историко-территориальные первоисточники
+### Банковский обмен ВТБ — #74
 
-GitHub Issue #76 хранит незавершённый поиск первичных документов создания и землеотвода. Результат исследования фиксируется в Notion с provenance источников; неподтверждённые вторичные сведения не превращаются в факты сайта.
+`WAITING_REAL_BANK_SAMPLE`.
+
+Начинать реализацию только после получения реального формата/образца ВТБ, используемого ТСН. Сначала read-only parser/dry-run, затем правила сопоставления/idempotency/audit, затем controlled import подтверждённых платежей. Формат не придумывать.
+
+### Зарегистрированный устав — #75
+
+`WAITING_REGISTERED_CHARTER`.
+
+Получить и проверить актуальный зарегистрированный устав до автоматизации действительно юридически значимых процедур. Внутренние предварительные опросы правления этим не блокируются.
+
+Общее голосование жителей / членов ТСН сейчас **не реализуется**. В продукте остаётся только существующий предварительный, неофициальный workflow `BoardPoll/BoardVote` для активного состава правления. Любое расширение до общего/юридически значимого голосования — отдельная будущая задача после проверки правовой основы.
+
+### Историко-территориальные первоисточники — #76
+
+`WAITING_EXTERNAL_PRIMARY_DOCS`.
+
+Официальная выписка ФНС уже подтверждает регистрационный № `22283197`, дату `27.05.1994` и регистрирующий орган — Исполнительный комитет Феодосийского городского совета. Постановление Администрации Феодосии №1573 от 07.05.2025 подтверждает современную земельную цепочку через договор №97 от 29.12.2022.
+
+Для исходных документов поиск адресно направлен в фонды муниципального архива Феодосии:
+
+- фонд 1 — Феодосийский городской совет и его исполнительный комитет, 1973–2015;
+- фонд 2 — Орджоникидзевский поселковый совет и его исполнительный комитет, 1982–2014;
+- фонд 78 — Феодосийское городское управление земельных ресурсов, 1996–2014.
+
+Первичные документы 1994 года, исходный акт землеотвода и полный договор №97 с приложениями пока не получены. Результат исследования хранится в Notion с provenance; неподтверждённые вторичные сведения не превращаются в факты сайта.
+
+### Appeal security — #80
+
+`BLOCKED_BY_INFRA_CAPACITY`.
+
+Код реализован и проверен в integration, но production deployment запрещён до появления безопасного malware-scanning контура. Подробности выше.
 
 ### 1С
 
@@ -74,7 +122,9 @@ GitHub Issue #76 хранит незавершённый поиск первич
 - Общая бизнес-логика выносится в service/use-case слой по мере переноса workflow; дублирование правил запрещено.
 - Не делать SPA, микросервисы или отдельный REST API только ради UI.
 - Не вводить новые роли без реального пользователя и отдельного процесса.
-- Permission и object scope проверяются server-side; скрытие UI не считается защитой.
+- Capability и object scope проверяются server-side; скрытие UI не считается защитой.
+- Роль — preset, а не единственный источник истины; несколько назначений одного Person могут безопасно композиционироваться.
+- Бизнес-статусы `TsnMembership`, `BoardMembership`, ownership и совпадение ФИО/email/телефона не создают системных прав автоматически.
 - Обычный staff workspace не расширяет границу персональных данных.
 - Каждый существенный vertical slice должен оставлять трассу Issue → branch/PR → CI → merge SHA → production marker/smoke, если production применим.
 
@@ -113,6 +163,7 @@ GitHub Issue #76 хранит незавершённый поиск первич
 ## Технические ссылки
 
 - `docs/STAFF-WORKSPACE-ARCHITECTURE.md` — Staff Workspace architecture/acceptance criteria.
+- `docs/ACCESS_CONTROL_V2.md` — Access Control V2: capabilities/scopes/roles/delegation/audit.
 - `backend/README.md` — модель и backend invariants.
 - `docs/ROLES.md` — роли и аудит.
 - `docs/PRIVACY.md` — privacy model.
@@ -120,4 +171,4 @@ GitHub Issue #76 хранит незавершённый поиск первич
 - `ops/DEPLOYMENT.md` — deploy/rollback.
 - `ops/RECOVERY.md` — backup/recovery.
 
-Обновлено: 2026-09-27.
+Обновлено: 2026-09-28.
