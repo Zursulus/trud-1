@@ -102,3 +102,16 @@ def scoped_accounts(scope: ScopeRef, on_date: date | None = None):
     if scope.type == ScopeType.SUPPLY_NODE:
         return accounts_for_supply_node(scope.object_id, on_date)
     return Account.objects.none()
+
+
+def scope_contains(granted: ScopeRef, requested: ScopeRef, on_date: date | None = None) -> bool:
+    """Return whether one granted scope contains a requested object scope."""
+    if granted.type == ScopeType.ALL:
+        return True
+    if granted.type == requested.type:
+        return granted.object_id == requested.object_id
+    if requested.type == ScopeType.ACCOUNT:
+        return scope_covers_account(granted, requested.object_id, on_date)
+    if requested.type == ScopeType.WATER_GROUP:
+        return scope_covers_water_group(granted, requested.object_id)
+    return False

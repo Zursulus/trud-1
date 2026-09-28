@@ -19,13 +19,14 @@
       </a>
       <nav class="ws-nav">
         <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
-        <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}>Поиск</a>
-        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}>Участки и счета</a>
+        {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}>Поиск</a>
+        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}>Участки и счета</a>{% endif %}
         {% if can_view_water %}<a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}>Вода</a>{% endif %}
         {% if can_view_appeals %}<a href="{% url 'staff_workspace:appeals' %}"{% if workspace_section == 'appeals' %} aria-current="page"{% endif %}>Обращения</a>{% endif %}
         {% if can_use_finance_workspace %}<a href="{% url 'staff_workspace:finance' %}"{% if workspace_section == 'finance' %} aria-current="page"{% endif %}>Финансы</a>{% endif %}
         {% if can_use_access_workspace %}<a href="{% url 'staff_workspace:access' %}"{% if workspace_section == 'access' %} aria-current="page"{% endif %}>Доступ жителей</a>{% endif %}
-        {% if perms.water.view_accountdocument or perms.public_site.view_publicdocument or perms.public_site.view_publicnews %}<a href="{% url 'staff_workspace:documents' %}"{% if workspace_section == 'documents' %} aria-current="page"{% endif %}>Документы</a>{% endif %}
+        {% if can_view_documents %}<a href="{% url 'staff_workspace:documents' %}"{% if workspace_section == 'documents' %} aria-current="page"{% endif %}>Документы</a>{% endif %}
+        {% if can_view_governance %}<a href="{% url 'staff_workspace:governance' %}"{% if workspace_section == 'governance' %} aria-current="page"{% endif %}>Правление</a>{% endif %}
       </nav>
       <div class="ws-sidebar-foot">
         <a href="{% url 'staff_workspace:more' %}">Ещё разделы</a>
@@ -40,7 +41,7 @@
           <strong>Рабочая база</strong>
           <span>ТСН «ТРУД-1»</span>
         </div>
-        <a class="ws-search-shortcut" href="{% url 'staff_workspace:search' %}" aria-label="Открыть поиск">Найти</a>
+        {% if can_view_accounts %}<a class="ws-search-shortcut" href="{% url 'staff_workspace:search' %}" aria-label="Открыть поиск">Найти</a>{% endif %}
       </header>
       <main class="ws-content" id="main-content">
         {% if messages %}
@@ -56,8 +57,8 @@
   <nav class="ws-bottom-nav" aria-label="Мобильная навигация">
     <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><span aria-hidden="true">⌂</span>Главная</a>
     <a href="{% url 'staff_workspace:tasks' %}"{% if workspace_section == 'work' or workspace_section == 'water' or workspace_section == 'appeals' or workspace_section == 'finance' or workspace_section == 'access' or workspace_section == 'documents' %} aria-current="page"{% endif %}><span aria-hidden="true">✓</span>Работа</a>
-    <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Поиск</a>
-    <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span>Участки</a>
+    {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Поиск</a>
+    <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span>Участки</a>{% endif %}
     <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}><span aria-hidden="true">•••</span>Ещё</a>
   </nav>
 </body>

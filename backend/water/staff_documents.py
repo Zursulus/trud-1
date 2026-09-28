@@ -14,6 +14,7 @@ from django.utils import timezone
 from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews
 from public_site.publication_workflow import PUBLICATION_CONFIRMATION_ERROR, apply_publication_state
 
+from .access_resolver import can_any
 from .document_workflow import create_account_document, update_account_document
 from .models import Account, AccountDocument, DocumentCategory
 from .staff_workspace import _base_context
@@ -22,19 +23,14 @@ from .staff_workspace import _base_context
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 
 
-def _can(user, permission):
-    return user.is_superuser or user.has_perm(permission)
+def _can(user, capability):
+    return user.is_superuser or can_any(user, capability)
 
 
 def _can_use_workspace(user):
-    return user.is_superuser or any(
-        user.has_perm(permission)
-        for permission in (
-            "water.view_accountdocument",
-            "public_site.view_publicdocument",
-            "public_site.view_publicnews",
-        )
-    )
+    return any(_can(user, capability) for capability in (
+        "documents.account.view", "documents.public.view", "news.view",
+    ))
 
 
 def _require_workspace(request):
@@ -112,6 +108,17 @@ class PublicationFormBase(forms.ModelForm):
         widget=forms.Textarea(attrs={"rows": 2}),
     )
 
+    def __init__(self, *args, can_publish=True, content_editable=True, **kwargs):
+        self.can_publish = can_publish
+        self.content_editable = content_editable
+        super().__init__(*args, **kwargs)
+        if "is_published" in self.fields and not can_publish:
+            self.fields["is_published"].disabled = True
+        if not content_editable:
+            for name in getattr(self._meta, "fields", ()):
+                if name != "is_published" and name in self.fields:
+                    self.fields[name].disabled = True
+
     def clean(self):
         data = super().clean()
         if data.get("is_published") and not data.get("confirm_publication"):
@@ -151,13 +158,19 @@ class PublicNewsForm(PublicationFormBase):
 
 
 @transaction.atomic
-def _save_public_form(form, *, actor):
+def _save_public_form(form, *, actor, can_publish):
     was_existing = bool(form.instance.pk)
+    original_published = False
+    if was_existing:
+        original_published = type(form.instance).objects.only("is_published").get(pk=form.instance.pk).is_published
+    desired_published = bool(form.cleaned_data["is_published"])
+    if desired_published != original_published and not can_publish:
+        raise ValidationError("У вас нет права менять статус публикации.")
     obj = form.save(commit=False)
     apply_publication_state(
         obj,
         actor=actor,
-        is_published=form.cleaned_data["is_published"],
+        is_published=desired_published,
         confirmed=form.cleaned_data.get("confirm_publication", False),
     )
     obj.save()
@@ -172,16 +185,16 @@ def dashboard(request):
     q = " ".join((request.GET.get("q") or "").split())[:160]
     context["q"] = q
 
-    can_account = _can(request.user, "water.view_accountdocument")
-    can_public = _can(request.user, "public_site.view_publicdocument")
-    can_news = _can(request.user, "public_site.view_publicnews")
+    can_account = _can(request.user, "documents.account.view")
+    can_public = _can(request.user, "documents.public.view")
+    can_news = _can(request.user, "news.view")
     context.update({
         "can_view_account_documents": can_account,
-        "can_add_account_documents": _can(request.user, "water.add_accountdocument"),
+        "can_add_account_documents": _can(request.user, "documents.account.create"),
         "can_view_public_documents": can_public,
-        "can_add_public_documents": _can(request.user, "public_site.add_publicdocument"),
+        "can_add_public_documents": _can(request.user, "documents.public.create"),
         "can_view_public_news": can_news,
-        "can_add_public_news": _can(request.user, "public_site.add_publicnews"),
+        "can_add_public_news": _can(request.user, "news.create"),
     })
 
     if can_account:
@@ -230,7 +243,7 @@ def dashboard(request):
 
 
 def account_document_create(request):
-    if not _can(request.user, "water.add_accountdocument"):
+    if not _can(request.user, "documents.account.create"):
         raise PermissionDenied
     form = AccountDocumentCreateForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
@@ -247,10 +260,10 @@ def account_document_create(request):
 
 
 def account_document_detail(request, document_id):
-    if not _can(request.user, "water.view_accountdocument"):
+    if not _can(request.user, "documents.account.view"):
         raise PermissionDenied
     item = get_object_or_404(AccountDocument.objects.select_related("account", "category"), pk=document_id)
-    can_change = _can(request.user, "water.change_accountdocument")
+    can_change = _can(request.user, "documents.account.edit_metadata")
     bound_data = request.POST if request.method == "POST" and can_change else None
     form = AccountDocumentEditForm(bound_data, item=item)
     if request.method == "POST":
@@ -270,7 +283,7 @@ def account_document_detail(request, document_id):
 
 
 def account_document_download(request, document_id):
-    if not _can(request.user, "water.view_accountdocument"):
+    if not _can(request.user, "documents.account.download"):
         raise PermissionDenied
     item = get_object_or_404(AccountDocument, pk=document_id)
     try:
@@ -284,12 +297,13 @@ def account_document_download(request, document_id):
 
 
 def public_document_create(request):
-    if not _can(request.user, "public_site.add_publicdocument"):
+    if not _can(request.user, "documents.public.create"):
         raise PermissionDenied
-    form = PublicDocumentCreateForm(request.POST or None, request.FILES or None)
+    can_publish = _can(request.user, "documents.public.publish")
+    form = PublicDocumentCreateForm(request.POST or None, request.FILES or None, can_publish=can_publish)
     if request.method == "POST" and form.is_valid():
         try:
-            item = _save_public_form(form, actor=request.user)
+            item = _save_public_form(form, actor=request.user, can_publish=can_publish)
         except ValidationError as error:
             form.add_error(None, "; ".join(error.messages))
         else:
@@ -301,30 +315,37 @@ def public_document_create(request):
 
 
 def public_document_detail(request, document_id):
-    if not _can(request.user, "public_site.view_publicdocument"):
+    if not _can(request.user, "documents.public.view"):
         raise PermissionDenied
     item = get_object_or_404(PublicDocument.objects.select_related("category", "published_by"), pk=document_id)
-    can_change = _can(request.user, "public_site.change_publicdocument")
+    can_publish = _can(request.user, "documents.public.publish")
+    can_edit = _can(request.user, "documents.public.edit") and (not item.is_published or can_publish)
+    can_change = can_edit or can_publish
     bound_data = request.POST if request.method == "POST" and can_change else None
-    form = PublicDocumentEditForm(bound_data, instance=item)
+    form = PublicDocumentEditForm(
+        bound_data, instance=item, can_publish=can_publish, content_editable=can_edit,
+    )
     if request.method == "POST":
         if not can_change:
             raise PermissionDenied
         if form.is_valid():
             try:
-                _save_public_form(form, actor=request.user)
+                _save_public_form(form, actor=request.user, can_publish=can_publish)
             except ValidationError as error:
                 form.add_error(None, "; ".join(error.messages))
             else:
                 messages.success(request, "Публичный документ обновлён; файл не заменялся.")
                 return HttpResponseRedirect(reverse("staff_workspace:public_document", args=[item.pk]))
     context = _base_context(request, section="documents")
-    context.update({"item": item, "form": form, "mode": "edit", "can_change": can_change})
+    context.update({
+        "item": item, "form": form, "mode": "edit", "can_change": can_change,
+        "can_edit_content": can_edit, "can_publish": can_publish,
+    })
     return TemplateResponse(request, "water/work/documents/public_form.html", context)
 
 
 def public_document_download(request, document_id):
-    if not _can(request.user, "public_site.view_publicdocument"):
+    if not _can(request.user, "documents.public.view"):
         raise PermissionDenied
     item = get_object_or_404(PublicDocument, pk=document_id)
     try:
@@ -338,12 +359,13 @@ def public_document_download(request, document_id):
 
 
 def news_create(request):
-    if not _can(request.user, "public_site.add_publicnews"):
+    if not _can(request.user, "news.create"):
         raise PermissionDenied
-    form = PublicNewsForm(request.POST or None)
+    can_publish = _can(request.user, "news.publish")
+    form = PublicNewsForm(request.POST or None, can_publish=can_publish)
     if request.method == "POST" and form.is_valid():
         try:
-            item = _save_public_form(form, actor=request.user)
+            item = _save_public_form(form, actor=request.user, can_publish=can_publish)
         except ValidationError as error:
             form.add_error(None, "; ".join(error.messages))
         else:
@@ -355,26 +377,34 @@ def news_create(request):
 
 
 def news_detail(request, news_id):
-    if not _can(request.user, "public_site.view_publicnews"):
+    if not _can(request.user, "news.view"):
         raise PermissionDenied
     item = get_object_or_404(PublicNews.objects.select_related("published_by"), pk=news_id)
-    can_change = _can(request.user, "public_site.change_publicnews")
+    can_publish = _can(request.user, "news.publish")
+    can_edit = _can(request.user, "news.edit") and (not item.is_published or can_publish)
+    can_change = can_edit or can_publish
     bound_data = request.POST if request.method == "POST" and can_change else None
-    form = PublicNewsForm(bound_data, instance=item)
+    form = PublicNewsForm(
+        bound_data, instance=item, can_publish=can_publish, content_editable=can_edit,
+    )
     if request.method == "POST":
         if not can_change:
             raise PermissionDenied
         if form.is_valid():
             try:
-                _save_public_form(form, actor=request.user)
+                _save_public_form(form, actor=request.user, can_publish=can_publish)
             except ValidationError as error:
                 form.add_error(None, "; ".join(error.messages))
             else:
                 messages.success(request, "Новость обновлена.")
                 return HttpResponseRedirect(reverse("staff_workspace:news", args=[item.pk]))
     context = _base_context(request, section="documents")
-    context.update({"item": item, "form": form, "mode": "edit", "can_change": can_change})
+    context.update({
+        "item": item, "form": form, "mode": "edit", "can_change": can_change,
+        "can_edit_content": can_edit, "can_publish": can_publish,
+    })
     return TemplateResponse(request, "water/work/documents/news_form.html", context)
+
 
 
 workspace_documents = admin.site.admin_view(dashboard)

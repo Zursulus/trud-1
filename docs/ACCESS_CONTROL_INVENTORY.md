@@ -161,9 +161,9 @@ Operational line-senior/controller roles must not receive private phone/email au
 | Member view/vote/comment | active BoardMembership | board electorate entitlement | event/person |
 | Board audit | model/workspace view | `governance.audit.view` | event |
 | Manage board membership | Django model permissions | `governance.membership.manage` | all/person |
-| TSN-member general voting | not yet implemented | member electorate entitlement | event/person |
+| General resident / TSN-member voting | postponed; not implemented in #99 | none | out of scope |
 
-Current BoardMembership is User-based. V2 target is Person-centric eligibility with `cast_by_user` recorded separately.
+Current `BoardMembership`/`BoardVote` workflow is retained. V2 adds a Person link to BoardMembership so board status belongs to the real person while existing votes remain compatible with the authenticated User.
 
 ### Security
 

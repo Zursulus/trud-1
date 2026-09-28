@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from dataclasses import dataclass
+
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -10,8 +12,11 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 
-from .controller_scope import ControllerLineAccess
-from .models import ControllerReadingSubmission, Membership, Meter, Reading
+from .access_control import AccessAssignment
+from .access_policy import ScopeType
+from .access_resolver import can_any, scopes_for
+from .models import ControllerReadingSubmission, Membership, Meter, Reading, WaterGroup
+from .resident_models import ResidentIdentity
 
 
 ZERO = Decimal('0')
@@ -31,13 +36,31 @@ class ControllerWorkspaceDateForm(forms.Form):
         return value
 
 
+@dataclass(frozen=True)
+class LineScopeAccess:
+    group: WaterGroup
+
+    @property
+    def group_id(self):
+        return self.group.pk
+
+
+def _active_group_ids(user, on_date):
+    ids = set()
+    for capability in ('water.line_submission.submit', 'water.observation.review_line'):
+        for scope in scopes_for(user, capability, on_date=on_date):
+            if scope.type == ScopeType.ALL:
+                ids.update(WaterGroup.objects.values_list('id', flat=True))
+            elif scope.type == ScopeType.WATER_GROUP:
+                ids.add(scope.object_id)
+            elif scope.type == ScopeType.SUPPLY_NODE:
+                ids.update(WaterGroup.objects.filter(node_id=scope.object_id).values_list('id', flat=True))
+    return sorted(ids)
+
+
 def _active_accesses(user, on_date):
-    return ControllerLineAccess.objects.filter(
-        user=user,
-        starts__lte=on_date,
-    ).filter(
-        Q(ends__isnull=True) | Q(ends__gt=on_date),
-    ).select_related('group', 'group__node').order_by('group__name', 'group_id')
+    groups = WaterGroup.objects.filter(pk__in=_active_group_ids(user, on_date)).select_related('node').order_by('name', 'id')
+    return [LineScopeAccess(group) for group in groups]
 
 
 def _active_meter_queryset(queryset, on_date):
@@ -197,7 +220,16 @@ def _build_groups(user, on_date, posted_values=None, errors=None):
 
 
 def controller_workspace(request):
-    if not request.user.has_perm('water.use_controller_workspace'):
+    has_current_scope = (
+        can_any(request.user, 'water.line_submission.submit')
+        or can_any(request.user, 'water.observation.review_line')
+    )
+    has_legacy_workspace = request.user.has_perm('water.use_controller_workspace')
+    identity = ResidentIdentity.objects.filter(user=request.user).only('person_id').first()
+    has_v2_line_history = bool(identity) and AccessAssignment.objects.filter(
+        person_id=identity.person_id, role_code__in=('line_senior', 'line_deputy')
+    ).exists()
+    if not (has_current_scope or has_legacy_workspace or has_v2_line_history):
         raise PermissionDenied
 
     source = request.POST if request.method == 'POST' else request.GET
@@ -225,7 +257,7 @@ def controller_workspace(request):
                 line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
             )
             allowed_account_ids = Membership.objects.filter(
-                group_id__in=_active_accesses(request.user, submission.date).values('group_id'),
+                group_id__in=_active_group_ids(request.user, submission.date),
                 starts__lte=submission.date,
             ).filter(Q(ends__isnull=True) | Q(ends__gt=submission.date)).values_list('account_id', flat=True)
             if submission.meter.kind != 'individual' or submission.meter.account_id not in allowed_account_ids:
@@ -358,7 +390,7 @@ def controller_workspace(request):
             date=selected_date,
             meter__kind='individual',
             meter__account_id__in=Membership.objects.filter(
-                group_id__in=_active_accesses(request.user, selected_date).values('group_id'),
+                group_id__in=_active_group_ids(request.user, selected_date),
                 starts__lte=selected_date,
             ).filter(Q(ends__isnull=True) | Q(ends__gt=selected_date)).values('account_id'),
         ).select_related('meter__account', 'submitted_by').order_by('meter__account__number', 'id'),

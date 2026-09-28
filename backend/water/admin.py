@@ -1,3 +1,4 @@
+from datetime import date
 import csv
 from pathlib import Path
 from urllib.parse import urlencode
@@ -19,6 +20,10 @@ from django.utils import timezone
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from simple_history.admin import SimpleHistoryAdmin
+
+from .access_policy import ScopeType
+from .access_resolver import can_any, scopes_for
+from .access_scope import scope_covers_meter
 
 from .models import (
     Account, AccountDocument, AppealCategory, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
@@ -191,6 +196,25 @@ class WaterWorkspaceFilterForm(forms.Form):
     )
     q = forms.CharField(label='Поиск', required=False)
 
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        raw_date = self.data.get('date') if self.is_bound else None
+        try:
+            on_date = date.fromisoformat(raw_date) if raw_date else timezone.localdate()
+        except (TypeError, ValueError):
+            on_date = timezone.localdate()
+        scopes = scopes_for(user, 'water.reading.submit_official', on_date=on_date) if user else []
+        if any(scope.type == ScopeType.ALL for scope in scopes):
+            return
+        node_ids = {scope.object_id for scope in scopes if scope.type == ScopeType.SUPPLY_NODE}
+        group_ids = {scope.object_id for scope in scopes if scope.type == ScopeType.WATER_GROUP}
+        group_node_ids = set(WaterGroup.objects.filter(pk__in=group_ids).values_list('node_id', flat=True))
+        allowed_node_ids = node_ids | group_node_ids
+        self.fields['node'].queryset = SupplyNode.objects.filter(pk__in=allowed_node_ids).order_by('name')
+        self.fields['group'].queryset = WaterGroup.objects.filter(
+            Q(pk__in=group_ids) | Q(node_id__in=node_ids)
+        ).distinct().order_by('name')
+
 
 class ImportUploadForm(forms.Form):
     file = forms.FileField(label='CSV или XLSX', help_text='До 5 МБ и 5000 строк. Исходный файл не сохраняется на сервере.')
@@ -219,13 +243,37 @@ class ControllerReadingCaptureForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.is_bound:
             self.fields['date'].initial = timezone.localdate()
-        self.fields['meter'].queryset = Meter.objects.select_related('account', 'group', 'node').filter(
+        raw_date = self.data.get('date') if self.is_bound else None
+        try:
+            on_date = date.fromisoformat(raw_date) if raw_date else timezone.localdate()
+        except (TypeError, ValueError):
+            on_date = timezone.localdate()
+        base = Meter.objects.select_related('account', 'group', 'node').filter(
             Q(account__isnull=True) | Q(account__archived=False),
-        ).order_by('kind', 'account__plot', 'account__number', 'serial')
+        )
+        scopes = scopes_for(user, 'water.observation.submit', on_date=on_date) if user else []
+        if any(scope.type == ScopeType.ALL for scope in scopes):
+            queryset = base
+        else:
+            query = Q(pk__in=[])
+            for scope in scopes:
+                if scope.type == ScopeType.SUPPLY_NODE:
+                    query |= Q(node_id=scope.object_id)
+                elif scope.type == ScopeType.WATER_GROUP:
+                    account_ids = Membership.objects.filter(
+                        group_id=scope.object_id, starts__lte=on_date, account__archived=False,
+                    ).filter(Q(ends__isnull=True) | Q(ends__gt=on_date)).values('account_id')
+                    query |= Q(group_id=scope.object_id) | Q(account_id__in=account_ids)
+                elif scope.type == ScopeType.ACCOUNT:
+                    query |= Q(account_id=scope.object_id)
+            queryset = base.filter(query) if scopes else base.none()
+        self.fields['meter'].queryset = queryset.distinct().order_by(
+            'kind', 'account__plot', 'account__number', 'serial'
+        )
 
 
 class ResidentInviteForm(forms.Form):
@@ -242,6 +290,32 @@ def validation_text(error):
 def spreadsheet_safe(value):
     text = str(value or '')
     return "'" + text if text.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else text
+
+
+def _scoped_meter_queryset(user, capability, on_date, queryset=None):
+    queryset = queryset if queryset is not None else Meter.objects.all()
+    scopes = scopes_for(user, capability, on_date=on_date)
+    if any(scope.type == ScopeType.ALL for scope in scopes):
+        return queryset
+    query = Q(pk__in=[])
+    for scope in scopes:
+        if scope.type == ScopeType.SUPPLY_NODE:
+            query |= Q(node_id=scope.object_id)
+        elif scope.type == ScopeType.WATER_GROUP:
+            account_ids = Membership.objects.filter(
+                group_id=scope.object_id, starts__lte=on_date, account__archived=False,
+            ).filter(Q(ends__isnull=True) | Q(ends__gt=on_date)).values('account_id')
+            query |= Q(group_id=scope.object_id) | Q(account_id__in=account_ids)
+        elif scope.type == ScopeType.ACCOUNT:
+            query |= Q(account_id=scope.object_id)
+    return queryset.filter(query).distinct() if scopes else queryset.none()
+
+
+def _has_all_scope(user, capability, on_date=None):
+    return any(
+        scope.type == ScopeType.ALL
+        for scope in scopes_for(user, capability, on_date=on_date or timezone.localdate())
+    )
 
 
 @admin.register(Account)
@@ -495,6 +569,9 @@ class MembershipAdmin(RecordedAdmin):
 
 @admin.register(Meter)
 class MeterAdmin(RecordedAdmin):
+    def has_view_permission(self, request, obj=None):
+        return super().has_view_permission(request, obj) or _has_all_scope(request.user, 'water.meters.view')
+
     list_display = (
         'serial', 'kind', 'node', 'group', 'account', 'commissioned_on',
         'seal_number', 'last_reading', 'retired_on',
@@ -511,6 +588,12 @@ class MeterAdmin(RecordedAdmin):
 
 @admin.register(Reading)
 class ReadingAdmin(RecordedAdmin):
+    def has_view_permission(self, request, obj=None):
+        return super().has_view_permission(request, obj) or _has_all_scope(request.user, 'water.reading.view')
+
+    def has_add_permission(self, request):
+        return super().has_add_permission(request) or _has_all_scope(request.user, 'water.reading.submit_official')
+
     change_list_template = 'admin/water/reading/change_list.html'
     list_display = ('meter', 'account_info', 'date', 'value', 'interval_consumption')
     list_filter = ('meter__kind', 'meter__node')
@@ -543,7 +626,7 @@ class ReadingAdmin(RecordedAdmin):
         return 'Неизвестен — начальное показание' if value is None else value
 
     def has_export_permission(self, request):
-        return request.user.has_perm('water.export_reading')
+        return request.user.has_perm('water.export_reading') or can_any(request.user, 'water.export')
 
     @admin.action(description='Выгрузить выбранные показания в CSV', permissions=['export'])
     def export_readings(self, request, queryset):
@@ -581,12 +664,15 @@ class ReadingAdmin(RecordedAdmin):
         return response
 
     def workspace_view(self, request):
-        if not self.has_view_permission(request) or not self.has_add_permission(request):
+        if not (
+            can_any(request.user, 'water.reading.view')
+            and can_any(request.user, 'water.reading.submit_official')
+        ):
             raise PermissionDenied
 
         source = request.POST if request.method == 'POST' else request.GET
         initial = {'date': timezone.localdate()}
-        filter_form = WaterWorkspaceFilterForm(source or None, initial=initial)
+        filter_form = WaterWorkspaceFilterForm(source or None, initial=initial, user=request.user)
         if filter_form.is_valid():
             selected_date = filter_form.cleaned_data['date']
             filters = filter_form.cleaned_data
@@ -597,6 +683,9 @@ class ReadingAdmin(RecordedAdmin):
         meters = Meter.objects.select_related('node', 'group', 'account').filter(
             Q(commissioned_on__isnull=True) | Q(commissioned_on__lte=selected_date),
         ).filter(Q(retired_on__isnull=True) | Q(retired_on__gte=selected_date))
+        meters = _scoped_meter_queryset(
+            request.user, 'water.reading.submit_official', selected_date, meters,
+        )
         if filters.get('node'):
             meters = meters.filter(node=filters['node'])
         if filters.get('group'):
@@ -727,13 +816,41 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
         ] + super().get_urls()
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request).select_related('meter__account', 'submitted_by', 'reviewed_by', 'reading')
-        if request.user.has_perm('water.change_controllerreadingsubmission'):
+        queryset = super().get_queryset(request).select_related(
+            'meter__account', 'meter__node', 'submitted_by', 'reviewed_by', 'reading'
+        )
+        moderation_scopes = scopes_for(request.user, 'water.observation.finalize')
+        if any(scope.type == ScopeType.ALL for scope in moderation_scopes):
             return queryset
+        node_ids = {scope.object_id for scope in moderation_scopes if scope.type == ScopeType.SUPPLY_NODE}
+        if node_ids:
+            return queryset.filter(meter__node_id__in=node_ids)
         return queryset.filter(submitted_by=request.user)
 
+    def has_view_permission(self, request, obj=None):
+        if super().has_view_permission(request, obj):
+            return True
+        if obj is not None:
+            scopes = scopes_for(request.user, 'water.observation.finalize', on_date=obj.date)
+            if any(scope_covers_meter(scope, obj.meter_id, obj.date) for scope in scopes):
+                return True
+            return obj.submitted_by_id == request.user.pk and can_any(request.user, 'water.observation.submit')
+        return can_any(request.user, 'water.observation.finalize') or can_any(request.user, 'water.observation.submit')
+
+    def has_change_permission(self, request, obj=None):
+        if super().has_change_permission(request, obj):
+            return True
+        if obj is None:
+            return can_any(request.user, 'water.observation.finalize')
+        return any(
+            scope_covers_meter(scope, obj.meter_id, obj.date)
+            for scope in scopes_for(request.user, 'water.observation.finalize', on_date=obj.date)
+        )
+
     def has_add_permission(self, request):
-        return request.user.has_perm('water.add_controllerreadingsubmission')
+        return request.user.has_perm('water.add_controllerreadingsubmission') or can_any(
+            request.user, 'water.observation.submit'
+        )
 
     @admin.display(description='ID / лицевой счёт')
     def account_id_display(self, obj):
@@ -763,10 +880,15 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
     def capture_view(self, request):
         if not self.has_add_permission(request):
             raise PermissionDenied
-        form = ControllerReadingCaptureForm(request.POST or None, request.FILES or None)
+        form = ControllerReadingCaptureForm(request.POST or None, request.FILES or None, user=request.user)
         if request.method == 'POST' and form.is_valid():
             with transaction.atomic():
                 meter = Meter.objects.select_for_update().get(pk=form.cleaned_data['meter'].pk)
+                allowed_scopes = scopes_for(
+                    request.user, 'water.observation.submit', on_date=form.cleaned_data['date']
+                )
+                if not any(scope_covers_meter(scope, meter.pk, form.cleaned_data['date']) for scope in allowed_scopes):
+                    raise PermissionDenied
                 submission = ControllerReadingSubmission.objects.select_for_update().filter(
                     meter=meter, date=form.cleaned_data['date'], status='pending',
                     submitted_by=request.user, source=ControllerReadingSubmission.SOURCE_CONTROLLER,
@@ -823,11 +945,13 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
         return response
 
     def approve_view(self, request, object_id):
-        if request.method != 'POST' or not request.user.has_perm('water.change_controllerreadingsubmission'):
+        if request.method != 'POST':
             raise PermissionDenied
         try:
             with transaction.atomic():
                 submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
+                if not self.has_change_permission(request, submission):
+                    raise PermissionDenied
                 if submission.status != 'pending':
                     raise ValidationError('Запись уже проверена.')
                 if submission.line_review_status == ControllerReadingSubmission.LINE_REVIEW_PENDING:
@@ -858,10 +982,12 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
         return HttpResponseRedirect(reverse('admin:water_controllerreadingsubmission_change', args=[object_id]))
 
     def reject_view(self, request, object_id):
-        if request.method != 'POST' or not request.user.has_perm('water.change_controllerreadingsubmission'):
+        if request.method != 'POST':
             raise PermissionDenied
         with transaction.atomic():
-            submission = ControllerReadingSubmission.objects.select_for_update().get(pk=object_id)
+            submission = ControllerReadingSubmission.objects.select_for_update().select_related('meter').get(pk=object_id)
+            if not self.has_change_permission(request, submission):
+                raise PermissionDenied
             if submission.line_review_status == ControllerReadingSubmission.LINE_REVIEW_PENDING:
                 messages.error(request, 'Нельзя отклонить: наблюдение жителя ещё ожидает проверки старшего линии.')
             elif submission.status == 'pending':
@@ -886,6 +1012,15 @@ class GroupConsumptionAdmin(RecordedAdmin):
 
 @admin.register(BillingPolicy)
 class BillingPolicyAdmin(RecordedAdmin):
+    def has_view_permission(self, request, obj=None):
+        return super().has_view_permission(request, obj) or can_any(request.user, 'finance.policy.manage')
+
+    def has_add_permission(self, request):
+        return super().has_add_permission(request) or can_any(request.user, 'finance.policy.manage')
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) or can_any(request.user, 'finance.policy.manage')
+
     list_display = ('name', 'is_default', 'missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
     list_filter = ('missing_reading', 'loss_distribution', 'rounding', 'payment_allocation')
     search_fields = ('name', 'notes')

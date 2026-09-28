@@ -1,25 +1,26 @@
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
+from .access_resolver import can_any
 from .billing import allocate_payment, calculate_period
 from .models import Account, BillingPeriod, Charge, Payment
 
 
-def _require(actor, *permissions):
-    if not actor.is_staff or not all(actor.has_perm(permission) for permission in permissions):
+def _require(actor, capability):
+    if not actor.is_staff or not can_any(actor, capability):
         raise PermissionDenied
 
 
 @transaction.atomic
 def calculate_billing_period(*, period_id, actor):
-    _require(actor, "water.change_billingperiod", "water.add_charge", "water.change_charge")
+    _require(actor, "finance.period.calculate")
     period = BillingPeriod.objects.select_for_update().get(pk=period_id)
     return calculate_period(period, actor=actor)
 
 
 @transaction.atomic
 def approve_charge(*, charge_id, actor):
-    _require(actor, "water.change_charge")
+    _require(actor, "finance.charge.approve")
     charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
     if charge.status != "draft":
         raise ValidationError("Изменить статус можно только у черновика начисления.")
@@ -32,7 +33,7 @@ def approve_charge(*, charge_id, actor):
 
 @transaction.atomic
 def cancel_charge(*, charge_id, actor):
-    _require(actor, "water.change_charge")
+    _require(actor, "finance.charge.cancel")
     charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
     if charge.status != "draft":
         raise ValidationError("Отменить можно только черновик начисления.")
@@ -45,7 +46,7 @@ def cancel_charge(*, charge_id, actor):
 
 @transaction.atomic
 def approve_billing_period(*, period_id, actor):
-    _require(actor, "water.change_billingperiod")
+    _require(actor, "finance.period.approve")
     period = BillingPeriod.objects.select_for_update().get(pk=period_id)
     if period.status != "calculated":
         raise ValidationError("Утвердить можно только рассчитанный период.")
@@ -62,7 +63,7 @@ def approve_billing_period(*, period_id, actor):
 
 @transaction.atomic
 def close_billing_period(*, period_id, actor):
-    _require(actor, "water.change_billingperiod")
+    _require(actor, "finance.period.close")
     period = BillingPeriod.objects.select_for_update().get(pk=period_id)
     if period.status != "approved":
         raise ValidationError("Закрыть можно только утверждённый период.")
@@ -75,7 +76,7 @@ def close_billing_period(*, period_id, actor):
 
 @transaction.atomic
 def create_payment(*, actor, account, paid_on, amount, method, reference="", notes=""):
-    _require(actor, "water.add_payment")
+    _require(actor, "finance.payment.create")
     if account.archived:
         raise ValidationError("Нельзя добавить новую оплату в архивный лицевой счёт.")
     payment = Payment(
@@ -95,7 +96,7 @@ def create_payment(*, actor, account, paid_on, amount, method, reference="", not
 
 @transaction.atomic
 def confirm_payment(*, payment_id, actor):
-    _require(actor, "water.change_payment")
+    _require(actor, "finance.payment.confirm")
     payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
     if payment.status != "pending":
         raise ValidationError("Подтвердить можно только оплату, ожидающую проверки.")
@@ -108,7 +109,7 @@ def confirm_payment(*, payment_id, actor):
 
 @transaction.atomic
 def reverse_payment(*, payment_id, actor):
-    _require(actor, "water.change_payment")
+    _require(actor, "finance.payment.reverse")
     payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
     if payment.status != "confirmed":
         raise ValidationError("Отменить можно только подтверждённую оплату.")
@@ -121,7 +122,7 @@ def reverse_payment(*, payment_id, actor):
 
 @transaction.atomic
 def allocate_confirmed_payment(*, payment_id, actor):
-    _require(actor, "water.add_paymentallocation")
+    _require(actor, "finance.payment.allocate")
     payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
     return allocate_payment(payment, actor=actor)
 

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 
-from .models import User
+from .models import Person, User
 
 
 BOARD_PROTOCOL_EXTENSIONS = {'.pdf', '.docx'}
@@ -76,6 +76,10 @@ class BoardMembership(BoardRecordedModel):
     ROLE_CHOICES = [(ROLE_CHAIR, 'Председатель'), (ROLE_MEMBER, 'Член правления')]
 
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='board_memberships')
+    person = models.ForeignKey(
+        Person, on_delete=models.PROTECT, related_name='board_memberships',
+        blank=True, null=True, verbose_name='Человек',
+    )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
     starts = models.DateField('В правлении с')
     ends = models.DateField('В правлении до (не включая)', blank=True, null=True)
@@ -94,14 +98,24 @@ class BoardMembership(BoardRecordedModel):
         ]
 
     def clean(self):
+        if self.user_id:
+            from .resident_models import ResidentIdentity
+            identity = ResidentIdentity.objects.filter(user_id=self.user_id).only('person_id').first()
+            if identity and self.person_id and identity.person_id != self.person_id:
+                raise ValidationError({'person': 'Членство в правлении не совпадает с подтверждённой личностью логина.'})
+            if identity and not self.person_id:
+                self.person_id = identity.person_id
         if not self.user_id or not self.starts:
             return
-        others = BoardMembership.objects.filter(user_id=self.user_id).exclude(pk=self.pk)
+        if self.person_id:
+            others = BoardMembership.objects.filter(person_id=self.person_id).exclude(pk=self.pk)
+        else:
+            others = BoardMembership.objects.filter(user_id=self.user_id).exclude(pk=self.pk)
         others = others.filter(models.Q(ends__isnull=True) | models.Q(ends__gt=self.starts))
         if self.ends:
             others = others.filter(starts__lt=self.ends)
         if others.exists():
-            raise ValidationError('У пользователя уже есть пересекающийся срок в правлении.')
+            raise ValidationError('У человека уже есть пересекающийся срок в правлении.')
 
     def __str__(self):
         return f'{self.user} · {self.get_role_display()}'
@@ -276,7 +290,12 @@ def active_board_membership(user, on=None):
     if not getattr(user, 'is_authenticated', False) or not getattr(user, 'is_active', False):
         return None
     on = on or timezone.localdate()
-    return BoardMembership.objects.filter(user=user, starts__lte=on).filter(
+    from .resident_models import ResidentIdentity
+    identity = ResidentIdentity.objects.filter(user=user).only('person_id').first()
+    subject = models.Q(user=user)
+    if identity:
+        subject |= models.Q(person_id=identity.person_id)
+    return BoardMembership.objects.filter(subject, starts__lte=on).filter(
         models.Q(ends__isnull=True) | models.Q(ends__gt=on),
     ).order_by('-starts', '-id').first()
 

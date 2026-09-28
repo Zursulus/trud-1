@@ -9,6 +9,8 @@ from django.db.models import Q
 from django.template.response import TemplateResponse
 from django.utils import timezone
 
+from .access_policy import ScopeType
+from .access_resolver import scopes_for
 from .models import GroupConsumption, Membership, Meter, Reading, SupplyNode, WaterGroup
 
 
@@ -221,9 +223,12 @@ def _group_line(group, starts, ends):
     )
 
 
-def calculate_water_balance(starts, ends):
+def calculate_water_balance(starts, ends, *, node_ids=None):
     nodes = []
-    for node in SupplyNode.objects.order_by('name', 'id'):
+    node_queryset = SupplyNode.objects.order_by('name', 'id')
+    if node_ids is not None:
+        node_queryset = node_queryset.filter(pk__in=node_ids)
+    for node in node_queryset:
         result = NodeBalance(node=node)
 
         main_meters = _active_meters(Meter.objects.filter(node=node, kind='main'), starts, ends)
@@ -296,9 +301,17 @@ def calculate_water_balance(starts, ends):
 
 
 def water_balance_view(request):
-    required = ('water.view_reading', 'water.view_meter', 'water.view_watergroup')
-    if not all(request.user.has_perm(permission) for permission in required):
+    scopes = scopes_for(request.user, 'water.balance.view')
+    if not scopes:
         raise PermissionDenied
+    if any(scope.type == ScopeType.ALL for scope in scopes):
+        node_ids = None
+    else:
+        node_ids = sorted({scope.object_id for scope in scopes if scope.type == ScopeType.SUPPLY_NODE})
+        # A line-level balance is shown in the line-senior workspace. The common
+        # node balance must never expose sibling lines from the same node.
+        if not node_ids:
+            raise PermissionDenied
 
     today = timezone.localdate()
     first_of_month = today.replace(day=1)
@@ -306,7 +319,7 @@ def water_balance_view(request):
     form = WaterBalanceForm(source, initial={'starts': first_of_month, 'ends': today})
     report = None
     if form.is_valid():
-        report = calculate_water_balance(form.cleaned_data['starts'], form.cleaned_data['ends'])
+        report = calculate_water_balance(form.cleaned_data['starts'], form.cleaned_data['ends'], node_ids=node_ids)
 
     context = {
         **admin.site.each_context(request),

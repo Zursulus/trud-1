@@ -13,10 +13,10 @@ APPEAL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 
 
 class ResidentIdentity(RecordedModel):
-    """Verified link between one resident login and one real person.
+    """Verified link between one login and one real Person.
 
-    This model is deliberately separate from ResidentAccess: identifying who a
-    login belongs to must not by itself grant access to any plot or account.
+    Identity never grants authority by itself. The same login may have both
+    personal resident access and service assignments.
     """
 
     user = models.OneToOneField(
@@ -34,6 +34,9 @@ class ResidentIdentity(RecordedModel):
     )
     basis = models.CharField('Основание подтверждения', max_length=300, blank=True)
     notes = models.TextField('Примечание', blank=True)
+    v2_staff_gateway_managed = models.BooleanField(
+        'Служебный вход управляется Access V2', default=False, editable=False,
+    )
 
     class Meta:
         verbose_name = 'Идентичность кабинета жителя'
@@ -41,8 +44,6 @@ class ResidentIdentity(RecordedModel):
         ordering = ['person', 'id']
 
     def clean(self):
-        if self.user_id and self.user.is_staff:
-            raise ValidationError({'user': 'Сотрудника нельзя связывать с кабинетом жителя.'})
         if self.verified_by_id and not self.verified_by.is_staff:
             raise ValidationError({'verified_by': 'Подтвердить личность может только сотрудник.'})
 
@@ -207,10 +208,16 @@ class ResidentAppealAttachment(models.Model):
         if self.board_message_id and self.appeal_id and self.board_message.appeal_id != self.appeal_id:
             raise ValidationError({'board_message': 'Сообщение правления относится к другому обращению.'})
         if self.uploaded_by_id and self.appeal_id:
-            if not self.uploaded_by.is_staff and self.appeal.author_id != self.uploaded_by_id:
+            if self.message_id and self.appeal.author_id != self.uploaded_by_id:
                 raise ValidationError({'uploaded_by': 'Житель может прикладывать файл только к своему обращению.'})
-            if self.board_message_id and self.uploaded_by_id != self.board_message.author_id:
-                raise ValidationError({'uploaded_by': 'Вложение правления должно принадлежать автору сообщения.'})
+            if self.board_message_id:
+                if not self.uploaded_by.is_staff:
+                    raise ValidationError({'uploaded_by': 'Вложение правления может загрузить только сотрудник.'})
+                if self.uploaded_by_id != self.board_message.author_id:
+                    raise ValidationError({'uploaded_by': 'Вложение правления должно принадлежать автору сообщения.'})
+            if not self.message_id and not self.board_message_id:
+                if self.uploaded_by_id != self.appeal.author_id and not self.uploaded_by.is_staff:
+                    raise ValidationError({'uploaded_by': 'Вложение может добавить только автор обращения или сотрудник правления.'})
         if self.document:
             size = getattr(self.document, 'size', 0)
             if size > APPEAL_ATTACHMENT_MAX_BYTES:
@@ -239,7 +246,10 @@ class ResidentAppealAttachment(models.Model):
 
     @property
     def is_board_file(self):
-        return bool(self.uploaded_by_id and self.uploaded_by.is_staff)
+        return bool(
+            self.board_message_id
+            or (self.uploaded_by_id and self.appeal_id and not self.message_id and self.uploaded_by_id != self.appeal.author_id)
+        )
 
     def __str__(self):
         return f'{self.appeal} · {self.original_name or self.document.name}'

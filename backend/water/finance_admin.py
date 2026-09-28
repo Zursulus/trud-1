@@ -3,6 +3,7 @@ from django.contrib import admin
 from .admin import RecordedAdmin
 from .finance_models import ChargeObligation
 from .finance_reporting import obligation_report_queryset, outstanding_amount
+from .privacy_admin import has_private_registry_access
 
 
 @admin.register(ChargeObligation)
@@ -26,7 +27,7 @@ class ChargeObligationAdmin(RecordedAdmin):
         return obligation_report_queryset()
 
     def get_list_display(self, request):
-        payer_column = 'payer_private' if request.user.has_perm('water.access_private_registry') else 'payer_safe'
+        payer_column = 'payer_private' if has_private_registry_access(request.user) else 'payer_safe'
         return (
             'account_number', 'period_label', 'category', payer_column,
             'due_on', 'base_amount', 'relief_amount', 'final_amount',
@@ -35,7 +36,7 @@ class ChargeObligationAdmin(RecordedAdmin):
 
     def get_search_fields(self, request):
         fields = ['charge__account__number', 'charge__account__plot', 'plot__label', 'basis']
-        if request.user.has_perm('water.access_private_registry'):
+        if has_private_registry_access(request.user):
             fields += ['person__full_name', 'membership__person__full_name']
         return fields
 
@@ -44,7 +45,7 @@ class ChargeObligationAdmin(RecordedAdmin):
             'charge', 'category', 'payer_scope', 'payer_summary',
             'due_on', 'base_amount', 'relief_amount', 'basis', 'relief_basis', 'notes',
         ]
-        if request.user.has_perm('water.access_private_registry'):
+        if has_private_registry_access(request.user):
             common[4:4] = ['plot', 'person', 'membership']
         else:
             common[4:4] = ['plot']

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from django.core.exceptions import ValidationError
@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from .models import Account, Person, RecordedModel, ResidentAccess, ResidentAppeal, User
 from .resident_models import ResidentIdentity
+from .access_control import active_delegations, direct_person_has_authority_on
+from .access_policy import ScopeType
 
 
 CAP_VIEW_ACCOUNT = 'view_account'
@@ -141,6 +143,36 @@ def _from_grant(grant):
     )
 
 
+DELEGATED_PORTAL_CAPABILITIES = {
+    'resident.account.view': 'can_view_account',
+    'resident.finance.view': 'can_view_finance',
+    'resident.water.submit': 'can_submit_water',
+    'resident.documents.view': 'can_view_documents',
+    'resident.appeals.use': 'can_use_appeals',
+    'resident.represent': 'can_represent',
+}
+
+
+def _merge_delegated(access, capabilities):
+    values = {field: getattr(access, field) for field in DELEGATED_PORTAL_CAPABILITIES.values()} if access else {
+        field: False for field in DELEGATED_PORTAL_CAPABILITIES.values()
+    }
+    for code in capabilities:
+        field = DELEGATED_PORTAL_CAPABILITIES.get(code)
+        if field:
+            values[field] = True
+    if access is None:
+        return values
+    return replace(access, source=f'{access.source}+delegation', **values)
+
+
+def _from_delegation(account, capabilities):
+    values = _merge_delegated(None, capabilities)
+    return ResolvedPortalAccess(
+        account=account, source='delegation', role='delegated', **values,
+    )
+
+
 def _from_legacy(access):
     # Legacy ResidentAccess historically unlocked the whole account workspace.
     # Preserve that behaviour exactly until each real user is migrated to an
@@ -161,7 +193,7 @@ def _from_legacy(access):
 
 def resolved_accesses_at(user, on_date, capability=None):
     """Resolve portal authority at an exact date without unioning sources."""
-    if not getattr(user, 'is_authenticated', False) or not user.is_active or user.is_staff:
+    if not getattr(user, 'is_authenticated', False) or not user.is_active:
         return []
 
     resolved = {}
@@ -175,6 +207,33 @@ def resolved_accesses_at(user, on_date, capability=None):
         for grant in grants:
             if grant.account_id not in resolved:
                 resolved[grant.account_id] = _from_grant(grant)
+
+        delegated_by_account = {}
+        delegations = active_delegations(identity.person_id, on_date).filter(
+            scope_type=ScopeType.ACCOUNT.value,
+        )
+        for delegation in delegations:
+            valid = {
+                code for code in delegation.capabilities
+                if direct_person_has_authority_on(
+                    delegation.delegator_id, code, ScopeType.ACCOUNT,
+                    delegation.scope_object_id, on_date,
+                )
+            }
+            if valid:
+                delegated_by_account.setdefault(delegation.scope_object_id, set()).update(valid)
+        accounts = Account.objects.in_bulk(delegated_by_account)
+        for account_id, delegated_caps in delegated_by_account.items():
+            account = accounts.get(account_id)
+            if account is None or account.archived:
+                continue
+            existing = resolved.get(account_id)
+            if existing is None:
+                delegated = _from_delegation(account, delegated_caps)
+                if delegated.can_view_account:
+                    resolved[account_id] = delegated
+            else:
+                resolved[account_id] = _merge_delegated(existing, delegated_caps)
 
     legacy = ResidentAccess.objects.filter(
         user=user,
@@ -224,8 +283,6 @@ def _resident_appeal_clean_with_resolver(self):
     models.py and, importantly, makes admin/board saves obey the same access
     model as resident views.
     """
-    if self.author_id and self.author.is_staff:
-        raise ValidationError({'author': 'Автором обращения должен быть житель.'})
     if self.author_id and self.account_id:
         opened_on = self.opened_at.date() if self.opened_at else timezone.localdate()
         access = resolved_access_at(self.author, self.account_id, CAP_APPEALS, opened_on)

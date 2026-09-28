@@ -129,7 +129,7 @@
 
 {% block form_top %}
   {{ block.super }}
-  {% if original.status == 'pending' and perms.water.change_controllerreadingsubmission %}
+  {% if original.status == 'pending' and has_change_permission %}
     {% controller_moderation_context original as moderation %}
     <section class="moderation-panel" aria-label="Проверка показания контролёра">
       <h2>Проверка показания</h2>

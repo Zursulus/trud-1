@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
+from .access_resolver import can_any
 from .appeal_admin_tools import download_appeal_attachment
 from .appeal_workflow import (
     FINAL_APPEAL_STATES,
@@ -56,12 +57,16 @@ class StaffAppealReplyForm(forms.Form):
 
 
 def _require_view(request):
-    if not (request.user.is_superuser or request.user.has_perm("water.view_residentappeal")):
+    if not request.user.is_staff or not can_any(request.user, "appeals.view"):
         raise PermissionDenied
 
 
-def _can_change(request):
-    return request.user.is_superuser or request.user.has_perm("water.change_residentappeal")
+def _can_reply(request):
+    return request.user.is_superuser or can_any(request.user, "appeals.reply")
+
+
+def _can_close(request):
+    return request.user.is_superuser or can_any(request.user, "appeals.close")
 
 
 def appeal_list(request):
@@ -116,7 +121,7 @@ def appeal_list(request):
         "account_id": account_id,
         "counts": counts,
         "page": page,
-        "can_manage_appeals": _can_change(request),
+        "can_manage_appeals": _can_reply(request) or _can_close(request),
     })
     return TemplateResponse(request, "water/work/appeals.html", context)
 
@@ -127,13 +132,16 @@ def appeal_detail(request, appeal_id):
         ResidentAppeal.objects.select_related("account", "category", "responded_by"),
         pk=appeal_id,
     )
-    can_change = _can_change(request)
+    can_reply = _can_reply(request)
+    can_close = _can_close(request)
     form = StaffAppealReplyForm(request.POST or None, request.FILES or None)
 
     if request.method == "POST":
-        if not can_change:
-            raise PermissionDenied
         action = request.POST.get("action")
+        if action == "reply" and not can_reply:
+            raise PermissionDenied
+        if action == "close" and not can_close:
+            raise PermissionDenied
         if action == "reply" and appeal.status in FINAL_APPEAL_STATES:
             messages.error(request, "Обращение уже завершено. Новое сообщение не отправлено.")
             return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
@@ -166,9 +174,9 @@ def appeal_detail(request, appeal_id):
         "appeal": appeal,
         "events": appeal_conversation_events(appeal),
         "form": form,
-        "can_manage_appeals": can_change,
-        "can_reply": can_change and appeal.status in OPEN_APPEAL_STATES,
-        "can_close": can_change and appeal.status == "resolved",
+        "can_manage_appeals": can_reply or can_close,
+        "can_reply": can_reply and appeal.status in OPEN_APPEAL_STATES,
+        "can_close": can_close and appeal.status == "resolved",
     })
     return TemplateResponse(request, "water/work/appeal.html", context)
 

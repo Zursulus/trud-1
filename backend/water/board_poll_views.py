@@ -25,15 +25,15 @@ from .portal_permissions import CAP_VIEW_ACCOUNT, resolved_accesses
 def _guard(request):
     if not request.user.is_authenticated:
         return HttpResponseRedirect(f'{reverse("resident_login")}?next={request.path}')
-    if request.user.is_staff:
-        return None
+    # Board materials are an electorate/business entitlement, not a staff privilege.
     if active_board_membership(request.user) is None:
         raise PermissionDenied
     return None
 
 
 def _portal_context(request, section='board'):
-    accesses = [] if request.user.is_staff else resolved_accesses(request.user, CAP_VIEW_ACCOUNT)
+    # One login may be both a board member/staff member and an ordinary resident.
+    accesses = resolved_accesses(request.user, CAP_VIEW_ACCOUNT)
     access = accesses[0] if accesses else None
     return {
         'access': access,
