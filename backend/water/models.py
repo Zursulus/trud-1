@@ -820,7 +820,24 @@ class ResidentAccess(RecordedModel):
 class ResidentInvite(RecordedModel):
     account = models.ForeignKey(Account, verbose_name='Лицевой счёт', on_delete=models.PROTECT, related_name='resident_invites')
     email = models.EmailField('Электронная почта')
-    role = models.CharField('Основание доступа', max_length=20, choices=ResidentAccess._meta.get_field('role').choices)
+    role = models.CharField(
+        'Основание доступа', max_length=20, choices=ResidentAccess._meta.get_field('role').choices, blank=True,
+    )
+    person = models.ForeignKey(
+        Person, verbose_name='Проверенный человек', on_delete=models.PROTECT,
+        related_name='resident_invites', blank=True, null=True,
+    )
+    basis = models.CharField('Проверенное основание', max_length=300, blank=True)
+    verified_by = models.ForeignKey(
+        User, verbose_name='Кто подтвердил', on_delete=models.PROTECT,
+        related_name='verified_resident_invites', blank=True, null=True,
+    )
+    can_view_account = models.BooleanField('Видеть участок и базовые данные', default=True)
+    can_view_finance = models.BooleanField('Видеть начисления и оплаты', default=False)
+    can_submit_water = models.BooleanField('Передавать показания воды', default=False)
+    can_view_documents = models.BooleanField('Видеть документы лицевого счёта', default=False)
+    can_use_appeals = models.BooleanField('Создавать и читать свои обращения', default=False)
+    can_represent = models.BooleanField('Совершать представительские действия', default=False)
     token_hash = models.CharField('Хэш приглашения', max_length=64, unique=True, editable=False)
     expires_at = models.DateTimeField('Действует до')
     used_at = models.DateTimeField('Использовано', blank=True, null=True, editable=False)
@@ -831,10 +848,33 @@ class ResidentInvite(RecordedModel):
         verbose_name_plural = '18 · Приглашения жителей'
         ordering = ['-id']
 
+    @property
+    def is_granular(self):
+        return bool(self.person_id)
+
     def clean(self):
         self.email = self.email.strip().lower()
+        self.basis = ' '.join((self.basis or '').split())
         if self._state.adding and self.expires_at and self.expires_at <= timezone.now():
             raise ValidationError({'expires_at': 'Срок приглашения должен быть в будущем.'})
+        if self.person_id:
+            if self.role:
+                raise ValidationError({'role': 'Для точечного приглашения legacy-роль не используется.'})
+            if self.person.archived:
+                raise ValidationError({'person': 'Нельзя выдавать доступ архивной карточке человека.'})
+            if self.account_id and self.account.archived:
+                raise ValidationError({'account': 'Нельзя выдавать доступ к архивному лицевому счёту.'})
+            if not self.verified_by_id or not self.verified_by.is_staff:
+                raise ValidationError({'verified_by': 'Точечное приглашение должен подтвердить сотрудник.'})
+            if not self.basis:
+                raise ValidationError({'basis': 'Укажите проверенное основание доступа.'})
+            if not self.can_view_account and any((
+                self.can_view_finance, self.can_submit_water, self.can_view_documents,
+                self.can_use_appeals, self.can_represent,
+            )):
+                raise ValidationError({'can_view_account': 'Специальные права требуют базового доступа к участку.'})
+        elif not self.role:
+            raise ValidationError({'role': 'Для legacy-приглашения укажите основание доступа.'})
 
     def __str__(self):
         return f'{self.email} → {self.account}'

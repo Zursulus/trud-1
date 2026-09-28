@@ -10,7 +10,10 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
-from .models import Account, ResidentAccess, ResidentInvite, ResidentPasswordReset, User
+from .models import Account, Person, ResidentAccess, ResidentInvite, ResidentPasswordReset, User
+from .portal import issue_granular_invite
+from .portal_permissions import PortalGrant
+from .resident_models import ResidentIdentity
 
 
 ADMIN = "Администратор ТСН"
@@ -200,6 +203,152 @@ class StaffWorkspaceAccessTests(TestCase):
         readonly = model_admin.get_readonly_fields(request, self.access)
         for field in ("user", "account", "role", "starts", "ends"):
             self.assertIn(field, readonly)
+
+
+    def test_dual_authority_can_create_person_then_continue_to_grant_form(self):
+        self.login(self.dual_user)
+        response = self.client.post(
+            "/work/access/people/new/",
+            {
+                "full_name": "Новый Тестовый Житель",
+                "email": "new-person@example.test",
+                "phone": "+7 900 000-00-02",
+                "notes": "Синтетическая тестовая карточка",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        person = Person.objects.get(email="new-person@example.test")
+        self.assertIn(f"person={person.pk}", response["Location"] )
+        self.assertIn("email=new-person%40example.test", response["Location"] )
+        follow = self.client.get(response["Location"])
+        self.assertEqual(follow.status_code, 200)
+        self.assertEqual(follow.context["form"].initial["person"], str(person.pk))
+        self.assertEqual(follow.context["form"].initial["email"], person.email)
+
+    def test_dual_authority_can_issue_granular_invite_and_activation_creates_identity_and_grant(self):
+        person = Person.objects.create(full_name="Тестовый Житель", email="granular@example.test")
+        self.login(self.dual_user)
+        response = self.client.post(
+            "/work/access/invite/",
+            {
+                "person": person.pk,
+                "account": self.account.pk,
+                "email": "granular@example.test",
+                "basis": "Личность и основание проверены",
+                "can_view_account": "on",
+                "can_submit_water": "on",
+                "can_view_documents": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        invite = ResidentInvite.objects.get(email="granular@example.test")
+        self.assertTrue(invite.is_granular)
+        self.assertFalse(invite.role)
+        self.assertContains(response, "Одноразовая ссылка создана")
+        invite_url = response.context["invite_url"]
+        self.assertTrue(invite_url)
+        self.assertFalse(PortalGrant.objects.filter(person=person, account=self.account).exists())
+
+        before_legacy = ResidentAccess.objects.count()
+        self.client.logout()
+        response = self.client.post(
+            invite_url,
+            {"password1": "Granular-resident-2026!", "password2": "Granular-resident-2026!"},
+        )
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(email="granular@example.test")
+        identity = ResidentIdentity.objects.get(user=user)
+        self.assertEqual(identity.person, person)
+        grant = PortalGrant.objects.get(person=person, account=self.account)
+        self.assertTrue(grant.can_view_account)
+        self.assertTrue(grant.can_submit_water)
+        self.assertTrue(grant.can_view_documents)
+        self.assertFalse(grant.can_view_finance)
+        self.assertEqual(ResidentAccess.objects.count(), before_legacy)
+        invite.refresh_from_db()
+        self.assertIsNotNone(invite.used_at)
+
+    def test_granular_invite_requires_both_private_registry_and_access_authority(self):
+        for user in (self.admin_user, self.private_user):
+            self.login(user)
+            self.assertEqual(self.client.get("/work/access/invite/").status_code, 403)
+        self.login(self.dual_user)
+        self.assertEqual(self.client.get("/work/access/invite/").status_code, 200)
+
+    def test_existing_user_without_current_access_can_log_in_only_to_activate_matching_invite(self):
+        person = Person.objects.create(full_name="Возвращающийся житель")
+        dormant = User.objects.create_user(
+            username="returning-resident", email="returning@example.test", password="Returning-resident-2026!",
+        )
+        _invite, raw = issue_granular_invite(
+            self.account, person, dormant.email, "Повторно проверено", actor=self.dual_user,
+            can_view_finance=True,
+        )
+        invite_path = f"/admin/cabinet/invite/{raw}/"
+        denied = self.client.post(
+            "/admin/cabinet/login/",
+            {"username": dormant.username, "password": "Returning-resident-2026!"},
+        )
+        self.assertEqual(denied.status_code, 200)
+        self.assertContains(denied, "Нет действующего доступа")
+        allowed = self.client.post(
+            f"/admin/cabinet/login/?next={invite_path}",
+            {"username": dormant.username, "password": "Returning-resident-2026!", "next": invite_path},
+        )
+        self.assertEqual(allowed.status_code, 302)
+        self.assertEqual(allowed["Location"], invite_path)
+
+    def test_granular_invite_does_not_rebind_existing_identity(self):
+        original_person = Person.objects.create(full_name="Уже подтверждённый житель")
+        invited_person = Person.objects.create(full_name="Другой проверенный житель")
+        ResidentIdentity.objects.create(
+            user=self.resident, person=original_person, verified_by=self.dual_user, basis="Ранее проверено",
+        )
+        invite, raw = issue_granular_invite(
+            self.account, invited_person, self.resident.email, "Новая проверка", actor=self.dual_user,
+        )
+        self.login(self.resident)
+        response = self.client.post(f"/admin/cabinet/invite/{raw}/")
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(PortalGrant.objects.filter(person=invited_person).exists())
+        invite.refresh_from_db()
+        self.assertIsNone(invite.used_at)
+        self.assertEqual(ResidentIdentity.objects.get(user=self.resident).person, original_person)
+
+    def test_admin_can_manage_explicit_grant_without_private_person_name(self):
+        person = Person.objects.create(full_name="Скрытое Имя")
+        ResidentIdentity.objects.create(
+            user=self.resident, person=person, verified_by=self.dual_user, basis="Проверено",
+        )
+        grant = PortalGrant.objects.create(
+            person=person, account=self.account, starts=timezone.localdate() - timedelta(days=2),
+            basis="Проверено", verified_by=self.dual_user, can_submit_water=True,
+        )
+        self.login(self.admin_user)
+        dashboard = self.client.get("/work/access/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "Точечные права")
+        self.assertNotContains(dashboard, person.full_name)
+
+        reset = self.client.post(f"/work/access/grants/{grant.pk}/", {"action": "reset"})
+        self.assertEqual(reset.status_code, 200)
+        self.assertContains(reset, "Одноразовая ссылка восстановления создана")
+        self.assertTrue(ResidentPasswordReset.objects.filter(user=self.resident).exists())
+
+        end_on = timezone.localdate()
+        end = self.client.post(
+            f"/work/access/grants/{grant.pk}/", {"action": "end", "ends_on": end_on.isoformat()},
+        )
+        self.assertEqual(end.status_code, 302)
+        grant.refresh_from_db()
+        self.assertEqual(grant.ends, end_on)
+
+    def test_staff_opening_resident_cabinet_gets_explanation_instead_of_bare_403(self):
+        self.login(self.admin_user)
+        response = self.client.get("/admin/cabinet/")
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "Сейчас вы вошли как сотрудник", status_code=403)
+        self.assertContains(response, "режиме инкогнито", status_code=403)
 
     def test_access_pages_have_bounded_query_counts(self):
         self.login(self.dual_user)

@@ -29,10 +29,12 @@ from .portal_permissions import (
     CAP_FINANCE,
     CAP_SUBMIT_WATER,
     CAP_VIEW_ACCOUNT,
+    PortalGrant,
     has_any_portal_access,
     resolved_access,
     resolved_accesses,
 )
+from .resident_models import ResidentIdentity
 
 
 class ResidentAuthenticationForm(AuthenticationForm):
@@ -41,7 +43,11 @@ class ResidentAuthenticationForm(AuthenticationForm):
         if user.is_staff:
             raise forms.ValidationError('Сотрудники входят через защищённую административную форму.', code='staff_portal')
         if not has_any_portal_access(user):
-            raise forms.ValidationError('Нет действующего доступа к лицевому счёту.', code='no_access')
+            next_path = ''
+            if self.request is not None:
+                next_path = self.request.POST.get('next') or self.request.GET.get('next') or ''
+            if not _invite_login_allowed(user, next_path):
+                raise forms.ValidationError('Нет действующего доступа к лицевому счёту.', code='no_access')
 
 
 class InviteRegistrationForm(forms.Form):
@@ -95,11 +101,24 @@ def token_digest(token):
     return hashlib.sha256(token.encode('ascii')).hexdigest()
 
 
-@transaction.atomic
-def issue_invite(account, email, role, *, actor=None):
-    if account.archived:
-        raise ValidationError('Для архивного лицевого счёта нельзя создавать приглашение.')
-    email = email.strip().lower()
+def _invite_login_allowed(user, next_path):
+    prefix = '/admin/cabinet/invite/'
+    if not next_path.startswith(prefix):
+        return False
+    token = next_path[len(prefix):].strip('/')
+    if not token or '/' in token:
+        return False
+    try:
+        digest = token_digest(token)
+    except UnicodeEncodeError:
+        return False
+    return ResidentInvite.objects.filter(
+        token_hash=digest, email__iexact=user.email, used_at__isnull=True, revoked=False,
+        expires_at__gt=timezone.now(), account__archived=False,
+    ).exists()
+
+
+def _revoke_previous_invites(account, email, *, actor=None):
     for previous in ResidentInvite.objects.select_for_update().filter(
         account=account, email=email, used_at__isnull=True, revoked=False,
     ):
@@ -107,6 +126,14 @@ def issue_invite(account, email, role, *, actor=None):
         previous._history_user = actor
         previous._change_reason = 'Заменено новым приглашением'
         previous.save()
+
+
+@transaction.atomic
+def issue_invite(account, email, role, *, actor=None):
+    if account.archived:
+        raise ValidationError('Для архивного лицевого счёта нельзя создавать приглашение.')
+    email = email.strip().lower()
+    _revoke_previous_invites(account, email, actor=actor)
     raw = secrets.token_urlsafe(32)
     invite = ResidentInvite(
         account=account, email=email, role=role, token_hash=token_digest(raw),
@@ -116,6 +143,72 @@ def issue_invite(account, email, role, *, actor=None):
     invite._change_reason = 'Создание одноразового приглашения'
     invite.save()
     return invite, raw
+
+
+@transaction.atomic
+def issue_granular_invite(
+    account, person, email, basis, *, actor, can_view_account=True,
+    can_view_finance=False, can_submit_water=False, can_view_documents=False,
+    can_use_appeals=False, can_represent=False,
+):
+    if account.archived:
+        raise ValidationError('Для архивного лицевого счёта нельзя создавать приглашение.')
+    if person.archived:
+        raise ValidationError('Для архивной карточки человека нельзя создавать приглашение.')
+    if not actor or not actor.is_staff:
+        raise ValidationError('Точечное приглашение должен подтвердить сотрудник.')
+    today = timezone.localdate()
+    if PortalGrant.objects.filter(person=person, account=account, starts__lte=today).filter(
+        Q(ends__isnull=True) | Q(ends__gt=today)
+    ).exists():
+        raise ValidationError('Для этого жителя уже действует явный доступ к выбранному счёту.')
+    email = email.strip().lower()
+    _revoke_previous_invites(account, email, actor=actor)
+    raw = secrets.token_urlsafe(32)
+    invite = ResidentInvite(
+        account=account, person=person, email=email, role='', basis=basis, verified_by=actor,
+        can_view_account=can_view_account, can_view_finance=can_view_finance,
+        can_submit_water=can_submit_water, can_view_documents=can_view_documents,
+        can_use_appeals=can_use_appeals, can_represent=can_represent,
+        token_hash=token_digest(raw), expires_at=timezone.now() + timedelta(days=7),
+    )
+    invite._history_user = actor
+    invite._change_reason = 'Создание точечного приглашения жителя'
+    invite.save()
+    return invite, raw
+
+
+def _activate_granular_invite(invite, user):
+    identity = ResidentIdentity.objects.select_for_update().filter(user=user).first()
+    if identity and identity.person_id != invite.person_id:
+        raise ValidationError('Кабинет уже связан с другой проверенной карточкой человека.')
+    other_identity = ResidentIdentity.objects.select_for_update().filter(person=invite.person).exclude(user=user).first()
+    if other_identity:
+        raise ValidationError('Проверенная карточка человека уже связана с другим кабинетом.')
+    if identity is None:
+        identity = ResidentIdentity(
+            user=user, person=invite.person, verified_by=invite.verified_by, basis=invite.basis,
+        )
+        identity._history_user = invite.verified_by
+        identity._change_reason = 'Личность подтверждена по точечному приглашению'
+        identity.save()
+
+    grant = PortalGrant(
+        person=invite.person, account=invite.account, starts=timezone.localdate(),
+        can_view_account=invite.can_view_account, can_view_finance=invite.can_view_finance,
+        can_submit_water=invite.can_submit_water, can_view_documents=invite.can_view_documents,
+        can_use_appeals=invite.can_use_appeals, can_represent=invite.can_represent,
+        basis=invite.basis, verified_by=invite.verified_by,
+        notes='Создано по точечному одноразовому приглашению',
+    )
+    grant._history_user = invite.verified_by
+    grant._change_reason = 'Активация точечного приглашения жителем'
+    grant.save()
+    invite.used_at = timezone.now()
+    invite._history_user = user
+    invite._change_reason = 'Точечное приглашение использовано'
+    invite.save()
+    return grant
 
 
 def password_reset_allowed(user):
@@ -164,7 +257,7 @@ def resident_guard(request):
     if not request.user.is_authenticated:
         return HttpResponseRedirect(f'{reverse("resident_login")}?next={request.path}')
     if request.user.is_staff:
-        raise PermissionDenied
+        return TemplateResponse(request, 'water/portal/staff_forbidden.html', status=403)
     return None
 
 
@@ -182,9 +275,15 @@ def register_invite(request, token):
         digest = token_digest(token)
     except UnicodeEncodeError as error:
         raise Http404 from error
-    invite = get_object_or_404(ResidentInvite.objects.select_related('account'), token_hash=digest)
+    invite = get_object_or_404(
+        ResidentInvite.objects.select_related('account', 'person', 'verified_by'),
+        token_hash=digest,
+    )
     if invite.revoked or invite.used_at or invite.expires_at <= timezone.now() or invite.account.archived:
         return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
+    if invite.is_granular and (invite.person.archived or not invite.verified_by_id):
+        return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
+
     email_users = User.objects.filter(email__iexact=invite.email).order_by('pk')
     if email_users.exists():
         existing_users = email_users.filter(is_staff=False, is_active=True)
@@ -200,56 +299,79 @@ def register_invite(request, token):
                 'invite': invite, 'wrong_user': True,
             }, status=403)
         if request.method == 'POST':
-            with transaction.atomic():
-                locked = ResidentInvite.objects.select_for_update().get(pk=invite.pk)
-                user = User.objects.select_for_update().get(pk=existing.pk)
-                if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
-                    return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
-                if user.is_staff or not user.is_active or user.email.lower() != locked.email.lower():
-                    return TemplateResponse(request, 'water/portal/invite_existing.html', {
-                        'invite': locked, 'ambiguous': True,
-                    }, status=409)
-                today = timezone.localdate()
-                active = ResidentAccess.objects.filter(
-                    user=user, account=locked.account, starts__lte=today,
-                ).filter(models_q_active(today)).exists()
-                if not active:
-                    access = ResidentAccess(
-                        user=user, account=locked.account, role=locked.role, starts=today,
-                        notes='Дополнительный счёт подключён по одноразовому приглашению',
-                    )
-                    access._history_user = user
-                    access._change_reason = 'Подключение дополнительного счёта жителем'
-                    access.save()
-                locked.used_at = timezone.now()
-                locked._history_user = user
-                locked._change_reason = 'Приглашение использовано существующим жителем'
-                locked.save()
+            try:
+                with transaction.atomic():
+                    locked = ResidentInvite.objects.select_for_update().select_related(
+                        'account', 'person', 'verified_by',
+                    ).get(pk=invite.pk)
+                    user = User.objects.select_for_update().get(pk=existing.pk)
+                    if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
+                        return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
+                    if user.is_staff or not user.is_active or user.email.lower() != locked.email.lower():
+                        return TemplateResponse(request, 'water/portal/invite_existing.html', {
+                            'invite': locked, 'ambiguous': True,
+                        }, status=409)
+                    if locked.is_granular:
+                        _activate_granular_invite(locked, user)
+                    else:
+                        today = timezone.localdate()
+                        active = ResidentAccess.objects.filter(
+                            user=user, account=locked.account, starts__lte=today,
+                        ).filter(models_q_active(today)).exists()
+                        if not active:
+                            access = ResidentAccess(
+                                user=user, account=locked.account, role=locked.role, starts=today,
+                                notes='Дополнительный счёт подключён по одноразовому приглашению',
+                            )
+                            access._history_user = user
+                            access._change_reason = 'Подключение дополнительного счёта жителем'
+                            access.save()
+                        locked.used_at = timezone.now()
+                        locked._history_user = user
+                        locked._change_reason = 'Приглашение использовано существующим жителем'
+                        locked.save()
+            except ValidationError:
+                return TemplateResponse(request, 'water/portal/invite_existing.html', {
+                    'invite': invite, 'ambiguous': True,
+                }, status=409)
             return HttpResponseRedirect(reverse('resident_account', args=[invite.account_id]))
         return TemplateResponse(request, 'water/portal/invite_existing.html', {
             'invite': invite, 'ready': True,
         })
+
     form = InviteRegistrationForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        with transaction.atomic():
-            locked = ResidentInvite.objects.select_for_update().get(pk=invite.pk)
-            if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
-                return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
-            username = invite.email.lower()
-            if len(username) > 150 or User.objects.filter(username=username).exists():
-                username = f'resident-{secrets.token_hex(12)}'
-            user = User.objects.create_user(username=username, email=invite.email, password=form.cleaned_data['password1'])
-            access = ResidentAccess(
-                user=user, account=invite.account, role=invite.role, starts=timezone.localdate(),
-                notes='Создано по одноразовому приглашению',
-            )
-            access._history_user = user
-            access._change_reason = 'Активация приглашения жителем'
-            access.save()
-            locked.used_at = timezone.now()
-            locked._history_user = user
-            locked._change_reason = 'Приглашение использовано'
-            locked.save()
+        try:
+            with transaction.atomic():
+                locked = ResidentInvite.objects.select_for_update().select_related(
+                    'account', 'person', 'verified_by',
+                ).get(pk=invite.pk)
+                if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
+                    return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
+                username = locked.email.lower()
+                if len(username) > 150 or User.objects.filter(username=username).exists():
+                    username = f'resident-{secrets.token_hex(12)}'
+                user = User.objects.create_user(
+                    username=username, email=locked.email, password=form.cleaned_data['password1'],
+                )
+                if locked.is_granular:
+                    _activate_granular_invite(locked, user)
+                else:
+                    access = ResidentAccess(
+                        user=user, account=locked.account, role=locked.role, starts=timezone.localdate(),
+                        notes='Создано по одноразовому приглашению',
+                    )
+                    access._history_user = user
+                    access._change_reason = 'Активация приглашения жителем'
+                    access.save()
+                    locked.used_at = timezone.now()
+                    locked._history_user = user
+                    locked._change_reason = 'Приглашение использовано'
+                    locked.save()
+        except ValidationError:
+            return TemplateResponse(request, 'water/portal/invite_existing.html', {
+                'invite': invite, 'ambiguous': True,
+            }, status=409)
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         return HttpResponseRedirect(reverse('resident_dashboard'))
     return TemplateResponse(request, 'water/portal/register.html', {'form': form, 'invite': invite})

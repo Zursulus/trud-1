@@ -1,0 +1,11 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Выдать доступ жителю{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступ жителей</a><span>›</span><span>Выдать доступ</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Закрытый реестр + доступ</p><h1>Выдать доступ жителю</h1><p>Выберите проверенного человека, лицевой счёт и только необходимые права. Само приглашение права не включает — они появятся после активации.</p></div></section>
+{% if invite_url %}
+<section class="ws-section"><div class="ws-banner ws-banner-warning"><strong>Одноразовая ссылка создана.</strong><br>Скопируйте её сейчас: исходный токен повторно не показывается.</div><div class="ws-finance-form"><label for="invite-url">Ссылка приглашения</label><input id="invite-url" value="{{ invite_url }}" readonly></div><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:access' %}">Вернуться к доступам</a></div></section>
+{% else %}
+<section class="ws-section"><div class="ws-section-head"><h2>Параметры доступа</h2><span>Минимально необходимые права</span></div><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:access_person_create' %}">Нет жителя в реестре? Добавить</a></div><form class="ws-finance-form" method="post">{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">Создать одноразовое приглашение</button></form></section>
+{% endif %}
+{% endblock %}
