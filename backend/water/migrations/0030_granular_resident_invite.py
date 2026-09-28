@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('water', '0029_security_alert'),
+        ('water', '0028_observation_sources_and_line_review'),
     ]
 
     operations = [
