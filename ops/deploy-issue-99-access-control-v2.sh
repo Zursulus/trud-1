@@ -74,6 +74,7 @@ backend/water/staff_documents.py
 backend/water/staff_finance.py
 backend/water/staff_governance.py
 backend/water/staff_workspace.py
+backend/water/staff_workspace_access_e2e_tests.py
 backend/water/staff_workspace_urls.py
 backend/water/templates/admin/water/controllerreadingsubmission/change_form.html
 backend/water/templates/water/portal/base.html
