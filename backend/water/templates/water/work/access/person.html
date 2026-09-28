@@ -1,0 +1,7 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Добавить жителя{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступ жителей</a><span>›</span><a href="{% url 'staff_workspace:access_invite' %}">Выдать доступ</a><span>›</span><span>Новый житель</span></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Закрытый реестр</p><h1>Добавить жителя</h1><p>Создаётся только карточка человека. Участок, собственность, членство и доступ автоматически не назначаются.</p></div></section>
+<section class="ws-section"><div class="ws-banner ws-banner-warning"><strong>Проверьте, что человека ещё нет в реестре.</strong><br>Не создавайте вторую карточку вместо выбора существующей.</div><form class="ws-finance-form" method="post">{% csrf_token %}{{ form.as_p }}<button class="ws-primary" type="submit">Создать и перейти к правам</button></form></section>
+{% endblock %}

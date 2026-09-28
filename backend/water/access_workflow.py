@@ -5,6 +5,8 @@ from django.utils import timezone
 from .access_requests import ResidentAccessRequest
 from .models import ResidentAccess, ResidentInvite, ResidentPasswordReset
 from .portal import issue_invite, issue_password_reset
+from .portal_permissions import PortalGrant
+from .resident_models import ResidentIdentity
 
 
 def _required_note(value, label='Основание решения'):
@@ -93,3 +95,26 @@ def end_resident_access(access_id, *, ends_on, actor):
 def issue_access_password_reset(access_id, *, actor):
     access = ResidentAccess.objects.select_for_update().select_related('user').get(pk=access_id)
     return issue_password_reset(access.user, actor=actor)
+
+
+@transaction.atomic
+def end_portal_grant(grant_id, *, ends_on, actor):
+    grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    if grant.ends is not None:
+        raise ValidationError('Доступ уже завершён.')
+    if ends_on <= grant.starts:
+        raise ValidationError('Дата завершения должна быть позже даты начала доступа.')
+    grant.ends = ends_on
+    grant._history_user = actor
+    grant._change_reason = 'Явный доступ жителя завершён сотрудником'
+    grant.save(update_fields=['ends'])
+    return grant
+
+
+@transaction.atomic
+def issue_grant_password_reset(grant_id, *, actor):
+    grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    identity = ResidentIdentity.objects.select_related('user').filter(person=grant.person).first()
+    if identity is None:
+        raise ValidationError('К этому доступу ещё не привязан активированный кабинет жителя.')
+    return issue_password_reset(identity.user, actor=actor)

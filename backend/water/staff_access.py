@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -11,13 +13,18 @@ from django.utils import timezone
 from .access_requests import ResidentAccessRequest
 from .access_workflow import (
     approve_access_request,
+    end_portal_grant,
     end_resident_access,
     issue_access_password_reset,
+    issue_grant_password_reset,
     reject_access_request,
     revoke_invite,
     revoke_password_reset,
 )
-from .models import Account, ResidentAccess, ResidentInvite, ResidentPasswordReset
+from .models import Account, Person, ResidentAccess, ResidentInvite, ResidentPasswordReset
+from .portal import issue_granular_invite
+from .portal_permissions import PortalGrant
+from .resident_models import ResidentIdentity
 from .staff_workspace import _base_context
 
 
@@ -34,6 +41,56 @@ class AccessRequestApproveForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["account"].queryset = Account.objects.filter(archived=False).order_by("plot", "number", "id")
+
+
+class PersonCreateForm(forms.ModelForm):
+    class Meta:
+        model = Person
+        fields = ("full_name", "email", "phone", "notes")
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if email and Person.objects.filter(email__iexact=email, archived=False).exists():
+            raise forms.ValidationError("Человек с таким email уже есть в закрытом реестре. Выберите существующую карточку.")
+        return email
+
+
+class GranularInviteForm(forms.Form):
+    person = forms.ModelChoiceField(label="Житель", queryset=Person.objects.none())
+    account = forms.ModelChoiceField(label="Лицевой счёт", queryset=Account.objects.none())
+    email = forms.EmailField(label="Email для одноразового приглашения")
+    basis = forms.CharField(
+        label="Проверенное основание", max_length=300,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    can_view_account = forms.BooleanField(label="Видеть участок и базовые данные", required=False, initial=True)
+    can_view_finance = forms.BooleanField(label="Видеть начисления и оплаты", required=False)
+    can_submit_water = forms.BooleanField(label="Передавать показания воды", required=False)
+    can_view_documents = forms.BooleanField(label="Видеть документы лицевого счёта", required=False)
+    can_use_appeals = forms.BooleanField(label="Создавать и читать свои обращения", required=False)
+    can_represent = forms.BooleanField(label="Совершать представительские действия", required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["person"].queryset = Person.objects.filter(archived=False).order_by("full_name", "id")
+        self.fields["account"].queryset = Account.objects.filter(archived=False).order_by("plot", "number", "id")
+
+    def clean(self):
+        data = super().clean()
+        if any(data.get(name) for name in (
+            "can_view_finance", "can_submit_water", "can_view_documents", "can_use_appeals", "can_represent",
+        )) and not data.get("can_view_account"):
+            self.add_error("can_view_account", "Специальные права требуют базового доступа к участку.")
+        person = data.get("person")
+        account = data.get("account")
+        if person and account:
+            today = timezone.localdate()
+            if PortalGrant.objects.filter(person=person, account=account, starts__lte=today).filter(
+                Q(ends__isnull=True) | Q(ends__gt=today)
+            ).exists():
+                self.add_error("account", "Для этого жителя уже действует явный доступ к выбранному счёту.")
+        return data
 
 
 class AccessRequestRejectForm(forms.Form):
@@ -87,6 +144,17 @@ def _can_manage_access(user):
     return user.is_superuser or all(user.has_perm(permission) for permission in required)
 
 
+def _can_issue_granular_invite(user):
+    return _can_review_requests(user) and _can(user, "water.add_residentinvite")
+
+
+def _can_manage_grants(user):
+    return user.is_superuser or (
+        _can_manage_access(user)
+        and user.has_perm("water.view_portalgrant")
+    )
+
+
 def _require_workspace(request):
     if not request.user.is_staff or not (
         _can_review_requests(request.user) or _can_manage_access(request.user)
@@ -121,6 +189,7 @@ def access_dashboard(request):
         "can_review_access_requests": can_review,
         "can_manage_access": can_manage,
         "can_approve_access_requests": can_review and _can(request.user, "water.add_residentinvite"),
+        "can_issue_granular_invite": _can_issue_granular_invite(request.user),
         "q": q,
         "request_state": request_state,
         "access_state": access_state,
@@ -146,10 +215,13 @@ def access_dashboard(request):
         today = timezone.localdate()
         now = timezone.now()
         accesses = ResidentAccess.objects.select_related("user", "account")
+        grants = PortalGrant.objects.select_related("account", "person") if _can_manage_grants(request.user) else PortalGrant.objects.none()
         if access_state == "active":
             accesses = accesses.filter(starts__lte=today).filter(Q(ends__isnull=True) | Q(ends__gt=today))
+            grants = grants.filter(starts__lte=today).filter(Q(ends__isnull=True) | Q(ends__gt=today))
         elif access_state == "ended":
             accesses = accesses.filter(ends__lte=today)
+            grants = grants.filter(ends__lte=today)
         if q:
             accesses = accesses.filter(
                 Q(user__username__icontains=q)
@@ -157,13 +229,26 @@ def access_dashboard(request):
                 | Q(account__number__icontains=q)
                 | Q(account__plot__icontains=q)
             )
+            grant_filter = Q(account__number__icontains=q) | Q(account__plot__icontains=q)
+            if can_review:
+                grant_filter |= Q(person__full_name__icontains=q) | Q(person__email__icontains=q)
+            grants = grants.filter(grant_filter)
+        active_legacy_count = ResidentAccess.objects.filter(starts__lte=today).filter(
+            Q(ends__isnull=True) | Q(ends__gt=today)
+        ).count()
+        active_grant_count = 0
+        if _can_manage_grants(request.user):
+            active_grant_count = PortalGrant.objects.filter(starts__lte=today).filter(
+                Q(ends__isnull=True) | Q(ends__gt=today)
+            ).count()
         context.update({
-            "active_access_count": ResidentAccess.objects.filter(starts__lte=today)
-            .filter(Q(ends__isnull=True) | Q(ends__gt=today)).count(),
+            "active_access_count": active_legacy_count + active_grant_count,
             "accesses": list(accesses.order_by("ends", "account__plot", "account__number", "id")[:40]),
+            "grants": list(grants.order_by("ends", "account__plot", "account__number", "id")[:40]),
+            "can_see_grant_person": can_review,
             "active_invites": list(
                 ResidentInvite.objects.filter(used_at__isnull=True, revoked=False, expires_at__gt=now)
-                .select_related("account")
+                .select_related("account", "person")
                 .order_by("expires_at", "id")[:30]
             ),
             "active_resets": list(
@@ -176,6 +261,113 @@ def access_dashboard(request):
         })
 
     return TemplateResponse(request, "water/work/access/dashboard.html", context)
+
+
+def person_create_for_access(request):
+    if not _can_issue_granular_invite(request.user) or not _can(request.user, "water.add_person"):
+        raise PermissionDenied
+    form = PersonCreateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        person = form.save(commit=False)
+        person._history_user = request.user
+        person._change_reason = "Житель добавлен из процесса выдачи доступа"
+        person.save()
+        messages.success(request, "Карточка жителя создана. Теперь выберите счёт и права.")
+        query = urlencode({"person": person.pk, "email": person.email or ""})
+        return HttpResponseRedirect(f'{reverse("staff_workspace:access_invite")}?{query}')
+    context = _base_context(request, section="access")
+    context.update({"form": form})
+    return TemplateResponse(request, "water/work/access/person.html", context)
+
+
+def granular_invite_create(request):
+    if not _can_issue_granular_invite(request.user):
+        raise PermissionDenied
+    initial = {}
+    if request.method != "POST":
+        person_id = request.GET.get("person")
+        if person_id and Person.objects.filter(pk=person_id, archived=False).exists():
+            initial["person"] = person_id
+        if request.GET.get("email"):
+            initial["email"] = request.GET.get("email")
+    form = GranularInviteForm(request.POST or None, initial=initial)
+    invite_url = None
+    invite = None
+    if request.method == "POST" and form.is_valid():
+        try:
+            invite, raw = issue_granular_invite(
+                form.cleaned_data["account"],
+                form.cleaned_data["person"],
+                form.cleaned_data["email"],
+                form.cleaned_data["basis"],
+                actor=request.user,
+                can_view_account=form.cleaned_data["can_view_account"],
+                can_view_finance=form.cleaned_data["can_view_finance"],
+                can_submit_water=form.cleaned_data["can_submit_water"],
+                can_view_documents=form.cleaned_data["can_view_documents"],
+                can_use_appeals=form.cleaned_data["can_use_appeals"],
+                can_represent=form.cleaned_data["can_represent"],
+            )
+        except ValidationError as error:
+            form.add_error(None, "; ".join(error.messages))
+        else:
+            invite_url = request.build_absolute_uri(reverse("resident_invite", args=[raw]))
+            messages.success(
+                request,
+                "Одноразовое приглашение создано. Права появятся только после активации жителем.",
+            )
+    context = _base_context(request, section="access")
+    context.update({"form": form, "invite_url": invite_url, "invite": invite})
+    return TemplateResponse(request, "water/work/access/invite.html", context)
+
+
+def grant_detail(request, grant_id):
+    _require_access_management(request)
+    if not _can_manage_grants(request.user):
+        raise PermissionDenied
+    grant = get_object_or_404(PortalGrant.objects.select_related("person", "account", "verified_by"), pk=grant_id)
+    identity = ResidentIdentity.objects.select_related("user").filter(person=grant.person).first()
+    end_form = EndAccessForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "end" else None,
+        access=grant,
+    )
+    reset_url = None
+    if request.method == "POST":
+        action = request.POST.get("action") or ""
+        try:
+            if action == "end":
+                if not _can(request.user, "water.change_portalgrant"):
+                    raise PermissionDenied
+                if end_form.is_valid():
+                    end_portal_grant(grant.pk, ends_on=end_form.cleaned_data["ends_on"], actor=request.user)
+                    messages.success(request, "Доступ завершён датой; запись и история сохранены.")
+                    return HttpResponseRedirect(reverse("staff_workspace:grant_detail", args=[grant.pk]))
+            elif action == "reset":
+                if not _can(request.user, "water.add_residentpasswordreset"):
+                    raise PermissionDenied
+                _reset, raw = issue_grant_password_reset(grant.pk, actor=request.user)
+                reset_url = request.build_absolute_uri(reverse("resident_password_reset", args=[raw]))
+                messages.success(request, "Создана одноразовая ссылка восстановления. Она показывается только сейчас.")
+            else:
+                messages.error(request, "Неизвестное действие с доступом.")
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+    grant.refresh_from_db()
+    identity = ResidentIdentity.objects.select_related("user").filter(person=grant.person).first()
+    context = _base_context(request, section="access")
+    context.update({
+        "grant": grant,
+        "identity": identity,
+        "end_form": end_form,
+        "reset_url": reset_url,
+        "can_see_person": _can_review_requests(request.user),
+        "can_end_access": _can(request.user, "water.change_portalgrant") and grant.ends is None,
+        "can_issue_reset": bool(identity) and _can(request.user, "water.add_residentpasswordreset") and grant.ends is None,
+        "resets": list(
+            ResidentPasswordReset.objects.filter(user=identity.user).order_by("-id")[:12]
+        ) if identity else [],
+    })
+    return TemplateResponse(request, "water/work/access/grant.html", context)
 
 
 def request_detail(request, request_id):
@@ -327,7 +519,10 @@ def revoke_reset_view(request, reset_id):
 
 
 workspace_access = admin.site.admin_view(access_dashboard)
+workspace_access_person_create = admin.site.admin_view(person_create_for_access)
+workspace_access_invite = admin.site.admin_view(granular_invite_create)
 workspace_access_request = admin.site.admin_view(request_detail)
 workspace_access_detail = admin.site.admin_view(access_detail)
+workspace_grant_detail = admin.site.admin_view(grant_detail)
 workspace_access_revoke_invite = admin.site.admin_view(revoke_invite_view)
 workspace_access_revoke_reset = admin.site.admin_view(revoke_reset_view)

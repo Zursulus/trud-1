@@ -7,6 +7,7 @@
     <h1>Доступ жителей</h1>
     <p>Заявки, приглашения, действующие доступы и восстановление пароля — с раздельной границей ПД.</p>
   </div>
+  {% if can_issue_granular_invite %}<a class="ws-primary" href="{% url 'staff_workspace:access_invite' %}">Выдать доступ</a>{% endif %}
 </section>
 
 <div class="ws-summary-grid">
@@ -65,12 +66,21 @@
     <a href="?access_state=ended&request_state={{ request_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if access_state == 'ended' %} aria-current="page"{% endif %}>Завершённые</a>
     <a href="?access_state=all&request_state={{ request_state }}{% if q %}&q={{ q|urlencode }}{% endif %}"{% if access_state == 'all' %} aria-current="page"{% endif %}>Все</a>
   </div>
-  {% if accesses %}
+  {% if grants or accesses %}
   <div class="ws-result-list">
+    {% for grant in grants %}
+    <a class="ws-result" href="{% url 'staff_workspace:grant_detail' grant.pk %}">
+      <div>
+        <span class="ws-result-type">Точечные права{% if grant.ends %} · завершён {{ grant.ends|date:'d.m.Y' }}{% else %} · действует{% endif %}</span>
+        <strong>{{ grant.account.number|default:'Без номера' }} · {{ grant.account.plot }}</strong>
+        <p>{% if can_see_grant_person %}{{ grant.person.full_name }} · {% endif %}Права: базовые{% if grant.can_view_finance %}, финансы{% endif %}{% if grant.can_submit_water %}, вода{% endif %}{% if grant.can_view_documents %}, документы{% endif %}{% if grant.can_use_appeals %}, обращения{% endif %}{% if grant.can_represent %}, представительство{% endif %}</p>
+      </div><span class="ws-chevron" aria-hidden="true">›</span>
+    </a>
+    {% endfor %}
     {% for access in accesses %}
     <a class="ws-result" href="{% url 'staff_workspace:access_detail' access.pk %}">
       <div>
-        <span class="ws-result-type">{{ access.get_role_display }}{% if access.ends %} · завершён {{ access.ends|date:'d.m.Y' }}{% else %} · действует{% endif %}</span>
+        <span class="ws-result-type">{{ access.get_role_display }} · прежний тип доступа{% if access.ends %} · завершён {{ access.ends|date:'d.m.Y' }}{% else %} · действует{% endif %}</span>
         <strong>{{ access.account.number|default:'Без номера' }} · {{ access.account.plot }}</strong>
         <p>{{ access.user.username }}{% if access.user.email %} · {{ access.user.email }}{% endif %}</p>
       </div><span class="ws-chevron" aria-hidden="true">›</span>
@@ -86,7 +96,7 @@
   <div class="ws-table-wrap" tabindex="0" role="region" aria-label="Активные приглашения">
     <table class="ws-table"><thead><tr><th>Email</th><th>Счёт</th><th>Основание</th><th>До</th><th>Действие</th></tr></thead><tbody>
     {% for invite in active_invites %}<tr>
-      <td>{{ invite.email }}</td><td>{{ invite.account.number|default:'—' }} · {{ invite.account.plot }}</td><td>{{ invite.get_role_display }}</td><td>{{ invite.expires_at|date:'d.m.Y H:i' }}</td>
+      <td>{{ invite.email }}</td><td>{{ invite.account.number|default:'—' }} · {{ invite.account.plot }}</td><td>{% if invite.is_granular %}Точечные права{% if can_review_access_requests %} · {{ invite.basis }}{% endif %}{% else %}{{ invite.get_role_display }}{% endif %}</td><td>{{ invite.expires_at|date:'d.m.Y H:i' }}</td>
       <td>{% if can_revoke_invite %}<form method="post" action="{% url 'staff_workspace:access_revoke_invite' invite.pk %}">{% csrf_token %}<button class="ws-danger-action" type="submit">Отозвать</button></form>{% else %}—{% endif %}</td>
     </tr>{% endfor %}
     </tbody></table>
