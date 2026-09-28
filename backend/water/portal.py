@@ -301,7 +301,7 @@ def register_invite(request, token):
         if request.method == 'POST':
             try:
                 with transaction.atomic():
-                    locked = ResidentInvite.objects.select_for_update().select_related(
+                    locked = ResidentInvite.objects.select_for_update(of=('self',)).select_related(
                         'account', 'person', 'verified_by',
                     ).get(pk=invite.pk)
                     user = User.objects.select_for_update().get(pk=existing.pk)
@@ -343,7 +343,7 @@ def register_invite(request, token):
     if request.method == 'POST' and form.is_valid():
         try:
             with transaction.atomic():
-                locked = ResidentInvite.objects.select_for_update().select_related(
+                locked = ResidentInvite.objects.select_for_update(of=('self',)).select_related(
                     'account', 'person', 'verified_by',
                 ).get(pk=invite.pk)
                 if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
