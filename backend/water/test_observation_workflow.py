@@ -53,6 +53,8 @@ class ObservationWorkflowTests(MFAAccessMixin, TestCase):
 
     def test_resident_who_is_line_senior_skips_own_line_review(self):
         ControllerLineAccess.objects.filter(user=self.senior, group=self.group).delete()
+        self.resident.is_staff = True
+        self.resident.save(update_fields=['is_staff'])
         self.resident.user_permissions.add(Permission.objects.get(
             content_type__app_label='water', codename='use_controller_workspace',
         ))
