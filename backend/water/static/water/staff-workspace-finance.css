@@ -6,6 +6,7 @@
 .ws-finance-form p { margin: 0 0 14px; }
 .ws-finance-form label { display: block; margin-bottom: 6px; color: var(--ws-muted); font-size: 13px; font-weight: 700; }
 .ws-finance-form input, .ws-finance-form select, .ws-finance-form textarea { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #cbd3dd; border-radius: 10px; background: #fff; color: var(--ws-text); font: inherit; }
+.ws-finance-form input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; border-radius: 4px; vertical-align: middle; }
 .ws-finance-form textarea { min-height: 92px; resize: vertical; }
 .ws-finance-form input:focus, .ws-finance-form select:focus, .ws-finance-form textarea:focus { outline: none; border-color: var(--ws-brand); box-shadow: 0 0 0 3px rgba(36,91,71,.12); }
 .ws-finance-form .errorlist { margin: 0 0 8px; padding-left: 20px; color: var(--ws-danger); }
