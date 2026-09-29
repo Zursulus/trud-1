@@ -75,7 +75,17 @@ class ResidentPortalUXTests(TestCase):
         response = self.client.get('/admin/cabinet/login/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'только необходимые технические cookies')
+        self.assertContains(response, 'Служебный вход')
+        self.assertContains(response, '/admin/login/?next=/work/')
         self.assertNotContains(response, 'Принять все cookies')
+
+    def test_staff_flag_keeps_explicit_resident_access_available(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.login()
+        response = self.client.get('/admin/cabinet/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Садовая, 42')
 
     def test_security_page_keeps_cookie_policy_and_password_action_clear(self):
         self.login()
