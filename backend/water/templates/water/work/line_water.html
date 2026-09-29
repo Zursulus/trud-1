@@ -1,0 +1,126 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Показания линии{% endblock %}
+{% block content %}
+<section class="ws-page-head ws-page-head-compact">
+  <div>
+    <p class="ws-eyebrow">Вода</p>
+    <h1>Показания линии</h1>
+    <p>{{ selected_date|date:'d.m.Y' }} · доступные линии и счётчики уже выбраны.</p>
+  </div>
+</section>
+
+<details class="ws-date-switch">
+  <summary>Нужна другая дата?</summary>
+  <form method="get" class="ws-date-switch-form">
+    <label for="{{ date_form.date.id_for_label }}">Дата показаний</label>
+    {{ date_form.date }}
+    {{ date_form.date.errors }}
+    <button type="submit" class="ws-secondary">Показать</button>
+  </form>
+</details>
+
+{% if has_groups %}
+  {% if resident_submissions %}
+  <section class="ws-section" aria-labelledby="resident-review-title">
+    <div class="ws-section-head">
+      <h2 id="resident-review-title">Ждут вашей сверки</h2>
+    </div>
+    <div class="ws-review-list">
+      {% for submission in resident_submissions %}
+      <form method="post" class="ws-review-card">
+        {% csrf_token %}
+        <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+        <input type="hidden" name="review_submission" value="{{ submission.pk }}">
+        <div class="ws-review-value">
+          <strong>{{ submission.meter.account.number|default:submission.meter.account.pk }} · {{ submission.meter.serial }}</strong>
+          <span>{{ submission.value|floatformat:3 }} м³ · {{ submission.date|date:'d.m.Y' }}</span>
+        </div>
+        <details class="ws-review-comment">
+          <summary>Добавить комментарий</summary>
+          <label class="ws-visually-hidden" for="review-comment-{{ submission.pk }}">Комментарий</label>
+          <input id="review-comment-{{ submission.pk }}" type="text" name="line_review_comment" maxlength="500" placeholder="Комментарий (необязательно)">
+        </details>
+        <div class="ws-review-actions">
+          <button type="submit" name="decision" value="confirm" class="ws-primary">Подтвердить</button>
+          <button type="submit" name="decision" value="flag" class="ws-warning-button">Есть расхождение</button>
+        </div>
+      </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <form method="post" class="ws-line-form">
+    {% csrf_token %}
+    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+
+    {% for item in groups %}
+    <section class="ws-line-card">
+      <header class="ws-line-head">
+        <div>
+          <p class="ws-eyebrow">Линия</p>
+          <h2>{{ item.group.name }}</h2>
+          <p>{{ item.group.node.name }}</p>
+        </div>
+      </header>
+
+      {% if item.rows %}
+        <div class="ws-meter-list">
+        {% for row in item.rows %}
+          <div class="ws-meter-row{% if row.is_line %} ws-meter-row-control{% endif %}">
+            <div class="ws-meter-copy">
+              {% if row.is_line %}<span class="ws-meter-badge">Контрольный</span>{% endif %}
+              <strong>{{ row.label }}</strong>
+              {% if row.previous %}
+                <span>Было: {{ row.previous.value|floatformat:3 }} м³ · {{ row.previous.date|date:'d.m.Y' }}</span>
+              {% else %}
+                <span>Первое показание</span>
+              {% endif %}
+              {% if row.pending %}
+                <span class="ws-meter-status ws-meter-status-pending">Уже отправлено: {{ row.pending.value|floatformat:3 }} м³</span>
+              {% elif row.approved %}
+                <span class="ws-meter-status ws-meter-status-ok">Уже принято: {{ row.approved.value|floatformat:3 }} м³</span>
+              {% endif %}
+            </div>
+            <div class="ws-reading-field">
+              <label for="value-{{ row.meter.pk }}">Новое показание, м³</label>
+              <input
+                id="value-{{ row.meter.pk }}"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.001"
+                name="value_{{ row.meter.pk }}"
+                value="{{ row.input_value }}"
+                placeholder="Введите значение"
+              >
+            </div>
+            {% if row.error %}<div class="ws-meter-error">{{ row.error }}</div>{% endif %}
+          </div>
+        {% endfor %}
+        </div>
+      {% else %}
+        <div class="ws-empty">На эту дату у линии нет доступных счётчиков.</div>
+      {% endif %}
+
+      <details class="ws-balance-details">
+        <summary>Предварительный баланс</summary>
+        <div class="ws-balance-grid">
+          <div><span>Контрольный расход</span><strong>{% if item.summary.line_volume is not None %}{{ item.summary.line_volume|floatformat:3 }} м³{% else %}—{% endif %}</strong></div>
+          <div><span>Сумма участков</span><strong>{% if item.summary.individual_volume is not None %}{{ item.summary.individual_volume|floatformat:3 }} м³{% else %}—{% endif %}</strong></div>
+          <div><span>Разница</span><strong>{% if item.summary.difference is not None %}{{ item.summary.difference|floatformat:3 }} м³{% if item.summary.difference_percent is not None %} · {{ item.summary.difference_percent|floatformat:2 }}%{% endif %}{% else %}—{% endif %}</strong></div>
+        </div>
+        {% if not item.summary.complete %}<p class="ws-balance-note">Баланс появится автоматически, когда будут два последовательных показания нужных счётчиков.{% if item.summary.missing_count %} Не хватает данных: {{ item.summary.missing_count }}.{% endif %}</p>{% endif %}
+      </details>
+    </section>
+    {% endfor %}
+
+    <button type="submit" class="ws-primary ws-line-submit">Сохранить и отправить на проверку</button>
+  </form>
+{% else %}
+  <section class="ws-empty">
+    <strong>На эту дату за вами нет линии</strong>
+    <p>Если это ошибка, обратитесь к администратору.</p>
+  </section>
+{% endif %}
+{% endblock %}
