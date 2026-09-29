@@ -25,7 +25,7 @@ def approve_access_request(request_id, *, account, email, role, decision_note, a
     note = _required_note(decision_note)
     email = (email or '').strip().lower()
     active_matches = User.objects.filter(email__iexact=email, is_active=True).count()
-    if active_matches > 1:
+    if not locked.requester_user_id and active_matches > 1:
         raise ValidationError(
             'Этот email связан с несколькими активными учётными записями. '
             'Сначала устраните неоднозначность или укажите email конкретного кабинета.'
