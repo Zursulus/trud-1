@@ -53,6 +53,7 @@
   <form method="post" class="ws-line-form">
     {% csrf_token %}
     <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+    <h2 class="ws-visually-hidden">Мои линии</h2>
 
     {% for item in groups %}
     <section class="ws-line-card">
