@@ -276,7 +276,9 @@ def register_invite(request, token):
     except UnicodeEncodeError as error:
         raise Http404 from error
     invite = get_object_or_404(
-        ResidentInvite.objects.select_related('account', 'person', 'verified_by'),
+        ResidentInvite.objects.select_related(
+            'account', 'person', 'verified_by', 'access_request__requester_user',
+        ),
         token_hash=digest,
     )
     if invite.revoked or invite.used_at or invite.expires_at <= timezone.now() or invite.account.archived:
@@ -284,14 +286,34 @@ def register_invite(request, token):
     if invite.is_granular and (invite.person.archived or not invite.verified_by_id):
         return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
 
-    email_users = User.objects.filter(email__iexact=invite.email).order_by('pk')
-    if email_users.exists():
-        existing_users = email_users.filter(is_active=True)
-        if email_users.count() != 1 or existing_users.count() != 1:
-            return TemplateResponse(request, 'water/portal/invite_existing.html', {
-                'invite': invite, 'ambiguous': True,
-            }, status=409)
-        existing = existing_users.first()
+    access_request = getattr(invite, 'access_request', None)
+    bound_user = (
+        access_request.requester_user
+        if access_request and access_request.requester_user_id
+        else None
+    )
+    existing = None
+    if bound_user is not None:
+        if not bound_user.is_active:
+            return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
+        existing = bound_user
+    else:
+        active_users = User.objects.filter(email__iexact=invite.email, is_active=True).order_by('pk')
+        if active_users.exists():
+            if (
+                request.user.is_authenticated
+                and request.user.is_active
+                and (request.user.email or '').strip().lower() == invite.email.lower()
+            ):
+                existing = request.user
+            elif active_users.count() == 1:
+                existing = active_users.first()
+            else:
+                return TemplateResponse(request, 'water/portal/invite_existing.html', {
+                    'invite': invite, 'ambiguous': True,
+                }, status=409)
+
+    if existing is not None:
         if not request.user.is_authenticated:
             return TemplateResponse(request, 'water/portal/invite_existing.html', {'invite': invite})
         if request.user.pk != existing.pk:
@@ -302,12 +324,26 @@ def register_invite(request, token):
             try:
                 with transaction.atomic():
                     locked = ResidentInvite.objects.select_for_update(of=('self',)).select_related(
-                        'account', 'person', 'verified_by',
+                        'account', 'person', 'verified_by', 'access_request',
                     ).get(pk=invite.pk)
                     user = User.objects.select_for_update().get(pk=existing.pk)
                     if locked.revoked or locked.used_at or locked.expires_at <= timezone.now() or locked.account.archived:
                         return TemplateResponse(request, 'water/portal/invite_invalid.html', status=410)
-                    if not user.is_active or user.email.lower() != locked.email.lower():
+                    locked_request = getattr(locked, 'access_request', None)
+                    locked_bound_user_id = (
+                        locked_request.requester_user_id
+                        if locked_request and locked_request.requester_user_id
+                        else None
+                    )
+                    identity_matches = (
+                        user.is_active
+                        and (
+                            user.pk == locked_bound_user_id
+                            if locked_bound_user_id
+                            else user.email.lower() == locked.email.lower()
+                        )
+                    )
+                    if not identity_matches:
                         return TemplateResponse(request, 'water/portal/invite_existing.html', {
                             'invite': locked, 'ambiguous': True,
                         }, status=409)
