@@ -14,7 +14,7 @@
   <div class="ws-section-head"><h2 id="attention-title">Ждёт вас</h2></div>
   <div class="ws-action-list">
     {% for item in attention %}
-      <a class="ws-action-row" href="{{ item.url }}">
+      <a class="ws-action-row" href="{% if can_use_controller_workspace and item.label == 'Наблюдения жителей на сверке' %}{% url 'staff_workspace:water_line' %}{% else %}{{ item.url }}{% endif %}">
         <span>{{ item.label }}</span>
         <strong>{{ item.count }}</strong>
       </a>
