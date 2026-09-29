@@ -140,12 +140,9 @@ class StaffWorkspaceWaterTests(TestCase):
         self.assertNotContains(response, "Ждут проверки старшего линии")
         self.assertNotContains(response, "Секретный Контакт")
 
-    def test_controller_water_entry_goes_directly_to_simple_line_workspace(self):
+    def test_controller_water_entry_renders_simple_line_workspace_directly(self):
         self.login(self.controller)
         response = self.client.get("/work/water/")
-        self.assertRedirects(response, "/work/water/line/", fetch_redirect_response=False)
-
-        response = self.client.get("/work/water/line/")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "water/work/line_water.html")
         self.assertContains(response, "Показания линии")
@@ -157,6 +154,10 @@ class StaffWorkspaceWaterTests(TestCase):
         self.assertNotContains(response, "WH-METER-202")
         self.assertNotContains(response, "Секретный Контакт 101")
         self.assertNotContains(response, "+79990000101")
+
+        alias = self.client.get("/work/water/line/")
+        self.assertEqual(alias.status_code, 200)
+        self.assertTemplateUsed(alias, "water/work/line_water.html")
 
     def test_controller_submission_redirect_stays_in_simple_workspace(self):
         self.login(self.controller)
@@ -197,5 +198,5 @@ class StaffWorkspaceWaterTests(TestCase):
         self.login(self.controller)
         with CaptureQueriesContext(connection) as controller_queries:
             response = self.client.get("/work/water/")
-        self.assertEqual(response.status_code, 302)
-        self.assertLessEqual(len(controller_queries), 28, len(controller_queries))
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(controller_queries), 40, len(controller_queries))
