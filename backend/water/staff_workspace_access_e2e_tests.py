@@ -72,7 +72,7 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
             self.assertTrue(page.get_by_role("heading", name="Доступы и полномочия", exact=True).is_visible())
-            self.assertEqual(page.locator(".ws-bottom-nav a").count(), 5)
+            self.assertEqual(page.locator(".ws-bottom-nav a").count(), 3)
 
             page.get_by_role("link", name="Выдать доступ жителю", exact=True).click()
             page.wait_for_load_state("networkidle")
