@@ -41,26 +41,25 @@ def _submission_key(request, email):
     return salted_hmac('resident-access-request-v1', value).hexdigest()
 
 
-def _current_resident_email(request):
+def _current_resident_user(request):
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated or not user.is_active or user.is_staff:
-        return ''
+        return None
     if not has_any_portal_access(user):
-        return ''
-    return (user.email or '').strip().lower()
+        return None
+    return user
 
 
 @csrf_protect
 @never_cache
 def request_access(request):
-    resident_email = _current_resident_email(request)
-    initial = {'email': resident_email} if resident_email else None
+    requester_user = _current_resident_user(request)
+    initial = {'email': requester_user.email} if requester_user and requester_user.email else None
     form = ResidentAccessRequestForm(request.POST or None, initial=initial)
-    if resident_email:
-        form.fields['email'].disabled = True
-        form.fields['email'].help_text = 'Заявка будет привязана к текущему кабинету.'
+    if requester_user:
+        form.fields['email'].help_text = 'Email нужен для связи; заявка уже привязана к текущему кабинету.'
     if request.method == 'POST' and form.is_valid():
-        email = resident_email or form.cleaned_data['email']
+        email = form.cleaned_data['email']
         key = _submission_key(request, email)
         is_honeypot = bool(form.cleaned_data.get('website'))
         recent_count = ResidentAccessRequest.objects.filter(
@@ -76,6 +75,7 @@ def request_access(request):
                 claimed_role=form.cleaned_data['claimed_role'],
                 message=form.cleaned_data['message'],
                 submission_key=key,
+                requester_user=requester_user,
             )
         return HttpResponseRedirect(reverse('resident_access_request_sent'))
     return TemplateResponse(request, 'water/portal/access_request.html', {'form': form})
