@@ -23,6 +23,7 @@
   </div>
 </section>
 
+{% if request.user.is_superuser or can_edit_accounts or can_manage_finance_policy %}
 <details class="ws-service-details">
   <summary>Служебные функции</summary>
   <div class="ws-service-details-body">
@@ -30,4 +31,5 @@
     <a class="ws-secondary" href="{{ admin_url }}">Открыть служебную админку</a>
   </div>
 </details>
+{% endif %}
 {% endblock %}
