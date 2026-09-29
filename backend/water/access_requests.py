@@ -41,6 +41,10 @@ class ResidentAccessRequest(models.Model):
     message = models.TextField('Комментарий', max_length=1000, blank=True)
     submitted_at = models.DateTimeField('Получено', default=timezone.now, editable=False)
     submission_key = models.CharField(max_length=64, db_index=True, editable=False)
+    requester_user = models.ForeignKey(
+        User, verbose_name='Кабинет-заявитель', on_delete=models.PROTECT,
+        related_name='submitted_resident_access_requests', blank=True, null=True, editable=False,
+    )
 
     status = models.CharField('Решение', max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW, editable=False)
     matched_account = models.ForeignKey(
@@ -93,7 +97,9 @@ class ResidentAccessRequest(models.Model):
         if self.pk:
             stored = type(self).objects.get(pk=self.pk)
             immutable = ('full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message', 'submission_key')
-            if any(getattr(stored, field) != getattr(self, field) for field in immutable):
+            if any(getattr(stored, field) != getattr(self, field) for field in immutable) or (
+                stored.requester_user_id != self.requester_user_id
+            ):
                 raise ValidationError('Исходную заявку нельзя переписывать. Создайте служебное решение отдельно.')
             if stored.status != self.STATUS_NEW and any(
                 getattr(stored, field) != getattr(self, field)
