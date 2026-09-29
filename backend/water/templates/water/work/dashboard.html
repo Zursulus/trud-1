@@ -1,21 +1,17 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Главная{% endblock %}
 {% block content %}
-<section class="ws-page-head">
+<section class="ws-page-head ws-page-head-compact">
   <div>
-    <p class="ws-eyebrow">Рабочий стол</p>
-    <h1>Что требует внимания</h1>
-    <p>Сначала действия, затем реестры и технические разделы.</p>
+    <p class="ws-eyebrow">Сегодня</p>
+    <h1>Что нужно сделать</h1>
+    <p>Здесь только ваши текущие действия. Остальные разделы — в «Ещё».</p>
   </div>
-  <a class="ws-primary" href="{% url 'staff_workspace:search' %}">Найти участок или счёт</a>
 </section>
 
-<div id="work-queue">
 {% if attention %}
 <section class="ws-section" aria-labelledby="attention-title">
-  <div class="ws-section-head">
-    <h2 id="attention-title">Требует действия</h2>
-  </div>
+  <div class="ws-section-head"><h2 id="attention-title">Ждёт вас</h2></div>
   <div class="ws-action-list">
     {% for item in attention %}
       <a class="ws-action-row" href="{{ item.url }}">
@@ -27,44 +23,25 @@
 </section>
 {% else %}
 <section class="ws-empty ws-section">
-  <strong>Нет срочных очередей</strong>
-  <p>В доступных вам процессах сейчас нет элементов, требующих отдельного действия.</p>
+  <strong>Срочных действий нет</strong>
+  <p>Новые задачи появятся здесь автоматически.</p>
 </section>
 {% endif %}
-</div>
 
-<section class="ws-section" aria-labelledby="quick-title">
-  <div class="ws-section-head"><h2 id="quick-title">Быстрый доступ</h2></div>
-  <div class="ws-card-grid">
-    {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:search' %}">
-      <span class="ws-card-kicker">Поиск</span>
-      <strong>Найти объект</strong>
-      <p>Лицевой счёт, участок, адрес или номер счётчика.</p>
-    </a>
-    <a class="ws-card" href="{% url 'staff_workspace:accounts' %}">
-      <span class="ws-card-kicker">Реестр</span>
-      <strong>Участки и счета</strong>
-      <p>{{ account_count }} доступно в вашем рабочем scope.</p>
-    </a>{% endif %}
-    {% if can_use_controller_workspace %}
-      <a class="ws-card" href="{% url 'water_controller_workspace' %}">
-        <span class="ws-card-kicker">Вода</span>
-        <strong>Мои линии</strong>
-        <p>Внести и сверить показания только по закреплённым линиям.</p>
-      </a>
-    {% elif can_view_water %}
-      <a class="ws-card" href="{% url 'staff_workspace:water' %}">
-        <span class="ws-card-kicker">Вода</span>
-        <strong>Работа с водой</strong>
-        <p>Доступные действия и данные ограничены вашим scope.</p>
-      </a>
-    {% endif %}
-  </div>
+{% if can_use_controller_workspace %}
+<section class="ws-section" aria-labelledby="routine-title">
+  <div class="ws-section-head"><h2 id="routine-title">Обычная работа</h2></div>
+  <a class="ws-card ws-card-primary" href="{% url 'staff_workspace:water_line' %}">
+    <span class="ws-card-kicker">Вода</span>
+    <strong>Показания моей линии</strong>
+    <p>Линия и доступные счётчики уже выбраны за вас.</p>
+  </a>
 </section>
+{% endif %}
 
-<section class="ws-section ws-muted-panel">
-  <h2>Технические функции</h2>
-  <p>Django Admin сохранён как резервный служебный интерфейс. Ежедневные сценарии постепенно переносятся сюда отдельными vertical slices.</p>
-  <a class="ws-secondary" href="{{ admin_url }}">Открыть служебную админку</a>
+{% if can_view_accounts %}
+<section class="ws-section ws-home-search">
+  <a class="ws-secondary" href="{% url 'staff_workspace:search' %}">Найти участок, счёт или счётчик</a>
 </section>
+{% endif %}
 {% endblock %}
