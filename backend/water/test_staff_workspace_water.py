@@ -140,34 +140,51 @@ class StaffWorkspaceWaterTests(TestCase):
         self.assertNotContains(response, "Ждут проверки старшего линии")
         self.assertNotContains(response, "Секретный Контакт")
 
-    def test_controller_queue_is_strictly_limited_to_assigned_line(self):
+    def test_controller_water_entry_goes_directly_to_simple_line_workspace(self):
         self.login(self.controller)
         response = self.client.get("/work/water/")
+        self.assertRedirects(response, "/work/water/line/", fetch_redirect_response=False)
+
+        response = self.client.get("/work/water/line/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Внести и сверить показания")
+        self.assertTemplateUsed(response, "water/work/line_water.html")
+        self.assertContains(response, "Показания линии")
+        self.assertContains(response, "Ждут вашей сверки")
         self.assertContains(response, "WH-101")
         self.assertContains(response, "WH-METER-101")
-        self.assertContains(response, "Ждут моей сверки")
+        self.assertContains(response, "Введите значение")
         self.assertNotContains(response, "WH-202")
         self.assertNotContains(response, "WH-METER-202")
         self.assertNotContains(response, "Секретный Контакт 101")
         self.assertNotContains(response, "+79990000101")
-        self.assertEqual(response.context["line_review_count"], 1)
-        self.assertEqual(response.context["own_pending_count"], 1)
+
+    def test_controller_submission_redirect_stays_in_simple_workspace(self):
+        self.login(self.controller)
+        response = self.client.post(
+            "/work/water/line/",
+            {
+                "date": self.today.isoformat(),
+                f"value_{self.meter_a.pk}": "125.000",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith("/work/water/line/?date="), response.url)
+        self.assertNotIn("/admin/", response.url)
 
     def test_private_registry_cannot_open_water_hub(self):
         self.login(self.private_user)
         response = self.client.get("/work/water/")
         self.assertEqual(response.status_code, 403)
 
-    def test_controller_dashboard_attention_is_scoped_and_points_to_water_hub(self):
+    def test_controller_dashboard_attention_is_scoped_and_renders_direct_line_link(self):
         self.login(self.controller)
         response = self.client.get("/work/")
         self.assertEqual(response.status_code, 200)
         matching = [item for item in response.context["attention"] if item["label"] == "Наблюдения жителей на сверке"]
         self.assertEqual(len(matching), 1)
         self.assertEqual(matching[0]["count"], 1)
-        self.assertEqual(matching[0]["url"], "/work/water/")
+        self.assertContains(response, 'href="/work/water/line/"')
+        self.assertContains(response, "Линия и доступные счётчики уже выбраны за вас")
 
     def test_water_hub_query_counts_are_bounded(self):
         self.login(self.manager)
@@ -180,5 +197,5 @@ class StaffWorkspaceWaterTests(TestCase):
         self.login(self.controller)
         with CaptureQueriesContext(connection) as controller_queries:
             response = self.client.get("/work/water/")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         self.assertLessEqual(len(controller_queries), 28, len(controller_queries))
