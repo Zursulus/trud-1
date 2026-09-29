@@ -51,14 +51,14 @@ class StaffWorkspaceGovernanceTests(TestCase):
     def test_view_permission_controls_workspace_and_more_card(self):
         self.login(self.no_permission)
         self.assertEqual(self.client.get("/work/governance/").status_code, 403)
-        self.assertNotContains(self.client.get("/work/more/"), "Опросы / правление")
+        self.assertNotContains(self.client.get("/work/more/"), "Опросы правления")
 
         self.login(self.viewer)
         response = self.client.get("/work/governance/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "предварительный")
         self.assertContains(response, "неофициаль")
-        self.assertContains(self.client.get("/work/more/"), "Опросы / правление")
+        self.assertContains(self.client.get("/work/more/"), "Опросы правления")
 
     def test_view_only_staff_cannot_create_edit_or_close_by_direct_post(self):
         self.login(self.viewer)
