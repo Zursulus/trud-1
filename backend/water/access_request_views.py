@@ -8,6 +8,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
 from .access_requests import ResidentAccessRequest
+from .portal_permissions import has_any_portal_access
 
 
 ACCESS_REQUESTS_PER_DAY = 3
@@ -40,12 +41,26 @@ def _submission_key(request, email):
     return salted_hmac('resident-access-request-v1', value).hexdigest()
 
 
+def _current_resident_email(request):
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated or not user.is_active or user.is_staff:
+        return ''
+    if not has_any_portal_access(user):
+        return ''
+    return (user.email or '').strip().lower()
+
+
 @csrf_protect
 @never_cache
 def request_access(request):
-    form = ResidentAccessRequestForm(request.POST or None)
+    resident_email = _current_resident_email(request)
+    initial = {'email': resident_email} if resident_email else None
+    form = ResidentAccessRequestForm(request.POST or None, initial=initial)
+    if resident_email:
+        form.fields['email'].disabled = True
+        form.fields['email'].help_text = 'Заявка будет привязана к текущему кабинету.'
     if request.method == 'POST' and form.is_valid():
-        email = form.cleaned_data['email']
+        email = resident_email or form.cleaned_data['email']
         key = _submission_key(request, email)
         is_honeypot = bool(form.cleaned_data.get('website'))
         recent_count = ResidentAccessRequest.objects.filter(
