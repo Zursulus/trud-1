@@ -90,7 +90,7 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             self.assertTrue(page.get_by_role("heading", name="Финансы", exact=True).is_visible())
             self.assertEqual(page.get_by_text("Секретный E2E Финконтакт").count(), 0)
             self.assertEqual(page.get_by_text("+79996660000").count(), 0)
-            self.assertEqual(page.locator(".ws-bottom-nav a").count(), 5)
+            self.assertEqual(page.locator(".ws-bottom-nav a").count(), 3)
 
             page.goto(f"{self.live_server_url}/work/finance/payments/{payment_id}/", wait_until="networkidle")
             page.get_by_role("button", name="Подтвердить оплату", exact=True).click()

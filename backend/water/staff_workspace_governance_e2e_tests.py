@@ -54,7 +54,7 @@ class StaffWorkspaceGovernanceBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/more/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            page.get_by_role("link", name="Опросы / правление", exact=False).click()
+            page.get_by_role("link", name="Опросы правления", exact=False).click()
             page.wait_for_load_state("networkidle")
             self.assertTrue(page.get_by_role("heading", name="Опросы правления", exact=True).is_visible())
             self.assertTrue(page.get_by_text("неофициальные опросы", exact=False).first.is_visible())

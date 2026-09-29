@@ -38,16 +38,16 @@ class StaffWorkTabBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/search/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            work_tab = page.locator('.ws-bottom-nav a[href="/work/tasks/"]')
-            self.assertTrue(work_tab.is_visible())
-            work_tab.click()
-            page.wait_for_url("**/work/tasks/")
-            page.wait_for_load_state("networkidle")
+            self.assertEqual(page.locator('.ws-bottom-nav a[href="/work/tasks/"]').count(), 0)
+            more_tab = page.locator('.ws-bottom-nav a[href="/work/more/"]')
+            self.assertTrue(more_tab.is_visible())
+
+            response = page.goto(f"{self.live_server_url}/work/tasks/", wait_until="networkidle")
+            self.assertIsNotNone(response)
+            self.assertEqual(response.status, 200)
             self.assertTrue(page.get_by_role("heading", name="Рабочая очередь", exact=True).is_visible())
-            self.assertEqual(
-                page.locator('.ws-bottom-nav a[aria-current="page"]').get_attribute("href"),
-                "/work/tasks/",
-            )
+            self.assertEqual(page.locator('.ws-bottom-nav a[href="/work/tasks/"]').count(), 0)
+            self.assertTrue(more_tab.is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
