@@ -47,12 +47,12 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
     date_hierarchy = 'submitted_at'
     actions = None
     readonly_fields = (
-        'submitted_at', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
+        'submitted_at', 'requester_user', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
         'status', 'matched_account', 'approved_role', 'decision_note', 'decided_by', 'decided_at',
         'invite', 'decision_actions',
     )
     fields = (
-        'submitted_at', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
+        'submitted_at', 'requester_user', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
         'status', 'matched_account', 'approved_role', 'decision_note', 'decided_by', 'decided_at',
         'invite', 'decision_actions',
     )
