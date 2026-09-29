@@ -199,4 +199,4 @@ class StaffWorkspaceWaterTests(TestCase):
         with CaptureQueriesContext(connection) as controller_queries:
             response = self.client.get("/work/water/")
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(controller_queries), 40, len(controller_queries))
+        self.assertLessEqual(len(controller_queries), 30, len(controller_queries))

@@ -33,8 +33,11 @@ def line_workspace(request):
 
 def water_entry(request):
     """Skip the intermediate water dashboard when the user's job is already known."""
-    base = staff_workspace._base_context(request, section="water")
-    if base.get("can_use_controller_workspace") and not can_any(request.user, "water.observation.finalize"):
+    line_senior = (
+        can_any(request.user, "water.line_submission.submit")
+        or can_any(request.user, "water.observation.review_line")
+    )
+    if line_senior and not can_any(request.user, "water.observation.finalize"):
         return line_workspace(request)
     return staff_workspace.water_dashboard(request)
 
