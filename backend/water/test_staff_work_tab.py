@@ -14,16 +14,17 @@ class StaffWorkTabTests(TestCase):
         cls.manager = User.objects.create_user(username="work-tab-manager", is_staff=True)
         cls.manager.groups.add(Group.objects.get(name="Администратор ТСН"))
 
-    def test_work_tab_has_dedicated_route_and_active_state(self):
+    def test_legacy_work_route_remains_available_but_is_not_primary_navigation(self):
         self.client.force_login(self.manager)
 
         response = self.client.get("/work/tasks/")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "water/work/tasks.html")
         self.assertContains(response, "Рабочая очередь")
-        self.assertContains(response, 'href="/work/tasks/" aria-current="page"')
         self.assertContains(response, 'href="/work/documents/"')
+        self.assertNotContains(response, '>Работа</a>')
 
         home = self.client.get("/work/")
         self.assertEqual(home.status_code, 200)
-        self.assertContains(home, 'href="/work/tasks/"')
+        self.assertNotContains(home, 'href="/work/tasks/"')
+        self.assertContains(home, 'href="/work/more/"')

@@ -1,15 +1,35 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Ещё{% endblock %}
 {% block content %}
-<section class="ws-page-head"><div><p class="ws-eyebrow">Рабочая база</p><h1>Ещё</h1><p>Специализированные разделы и служебный интерфейс.</p></div></section>
-<div class="ws-card-grid">
-  {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Вода</strong><p>Показания, проверки, линии и баланс.</p></a>{% endif %}
-  {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Обращения</strong><p>Очередь, диалоги и решения.</p></a>{% endif %}
-  {% if can_use_finance_workspace %}<a class="ws-card" href="{% url 'staff_workspace:finance' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Финансы</strong><p>Начисления, оплаты, распределение и баланс.</p></a>{% endif %}
-  {% if can_use_access_workspace %}<a class="ws-card" href="{% url 'staff_workspace:access' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Доступ жителей</strong><p>Заявки, приглашения, действующие доступы и восстановление.</p></a>{% endif %}
-  {% if can_view_documents %}<a class="ws-card" href="{% url 'staff_workspace:documents' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Документы и контент</strong><p>Документы жителей, публичные документы и новости сайта.</p></a>{% endif %}
-  {% if can_view_governance %}<a class="ws-card" href="{% url 'staff_workspace:governance' %}"><span class="ws-card-kicker">Правление · предварительно</span><strong>Опросы / правление</strong><p>Неофициальные внутренние опросы, результаты, протокол и аудит.</p></a>{% endif %}
-  {% if can_view_security_alerts %}<a class="ws-card" href="{% url 'staff_workspace:security' %}"><span class="ws-card-kicker">Контроль</span><strong>Безопасность{% if security_alert_count %} · {{ security_alert_count }}{% endif %}</strong><p>Подозрительные вложения, спам и состояние антивирусной проверки.</p></a>{% endif %}
-  <a class="ws-card" href="{{ admin_url }}"><span class="ws-card-kicker">Служебное</span><strong>Django Admin</strong><p>Технические справочники и редкие операции.</p></a>
-</div>
+<section class="ws-page-head ws-page-head-compact">
+  <div>
+    <p class="ws-eyebrow">Дополнительно</p>
+    <h1>Ещё</h1>
+    <p>Сюда вынесено то, что нужно не каждый день.</p>
+  </div>
+</section>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Разделы</h2></div>
+  <div class="ws-card-grid">
+    {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:accounts' %}"><span class="ws-card-kicker">Реестр</span><strong>Участки и счета</strong><p>Список доступных вам объектов.</p></a>{% endif %}
+    {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Вода</span><strong>Учёт воды</strong><p>Показания, проверки и баланс.</p></a>{% endif %}
+    {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Обращения</span><strong>Обращения жителей</strong><p>Диалоги, статусы и решения.</p></a>{% endif %}
+    {% if can_use_finance_workspace %}<a class="ws-card" href="{% url 'staff_workspace:finance' %}"><span class="ws-card-kicker">Финансы</span><strong>Начисления и оплаты</strong><p>Периоды, платежи и распределение.</p></a>{% endif %}
+    {% if can_use_access_workspace %}<a class="ws-card" href="{% url 'staff_workspace:access' %}"><span class="ws-card-kicker">Доступ</span><strong>Доступ жителей</strong><p>Заявки, приглашения и восстановление.</p></a>{% endif %}
+    {% if can_view_documents %}<a class="ws-card" href="{% url 'staff_workspace:documents' %}"><span class="ws-card-kicker">Документы</span><strong>Документы и новости</strong><p>Материалы жителей и публикации сайта.</p></a>{% endif %}
+    {% if can_view_governance %}<a class="ws-card" href="{% url 'staff_workspace:governance' %}"><span class="ws-card-kicker">Правление</span><strong>Опросы правления</strong><p>Внутренние опросы, результаты и протоколы.</p></a>{% endif %}
+    {% if can_view_security_alerts %}<a class="ws-card" href="{% url 'staff_workspace:security' %}"><span class="ws-card-kicker">Контроль</span><strong>Безопасность{% if security_alert_count %} · {{ security_alert_count }}{% endif %}</strong><p>Подозрительные вложения и сигналы.</p></a>{% endif %}
+  </div>
+</section>
+
+{% if request.user.is_superuser or can_edit_accounts or can_manage_finance_policy %}
+<details class="ws-service-details">
+  <summary>Служебные функции</summary>
+  <div class="ws-service-details-body">
+    <p>Технический интерфейс для редких административных операций.</p>
+    <a class="ws-secondary" href="{{ admin_url }}">Открыть служебную админку</a>
+  </div>
+</details>
+{% endif %}
 {% endblock %}
