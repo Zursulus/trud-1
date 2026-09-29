@@ -7,6 +7,7 @@ from . import (
     staff_documents,
     staff_finance,
     staff_governance,
+    staff_line_workspace,
     staff_more,
     staff_tasks,
     staff_workspace,
@@ -20,7 +21,8 @@ urlpatterns = [
     path("tasks/", staff_tasks.workspace_tasks, name="tasks"),
     path("search/", staff_workspace.workspace_search, name="search"),
     path("accounts/", staff_workspace.workspace_accounts, name="accounts"),
-    path("water/", staff_workspace.workspace_water, name="water"),
+    path("water/line/", staff_line_workspace.workspace_line, name="water_line"),
+    path("water/", staff_line_workspace.workspace_water_entry, name="water"),
     path("appeals/", staff_appeals.workspace_appeals, name="appeals"),
     path("appeals/<int:appeal_id>/", staff_appeals.workspace_appeal, name="appeal"),
     path(
