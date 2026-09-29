@@ -256,6 +256,8 @@ def controller_workspace(request):
                 status='pending',
                 line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
             )
+            if submission.submitted_by_id == request.user.pk:
+                raise PermissionDenied
             allowed_account_ids = Membership.objects.filter(
                 group_id__in=_active_group_ids(request.user, submission.date),
                 starts__lte=submission.date,
@@ -393,7 +395,9 @@ def controller_workspace(request):
                 group_id__in=_active_group_ids(request.user, selected_date),
                 starts__lte=selected_date,
             ).filter(Q(ends__isnull=True) | Q(ends__gt=selected_date)).values('account_id'),
-        ).select_related('meter__account', 'submitted_by').order_by('meter__account__number', 'id'),
+        ).exclude(submitted_by=request.user).select_related(
+            'meter__account', 'submitted_by'
+        ).order_by('meter__account__number', 'id'),
     }
     return TemplateResponse(
         request,
