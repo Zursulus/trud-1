@@ -75,7 +75,7 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
                 self.assertEqual(bottom_nav.get_by_role("link", name="Участки", exact=True).count(), 0)
                 bottom_nav.get_by_role("link", name="Найти", exact=True).click()
             else:
-                page.locator(".ws-topbar").get_by_role("link", name="Найти", exact=True).click()
+                page.locator(".ws-sidebar").get_by_role("link", name="Найти", exact=True).click()
 
             page.wait_for_url("**/work/search/**")
             page.locator("#workspace-search").fill("Садовая 101")
