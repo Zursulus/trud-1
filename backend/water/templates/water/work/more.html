@@ -3,6 +3,7 @@
 {% block content %}
 <section class="ws-page-head"><div><p class="ws-eyebrow">Рабочая база</p><h1>Ещё</h1><p>Специализированные разделы и служебный интерфейс.</p></div></section>
 <div class="ws-card-grid">
+  {% if roles_guide_available %}<a class="ws-card" href="{% url 'staff_workspace:roles_guide' %}"><span class="ws-card-kicker">Внутренняя инструкция{% if roles_guide_version %} · версия {{ roles_guide_version }}{% endif %}</span><strong>Роли и полномочия</strong><p>Где выдавать роли, что они разрешают и как оформлять совмещённые полномочия.</p></a>{% endif %}
   {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Вода</strong><p>Показания, проверки, линии и баланс.</p></a>{% endif %}
   {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Обращения</strong><p>Очередь, диалоги и решения.</p></a>{% endif %}
   {% if can_use_finance_workspace %}<a class="ws-card" href="{% url 'staff_workspace:finance' %}"><span class="ws-card-kicker">Рабочий процесс</span><strong>Финансы</strong><p>Начисления, оплаты, распределение и баланс.</p></a>{% endif %}
