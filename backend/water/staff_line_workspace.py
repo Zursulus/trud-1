@@ -3,6 +3,7 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 
 from . import controller_workspace, staff_workspace
+from .access_resolver import can_any
 
 
 def _friendly_redirect(response):
@@ -31,12 +32,11 @@ def line_workspace(request):
 
 
 def water_entry(request):
-    """Skip the intermediate water dashboard for a line-only worker."""
-    response = staff_workspace.water_dashboard(request)
-    context = getattr(response, "context_data", {})
-    if context.get("can_use_controller_workspace") and not context.get("can_moderate_submissions"):
-        return HttpResponseRedirect(reverse("staff_workspace:water_line"))
-    return response
+    """Skip the intermediate water dashboard when the user's job is already known."""
+    base = staff_workspace._base_context(request, section="water")
+    if base.get("can_use_controller_workspace") and not can_any(request.user, "water.observation.finalize"):
+        return line_workspace(request)
+    return staff_workspace.water_dashboard(request)
 
 
 workspace_line = admin.site.admin_view(line_workspace)
