@@ -51,6 +51,26 @@ class ObservationWorkflowTests(MFAAccessMixin, TestCase):
         self.assertEqual(observation.source, observation.SOURCE_RESIDENT)
         self.assertEqual(observation.line_review_status, observation.LINE_REVIEW_PENDING)
 
+    def test_resident_who_is_line_senior_skips_own_line_review(self):
+        ControllerLineAccess.objects.filter(user=self.senior, group=self.group).delete()
+        self.resident.is_staff = True
+        self.resident.save(update_fields=['is_staff'])
+        self.resident.user_permissions.add(Permission.objects.get(
+            content_type__app_label='water', codename='use_controller_workspace',
+        ))
+        ControllerLineAccess.objects.create(
+            user=self.resident, group=self.group, starts=self.today - timedelta(days=30),
+        )
+
+        self.assertEqual(self.submit_resident().status_code, 302)
+        observation = ControllerReadingSubmission.objects.get()
+        self.assertEqual(
+            observation.line_review_status,
+            observation.LINE_REVIEW_NOT_REQUIRED,
+        )
+        self.assertIsNone(observation.line_reviewed_by_id)
+        self.assertIn('Самопроверка исключена', observation.line_review_comment)
+
     def test_sources_and_submitters_do_not_overwrite_each_other(self):
         self.submit_resident()
         ControllerReadingSubmission.objects.create(

@@ -36,7 +36,7 @@ class StaffWorkTabTests(TestCase):
         more = self.client.get("/work/more/")
         self.assertEqual(more.status_code, 200)
         self.assertContains(more, "Роли и полномочия")
-        self.assertContains(more, "версия 1.0")
+        self.assertContains(more, "версия 1.1")
         self.assertContains(more, 'href="/work/more/roles-guide/"')
 
         guide = self.client.get("/work/more/roles-guide/")

@@ -170,6 +170,35 @@ class ControllerWorkspaceTests(TestCase):
             submitted_by=self.controller,
         ).exists())
 
+    def test_controller_cannot_review_own_resident_submission(self):
+        own = ControllerReadingSubmission.objects.create(
+            meter=self.individual_meter,
+            date=self.today,
+            value=Decimal('450.000'),
+            source=ControllerReadingSubmission.SOURCE_RESIDENT,
+            status='pending',
+            line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
+            submitted_by=self.other_controller,
+        )
+        # Simulate a historical/pre-policy row without running the pre-save policy.
+        ControllerReadingSubmission.objects.filter(pk=own.pk).update(submitted_by=self.controller)
+        own.refresh_from_db()
+        self.client.force_login(self.controller)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(own, list(response.context['resident_submissions']))
+
+        response = self.client.post('/admin/water/controller-workspace/', {
+            'date': self.today.isoformat(),
+            'review_submission': own.pk,
+            'decision': 'confirm',
+        })
+        self.assertEqual(response.status_code, 403)
+        own.refresh_from_db()
+        self.assertEqual(own.line_review_status, ControllerReadingSubmission.LINE_REVIEW_PENDING)
+        self.assertIsNone(own.line_reviewed_by_id)
+
     def test_package_input_shows_preliminary_line_difference(self):
         self.client.force_login(self.controller)
         response = self.client.post(

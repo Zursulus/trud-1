@@ -4,7 +4,7 @@ from django.template.response import TemplateResponse
 from .staff_workspace import _base_context
 
 
-ROLES_GUIDE_VERSION = "1.0"
+ROLES_GUIDE_VERSION = "1.1"
 ROLES_GUIDE_UPDATED = "29.09.2026"
 
 
