@@ -5,7 +5,7 @@
 <section class="ws-object-head"><div><p class="ws-eyebrow">Person #{{ person.pk }}</p><h1>{{ person.full_name }}</h1><p>{% if identity %}Логин: {{ identity.user.username }}{% if identity.user.is_staff %} · служебный вход включён{% endif %}{% else %}Логин ещё не связан{% endif %}{% if can_view_contacts and person.email %} · {{ person.email }}{% endif %}{% if can_view_contacts and person.phone %} · {{ person.phone }}{% endif %}</p></div></section>
 
 <div class="ws-summary-grid">
-  <div class="ws-summary"><span>Личные доступы</span><strong>{{ grants|length }}</strong><p>Явные права на лицевые счета.</p></div>
+  <div class="ws-summary"><span>Личные доступы</span><strong>{{ grants|length }} V2{% if legacy_accesses %} + {{ legacy_accesses|length }} прежн.{% endif %}</strong><p>Явные права V2{% if legacy_accesses %}; прежние доступы продолжают действовать{% endif %}.</p></div>
   <div class="ws-summary"><span>Служебные назначения</span><strong>{{ assignment_rows|length }}</strong><p>Роли V2 с областью и сроком.</p></div>
   <div class="ws-summary"><span>Членство ТСН</span><strong>{{ tsn_memberships|length }}</strong><p>Бизнес-статус, не permission.</p></div>
   <div class="ws-summary"><span>Правление</span><strong>{{ board_memberships|length }}</strong><p>Отдельный электорат и история.</p></div>
@@ -29,13 +29,13 @@
 
 <section class="ws-section">
   <div class="ws-section-head"><h2>Личные права жителя</h2><span>{{ grants|length }}</span></div>
-  {% if grants %}<div class="ws-result-list">{% for grant in grants %}<a class="ws-result" href="{% url 'staff_workspace:grant_detail' grant.pk %}"><div><span class="ws-result-type">{{ grant.starts|date:'d.m.Y' }} — {% if grant.ends %}{{ grant.ends|date:'d.m.Y' }}{% else %}действует{% endif %}</span><strong>{{ grant.account.number|default:'Без номера' }} · {{ grant.account.plot }}</strong><p>Базовые{% if grant.can_view_finance %} · финансы{% endif %}{% if grant.can_submit_water %} · вода{% endif %}{% if grant.can_view_documents %} · документы{% endif %}{% if grant.can_use_appeals %} · обращения{% endif %}{% if grant.can_represent %} · представительство{% endif %}</p></div><span class="ws-chevron">›</span></a>{% endfor %}</div>{% else %}<div class="ws-empty"><strong>Явных личных прав нет.</strong><p>Владение, членство и identity сами по себе доступ к кабинету не создают.</p></div>{% endif %}
+  {% if grants %}<div class="ws-result-list">{% for grant in grants %}<a class="ws-result" href="{% url 'staff_workspace:grant_detail' grant.pk %}"><div><span class="ws-result-type">{{ grant.starts|date:'d.m.Y' }} — {% if grant.ends %}{{ grant.ends|date:'d.m.Y' }}{% else %}действует{% endif %}</span><strong>{{ grant.account.number|default:'Без номера' }} · {{ grant.account.plot }}</strong><p>Базовые{% if grant.can_view_finance %} · финансы{% endif %}{% if grant.can_submit_water %} · вода{% endif %}{% if grant.can_view_documents %} · документы{% endif %}{% if grant.can_use_appeals %} · обращения{% endif %}{% if grant.can_represent %} · представительство{% endif %}</p></div><span class="ws-chevron">›</span></a>{% endfor %}</div>{% else %}<div class="ws-empty"><strong>Явных личных прав V2 нет.</strong><p>{% if legacy_accesses %}Прежние доступы перечислены ниже и продолжают действовать до миграции.{% else %}Владение, членство и identity сами по себе доступ к кабинету не создают.{% endif %}</p></div>{% endif %}
 </section>
 
 <section class="ws-section">
   <div class="ws-section-head"><h2>Служебные назначения V2</h2><span>{{ assignment_rows|length }}</span></div>
   {% if assignment_rows %}<div class="ws-action-list">{% for row in assignment_rows %}<div class="ws-action-row"><div><span><strong>{{ row.assignment.role_label }} · {{ row.scope_label }}</strong><br><small>{% if row.active %}Действует{% elif row.assignment.revoked_at %}Отозвано {{ row.assignment.revoked_at|date:'d.m.Y H:i' }}{% else %}Не действует сегодня{% endif %} · с {{ row.assignment.starts|date:'d.m.Y' }}{% if row.assignment.ends %} до {{ row.assignment.ends|date:'d.m.Y' }}{% endif %} · {{ row.assignment.basis }}</small><br><small>{{ row.capability_labels|join:' · ' }}</small>{% if row.account_count %}<br><small><strong>Подотчётных счетов сегодня: {{ row.account_count }}</strong>{% for account in row.accounts %} · {{ account.number|default:account.plot }}{% endfor %}</small>{% endif %}</span>{% if row.active and can_manage_assignments %}<details><summary>Настроить функции роли</summary><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="edit_assignment"><input type="hidden" name="assignment_id" value="{{ row.assignment.pk }}">{% for item in row.allowed_capabilities %}<label><input type="checkbox" name="capabilities" value="{{ item.code }}"{% if item.enabled %} checked{% endif %}> {{ item.label }}</label>{% endfor %}<label>Основание изменения<input name="reason" maxlength="300" required></label><button class="ws-primary" type="submit">Сохранить функции</button></form></details>{% endif %}</div>{% if row.active and can_manage_assignments %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="revoke_assignment"><input type="hidden" name="assignment_id" value="{{ row.assignment.pk }}"><input name="revoke-reason" maxlength="300" required placeholder="Причина завершения"><button class="ws-danger-action" type="submit">Завершить</button></form>{% endif %}</div>{% endfor %}</div>{% else %}<div class="ws-empty"><strong>Служебных назначений V2 нет.</strong><p>Житель может оставаться обычным жителем без служебных ролей.</p></div>{% endif %}
-  {% if can_manage_assignments %}<details class="ws-section"><summary>Добавить служебную роль</summary><p>Выберите роль и её реальную область. Для роли линии укажите линию; дома подтянутся из действующей топологии автоматически.</p><form class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="assign">{{ assignment_form.as_p }}<button class="ws-primary" type="submit">Выдать назначение</button></form></details>{% endif %}
+  {% if can_manage_assignments %}<details class="ws-section"><summary>Добавить служебную роль</summary><p>Выберите роль и её реальную область. Для роли линии укажите линию; дома подтянутся из действующей топологии автоматически.</p><form id="assignment-form" class="ws-finance-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="assign">{{ assignment_form.as_p }}<button class="ws-primary" type="submit">Выдать назначение</button></form></details>{% endif %}
 </section>
 
 <section class="ws-section">
@@ -48,4 +48,29 @@
 </section>
 
 {% if legacy_line_accesses or legacy_accesses %}<section class="ws-section ws-muted-panel"><div class="ws-section-head"><h2>Legacy, ожидает миграции</h2></div>{% for item in legacy_line_accesses %}<p><strong>Старший / контролёр (старый тип):</strong> {{ item.group }} · {{ item.starts|date:'d.m.Y' }}{% if item.ends %}—{{ item.ends|date:'d.m.Y' }}{% endif %}</p>{% endfor %}{% for item in legacy_accesses %}<p><strong>Доступ жителя (старый тип):</strong> {{ item.account }} · {{ item.get_role_display }}</p>{% endfor %}</section>{% endif %}
+
+<script>
+(function () {
+  const form = document.getElementById('assignment-form');
+  if (!form) return;
+  const scope = form.querySelector('#id_assign-scope_type');
+  if (!scope) return;
+  const fields = {
+    water_group: form.querySelector('#id_assign-water_group'),
+    supply_node: form.querySelector('#id_assign-supply_node'),
+    account: form.querySelector('#id_assign-account')
+  };
+  function syncScopeFields() {
+    Object.entries(fields).forEach(([type, field]) => {
+      if (!field) return;
+      const visible = scope.value === type;
+      const row = field.closest('p');
+      if (row) row.hidden = !visible;
+      field.disabled = !visible;
+    });
+  }
+  scope.addEventListener('change', syncScopeFields);
+  syncScopeFields();
+}());
+</script>
 {% endblock %}
