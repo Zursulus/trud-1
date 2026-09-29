@@ -3,7 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
-from .models import ResidentAccess, ResidentInvite, ResidentPasswordReset
+from .models import ResidentAccess, ResidentInvite, ResidentPasswordReset, User
 from .portal import issue_invite, issue_password_reset
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
@@ -23,6 +23,13 @@ def approve_access_request(request_id, *, account, email, role, decision_note, a
     if locked.status != ResidentAccessRequest.STATUS_NEW:
         raise ValidationError('По этой заявке решение уже принято.')
     note = _required_note(decision_note)
+    email = (email or '').strip().lower()
+    active_matches = User.objects.filter(email__iexact=email, is_active=True).count()
+    if active_matches > 1:
+        raise ValidationError(
+            'Этот email связан с несколькими активными учётными записями. '
+            'Сначала устраните неоднозначность или укажите email конкретного кабинета.'
+        )
     invite, raw = issue_invite(account, email, role, actor=actor)
     locked.status = ResidentAccessRequest.STATUS_APPROVED
     locked.matched_account = account
