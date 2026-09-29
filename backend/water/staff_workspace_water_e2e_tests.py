@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
+from django.test import Client
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django.utils import timezone
@@ -41,11 +42,12 @@ class StaffWorkspaceWaterBrowserTests(StaticLiveServerTestCase):
 
     def _verified_session_cookie(self, user, name):
         device = TOTPDevice.objects.create(user=user, name=name)
-        self.client.force_login(user)
-        session = self.client.session
+        client = Client()
+        client.force_login(user)
+        session = client.session
         session[DEVICE_ID_SESSION_KEY] = device.persistent_id
         session.save()
-        return self.client.cookies[settings.SESSION_COOKIE_NAME].value
+        return client.cookies[settings.SESSION_COOKIE_NAME].value
 
     def _assert_no_blocking_accessibility(self, page, label):
         results = Axe().run(page).response
