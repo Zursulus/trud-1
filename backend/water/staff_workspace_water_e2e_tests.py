@@ -121,6 +121,7 @@ class StaffWorkspaceWaterBrowserTests(StaticLiveServerTestCase):
 
     def test_water_hub_mobile_chromium_and_webkit(self):
         manager_cookie = self._verified_session_cookie(self.manager, "water hub e2e device")
+        line_cookie = self._verified_session_cookie(self.line_user, "water line e2e device")
         with sync_playwright() as playwright:
             chromium = playwright.chromium.launch(headless=True)
             try:
@@ -132,9 +133,6 @@ class StaffWorkspaceWaterBrowserTests(StaticLiveServerTestCase):
                 self._exercise_manager(webkit, "water hub webkit mobile", manager_cookie)
             finally:
                 webkit.close()
-
-            self.client.logout()
-            line_cookie = self._verified_session_cookie(self.line_user, "water line e2e device")
 
             chromium = playwright.chromium.launch(headless=True)
             try:
