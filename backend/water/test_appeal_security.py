@@ -132,6 +132,9 @@ class AppealAttachmentSecurityTests(TestCase):
         self.assertEqual(alert.kind, SecurityAlert.KIND_MALWARE)
         self.assertEqual(alert.severity, SecurityAlert.SEVERITY_CRITICAL)
         self.assertEqual(ResidentAppeal.objects.count(), 0)
+        command = run.call_args.args[0]
+        self.assertNotIn('--fdpass', command)
+        self.assertIn('--no-summary', command)
 
 
 @override_settings(APPEAL_MALWARE_SCAN_REQUIRED=False, APPEAL_CLAMDSCAN_PATH='')
