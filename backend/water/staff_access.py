@@ -219,7 +219,7 @@ def access_dashboard(request):
     })
 
     if can_review:
-        requests = ResidentAccessRequest.objects.select_related("matched_account", "decided_by", "invite")
+        requests = ResidentAccessRequest.objects.select_related("matched_account", "decided_by", "invite", "requester_user")
         if request_state != "all":
             requests = requests.filter(status=request_state)
         if q:
@@ -420,7 +420,7 @@ def grant_detail(request, grant_id):
 def request_detail(request, request_id):
     _require_request_review(request)
     request_obj = get_object_or_404(
-        ResidentAccessRequest.objects.select_related("matched_account", "decided_by", "invite"),
+        ResidentAccessRequest.objects.select_related("matched_account", "decided_by", "invite", "requester_user"),
         pk=request_id,
     )
     can_change = _can_change_requests(request.user)

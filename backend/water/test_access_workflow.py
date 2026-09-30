@@ -95,6 +95,24 @@ class AccessWorkflowTests(TestCase):
             )
         self.assertEqual(ResidentInvite.objects.count(), 1)
 
+    def test_approval_rejects_ambiguous_active_email_before_creating_invite(self):
+        User.objects.create_user(username='duplicate-one', email=self.request.email, password='test')
+        User.objects.create_user(username='duplicate-two', email=self.request.email, password='test')
+
+        with self.assertRaisesMessage(ValidationError, 'несколькими активными учётными записями'):
+            approve_access_request(
+                self.request.pk,
+                account=self.account,
+                email=self.request.email,
+                role='payer',
+                decision_note='Основание проверено',
+                actor=self.actor,
+            )
+
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status, ResidentAccessRequest.STATUS_NEW)
+        self.assertEqual(ResidentInvite.objects.count(), 0)
+
     def test_rejection_requires_reason_and_is_immutable(self):
         with self.assertRaisesMessage(ValidationError, 'Причина отклонения: обязательно заполнить'):
             reject_access_request(self.request.pk, decision_note='  ', actor=self.actor)

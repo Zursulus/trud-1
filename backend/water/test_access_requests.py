@@ -2,9 +2,11 @@ from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
 from .models import Account, Person, ResidentAccess, ResidentInvite, User
+from .access_workflow import approve_access_request
 from .resident_models import TsnMembership
 
 
@@ -80,11 +82,63 @@ class PublicAccessRequestTests(TestCase):
         with self.assertRaises(ValidationError):
             request_obj.save()
 
+    def test_authenticated_resident_request_is_bound_to_current_cabinet_user(self):
+        resident = User.objects.create_user(username='current-cabinet', password='test-password')
+        ResidentAccess.objects.create(
+            user=resident, account=self.account, role='payer', starts=timezone.localdate(),
+        )
+        self.client.force_login(resident)
+
+        payload = {**self.payload, 'email': 'contact-address@example.test'}
+        response = self.client.post(
+            reverse('resident_access_request'), payload, REMOTE_ADDR='198.51.100.31',
+        )
+        self.assertEqual(response.status_code, 302)
+        request_obj = ResidentAccessRequest.objects.get()
+        self.assertEqual(request_obj.requester_user, resident)
+        self.assertEqual(request_obj.email, payload['email'])
+
     def test_confirmation_page_is_neutral(self):
         response = self.client.get(reverse('resident_access_request_sent'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'не подтверждает наличие записи')
         self.assertNotContains(response, self.account.plot)
+
+
+class InviteDisambiguationTests(TestCase):
+    def test_bound_request_activates_exact_existing_cabinet_despite_duplicate_contact_email(self):
+        first = Account.objects.create(number='INVITE-A', plot='Участок A')
+        second = Account.objects.create(number='INVITE-B', plot='Участок B')
+        resident = User.objects.create_user(username='test333', password='test-password')
+        ResidentAccess.objects.create(
+            user=resident, account=first, role='payer', starts=timezone.localdate(),
+        )
+        duplicate_one = User.objects.create_user(
+            username='technical-one', email='shared@example.test', password='test-password', is_staff=True,
+        )
+        User.objects.create_user(
+            username='technical-two', email='shared@example.test', password='test-password', is_staff=True,
+        )
+        request_obj = ResidentAccessRequest.objects.create(
+            full_name='Тестовый плательщик', email='shared@example.test', phone='',
+            plot_hint='Участок B', claimed_role=ResidentAccessRequest.CLAIM_PAYER,
+            message='', submission_key='bound-request', requester_user=resident,
+        )
+        actor = User.objects.create_user(username='reviewer', is_staff=True)
+        _decided, _invite, raw = approve_access_request(
+            request_obj.pk, account=second, email=request_obj.email, role='payer',
+            decision_note='Основание проверено', actor=actor,
+        )
+        url = reverse('resident_invite', args=[raw])
+
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.client.force_login(duplicate_one)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(resident)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.post(url)
+        self.assertRedirects(response, reverse('resident_account', args=[second.pk]))
+        self.assertTrue(ResidentAccess.objects.filter(user=resident, account=second).exists())
 
 
 class AccessRequestReviewTests(TestCase):
