@@ -4,8 +4,24 @@ from django.template.response import TemplateResponse
 from .staff_workspace import _base_context
 
 
+ROLES_GUIDE_VERSION = "1.0"
+ROLES_GUIDE_UPDATED = "29.09.2026"
+
+
 def more(request):
-    return TemplateResponse(request, "water/work/more.html", _base_context(request, section="more"))
+    context = _base_context(request, section="more")
+    context["roles_guide_version"] = ROLES_GUIDE_VERSION
+    return TemplateResponse(request, "water/work/more.html", context)
+
+
+def roles_guide(request):
+    context = _base_context(request, section="more")
+    context.update({
+        "roles_guide_version": ROLES_GUIDE_VERSION,
+        "roles_guide_updated": ROLES_GUIDE_UPDATED,
+    })
+    return TemplateResponse(request, "water/work/roles_guide.html", context)
 
 
 workspace_more = admin.site.admin_view(more)
+workspace_roles_guide = admin.site.admin_view(roles_guide)

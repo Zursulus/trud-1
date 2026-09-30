@@ -28,3 +28,21 @@ class StaffWorkTabTests(TestCase):
         self.assertEqual(home.status_code, 200)
         self.assertNotContains(home, 'href="/work/tasks/"')
         self.assertContains(home, 'href="/work/more/"')
+
+    def test_internal_roles_guide_is_staff_only_and_linked_from_more(self):
+        anonymous = self.client.get("/work/more/roles-guide/")
+        self.assertEqual(anonymous.status_code, 302)
+
+        self.client.force_login(self.manager)
+        more = self.client.get("/work/more/")
+        self.assertEqual(more.status_code, 200)
+        self.assertContains(more, "Роли и полномочия")
+        self.assertContains(more, "версия 1.0")
+        self.assertContains(more, 'href="/work/more/roles-guide/"')
+
+        guide = self.client.get("/work/more/roles-guide/")
+        self.assertEqual(guide.status_code, 200)
+        self.assertTemplateUsed(guide, "water/work/roles_guide.html")
+        self.assertContains(guide, "17 рабочих ролей")
+        self.assertContains(guide, "Председатель не выбирается")
+        self.assertContains(guide, "Администратор ТСН")
