@@ -38,6 +38,7 @@ TEMPLATES = [{
     'OPTIONS': {'context_processors': [
         'django.template.context_processors.request', 'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
+        'water.mixed_role_context.mixed_role_context',
     ]},
 }]
 if DEBUG and os.environ.get('DJANGO_TEST_SQLITE') == '1':
