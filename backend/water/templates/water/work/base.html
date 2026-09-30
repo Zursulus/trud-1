@@ -25,6 +25,7 @@
       </nav>
       <div class="ws-sidebar-foot">
         <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+        {% if has_resident_access %}<a href="{% url 'resident_dashboard' %}">↔ Личный кабинет</a>{% endif %}
       </div>
     </aside>
 
