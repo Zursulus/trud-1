@@ -12,6 +12,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Разделы</h2></div>
   <div class="ws-card-grid">
+    {% if has_resident_access %}<a class="ws-card" href="{% url 'resident_dashboard' %}"><span class="ws-card-kicker">Личный режим</span><strong>Кабинет жителя</strong><p>Мои участки, показания, платежи, документы и обращения. Служебная роль не отменяет личный доступ.</p></a>{% endif %}
     {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:accounts' %}"><span class="ws-card-kicker">Реестр</span><strong>Участки и счета</strong><p>Список доступных вам объектов.</p></a>{% endif %}
     {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Вода</span><strong>Учёт воды</strong><p>Показания, проверки и баланс.</p></a>{% endif %}
     {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Обращения</span><strong>Обращения жителей</strong><p>Диалоги, статусы и решения.</p></a>{% endif %}
