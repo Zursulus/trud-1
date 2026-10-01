@@ -253,11 +253,10 @@ class AdminResidentContractTests(TestCase):
                 document=SimpleUploadedFile("own.pdf", b"%PDF-1.4\nOwn synthetic content"),
             )
             download = client.get(reverse("staff_workspace:appeal_attachment", args=[own_attachment.pk]))
-            try:
-                self.assertEqual(download.status_code, 200)
-                self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nOwn synthetic content")
-            finally:
-                download.close()
+            self.assertEqual(download.status_code, 200)
+            # Client's streaming wrapper closes the response with DB signals
+            # isolated. A second manual close would close TestCase's transaction.
+            self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nOwn synthetic content")
         self.assertEqual(client.get(reverse("admin_appeal_attachments", args=[foreign.pk])).status_code, 404)
         # An unrelated view scope must not authorize reply on an allowed view.
         assignment = AccessAssignment.objects.get(person=person, role_code="scoped_appeals")

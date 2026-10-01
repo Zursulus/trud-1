@@ -156,7 +156,7 @@ def period_detail(request, period_id):
         "draft_amount": sum((charge.amount for charge in charges if charge.status == "draft"), Decimal("0.00")),
         "can_calculate": _can(request.user, "finance.period.calculate") and period.status not in ("approved", "closed"),
         "can_change_charge": any(charge.can_approve or charge.can_cancel for charge in charges),
-        "can_approve_period": _can(request.user, "finance.period.approve") and period.status == "calculated" and draft_count == 0,
+        "can_approve_period": _can(request.user, "finance.period.approve") and period.status == "calculated" and not Charge.objects.filter(period=period, status="draft").exists(),
         "can_close_period": _can(request.user, "finance.period.close") and period.status == "approved",
     })
     return TemplateResponse(request, "water/work/finance/period.html", context)

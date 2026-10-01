@@ -135,4 +135,5 @@ def allocate_confirmed_payment(*, payment_id, actor):
 
 
 def payment_account_queryset(*, actor):
-    return scoped_records(Account.objects.filter(archived=False), actor, "finance.payment.create", account_field="pk").order_by("plot", "number", "id")
+    accounts = scoped_records(Account.objects.filter(archived=False), actor, "finance.payment.create", account_field="pk")
+    return scoped_records(accounts, actor, "finance.view", account_field="pk").order_by("plot", "number", "id")

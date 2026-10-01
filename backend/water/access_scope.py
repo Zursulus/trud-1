@@ -18,7 +18,7 @@ class ScopeRef:
             if self.object_id is not None:
                 raise ValueError("all scope cannot have object_id")
         elif self.object_id is None:
-                raise ValueError(f"{self.type} scope requires object_id")
+            raise ValueError(f"{self.type} scope requires object_id")
 
 
 def scoped_records(queryset, actor, capability, *, account_field="account_id", person_field=None):

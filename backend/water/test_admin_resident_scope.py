@@ -130,11 +130,8 @@ class ServiceAccountScopeTests(TestCase):
                                         visible_to_residents=False, notes="", change_reason="Forbidden", actor=self.user)
             self.assertEqual(documents[1].history.count(), history_count)
             download = self.client.get(reverse("staff_workspace:account_document_download", args=[documents[0].pk]))
-            try:
-                self.assertEqual(download.status_code, 200)
-                self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nSynthetic private content")
-            finally:
-                download.close()
+            self.assertEqual(download.status_code, 200)
+            self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nSynthetic private content")
 
     def test_access_global_center_and_services_fail_closed_for_scoped_actor(self):
         grant = PortalGrant.objects.create(person=self.person, account=self.b, starts=self.today - timedelta(days=1),
@@ -173,12 +170,9 @@ class ServiceAccountScopeTests(TestCase):
             original_file = item.document.name
             resident_url = reverse("resident_document", args=[self.a.pk, item.pk])
             download = reader.get(resident_url)
-            try:
-                self.assertEqual(download.status_code, 200)
-                self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nExact synthetic document")
-                self.assertIn("private", download["Cache-Control"])
-            finally:
-                download.close()
+            self.assertEqual(download.status_code, 200)
+            self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nExact synthetic document")
+            self.assertIn("private", download["Cache-Control"])
             home_url = f"/admin/cabinet/account/{self.a.pk}/"
             self.assertEqual([x["kind"] for x in reader.get(home_url).context["attention"]], ["document"])
             self.assertEqual(staff.post(reverse("staff_workspace:account_document", args=[item.pk]), {

@@ -68,6 +68,7 @@ class AccountDocumentCreateForm(forms.Form):
         self.fields["account"].queryset = scoped_records(
             Account.objects.filter(archived=False), actor, "documents.account.create", account_field="pk",
         ).order_by("plot", "number", "id")
+        self.fields["account"].queryset = scoped_records(self.fields["account"].queryset, actor, "documents.account.view", account_field="pk")
         self.fields["category"].queryset = DocumentCategory.objects.filter(active=True).order_by("sort_order", "name")
         if not self.is_bound:
             self.fields["published_at"].initial = timezone.localtime().strftime(DATETIME_FORMAT)
