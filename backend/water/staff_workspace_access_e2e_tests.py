@@ -137,3 +137,69 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(ResidentInvite.objects.filter(access_request__in=[self.chromium_request, self.webkit_request]).count(), 2)
         self.assertEqual(ResidentInvite.objects.filter(person__isnull=False).count(), 2)
         self.assertEqual(ResidentAccess.objects.count(), 0)
+
+
+
+class WorkbenchBrowserTests(StaticLiveServerTestCase):
+    def test_panel_desktop_mobile_chromium_webkit(self):
+        from pathlib import Path
+        from django.utils import timezone
+        from .models import LandPlot, Meter, PlotRelation, SupplyNode
+        from .portal_permissions import PortalGrant
+        from .resident_models import ResidentIdentity
+
+        staff = User.objects.create_user(username='panel-browser-admin', is_staff=True, is_superuser=True)
+        person = Person.objects.create(full_name='Тестовый житель панели')
+        resident = User.objects.create_user(username='panel-browser-resident')
+        ResidentIdentity.objects.create(user=resident, person=person, verified_by=staff, basis='E2E')
+        account = Account.objects.create(number='BROWSER-PANEL', plot='Тестовый адрес 2')
+        plot = LandPlot.objects.create(label='Тестовый участок панели', account=account)
+        PlotRelation.objects.create(person=person, plot=plot, role='owner', starts=timezone.localdate(), document='E2E')
+        PortalGrant.objects.create(person=person, account=account, starts=timezone.localdate(), basis='E2E', verified_by=staff)
+        node = SupplyNode.objects.create(name='Тестовый узел панели')
+        Meter.objects.create(serial='BROWSER-METER', kind='individual', node=node, account=account)
+        device = TOTPDevice.objects.create(user=staff, name='panel e2e')
+        self.client.force_login(staff)
+        session = self.client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
+        cookie = self.client.cookies[settings.SESSION_COOKIE_NAME].value
+        artifacts = Path(settings.BASE_DIR) / 'test-artifacts'
+        artifacts.mkdir(exist_ok=True)
+        with sync_playwright() as pw:
+            for engine in ('chromium', 'webkit'):
+                browser = getattr(pw, engine).launch(headless=True)
+                try:
+                    for width in (1440, 390):
+                        context = browser.new_context(viewport={'width': width, 'height': 900})
+                        context.add_cookies([{'name': settings.SESSION_COOKIE_NAME, 'value': cookie, 'url': self.live_server_url}])
+                        context.tracing.start(screenshots=True, snapshots=True)
+                        page = context.new_page()
+                        errors = []
+                        page.on('pageerror', lambda error: errors.append(str(error)))
+                        try:
+                            page.goto(self.live_server_url + '/work/more/')
+                            page.get_by_role('link', name='Новая панель · только просмотр Жители и участки', exact=False).click()
+                            page.wait_for_load_state('networkidle')
+                            self.assertTrue(page.get_by_role('heading', name='Жители и участки', exact=True).is_visible())
+                            page.get_by_label('Адрес, имя, логин или ID').fill('Тестовый адрес 2')
+                            page.get_by_role('button', name='Найти', exact=True).click()
+                            page.wait_for_load_state('networkidle')
+                            page.locator('.wb-results a').first.click()
+                            page.wait_for_load_state('networkidle')
+                            self.assertTrue(page.get_by_text('BROWSER-METER', exact=True).is_visible())
+                            page.locator('.wb-detail a[href^="?kind=person&id=%s&"]' % person.pk).first.click()
+                            page.wait_for_load_state('networkidle')
+                            self.assertTrue(page.get_by_role('heading', name=person.full_name, exact=True).is_visible())
+                            self.assertEqual(page.get_by_label('Адрес, имя, логин или ID').input_value(), 'Тестовый адрес 2')
+                            self.assertTrue(page.get_by_text('BROWSER-METER', exact=True).is_visible())
+                            self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
+                            blocking = [v for v in Axe().run(page).response.get('violations', []) if v.get('impact') in {'serious', 'critical'} and any(t.startswith('wcag') for t in v.get('tags', []))]
+                            self.assertEqual(blocking, [])
+                            self.assertEqual(errors, [])
+                            page.screenshot(path=str(artifacts / f'panel-{engine}-{width}.png'), full_page=True)
+                        finally:
+                            context.tracing.stop(path=str(artifacts / f'panel-{engine}-{width}.zip'))
+                            context.close()
+                finally:
+                    browser.close()

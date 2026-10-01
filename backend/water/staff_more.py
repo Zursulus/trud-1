@@ -3,6 +3,7 @@ from django.template.response import TemplateResponse
 
 from .portal_permissions import has_any_portal_access
 from .staff_workspace import _base_context
+from .staff_workbench import can_use_workbench
 
 
 ROLES_GUIDE_VERSION = "1.1"
@@ -12,6 +13,7 @@ ROLES_GUIDE_UPDATED = "29.09.2026"
 def more(request):
     context = _base_context(request, section="more")
     context["roles_guide_version"] = ROLES_GUIDE_VERSION
+    context["can_use_workbench"] = can_use_workbench(request.user)
     context["has_resident_access"] = has_any_portal_access(request.user)
     return TemplateResponse(request, "water/work/more.html", context)
 
@@ -27,3 +29,4 @@ def roles_guide(request):
 
 workspace_more = admin.site.admin_view(more)
 workspace_roles_guide = admin.site.admin_view(roles_guide)
+
