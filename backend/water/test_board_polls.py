@@ -124,6 +124,7 @@ class BoardPollTests(TestCase):
         response = self.client.get(f'/admin/cabinet/board/poll/{self.poll.pk}/protocol/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('attachment', response['Content-Disposition'])
+        self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4\nboard-test')
         self.assertEqual(protocol.original_name, 'protocol.pdf')
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(f'/admin/cabinet/board/poll/{self.poll.pk}/protocol/').status_code, 403)

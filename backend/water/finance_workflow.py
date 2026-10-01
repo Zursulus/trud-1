@@ -23,7 +23,7 @@ def calculate_billing_period(*, period_id, actor):
 @transaction.atomic
 def approve_charge(*, charge_id, actor):
     _require(actor, "finance.charge.approve")
-    charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
+    charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
     _require(actor, "finance.charge.approve", account_id=charge.account_id)
     if charge.status != "draft":
         raise ValidationError("Изменить статус можно только у черновика начисления.")
@@ -37,7 +37,7 @@ def approve_charge(*, charge_id, actor):
 @transaction.atomic
 def cancel_charge(*, charge_id, actor):
     _require(actor, "finance.charge.cancel")
-    charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
+    charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
     _require(actor, "finance.charge.cancel", account_id=charge.account_id)
     if charge.status != "draft":
         raise ValidationError("Отменить можно только черновик начисления.")
@@ -101,7 +101,7 @@ def create_payment(*, actor, account, paid_on, amount, method, reference="", not
 @transaction.atomic
 def confirm_payment(*, payment_id, actor):
     _require(actor, "finance.payment.confirm")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
     _require(actor, "finance.payment.confirm", account_id=payment.account_id)
     if payment.status != "pending":
         raise ValidationError("Подтвердить можно только оплату, ожидающую проверки.")
@@ -115,7 +115,7 @@ def confirm_payment(*, payment_id, actor):
 @transaction.atomic
 def reverse_payment(*, payment_id, actor):
     _require(actor, "finance.payment.reverse")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
     _require(actor, "finance.payment.reverse", account_id=payment.account_id)
     if payment.status != "confirmed":
         raise ValidationError("Отменить можно только подтверждённую оплату.")
@@ -129,7 +129,7 @@ def reverse_payment(*, payment_id, actor):
 @transaction.atomic
 def allocate_confirmed_payment(*, payment_id, actor):
     _require(actor, "finance.payment.allocate")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
     _require(actor, "finance.payment.allocate", account_id=payment.account_id)
     return allocate_payment(payment, actor=actor)
 

@@ -697,6 +697,22 @@ class PaymentAllocation(RecordedModel):
         verbose_name_plural = '14 · Распределение оплат'
         constraints = [models.UniqueConstraint(fields=['payment', 'charge'], name='payment_charge_unique')]
 
+    def save(self, *args, **kwargs):
+        # All allocation paths serialize on fresh parents before checking sums.
+        # Consistent order: Payment -> Charge -> existing PaymentAllocation.
+        with transaction.atomic():
+            if self.payment_id:
+                try:
+                    self.payment = Payment.objects.select_for_update(of=('self',)).get(pk=self.payment_id)
+                except Payment.DoesNotExist:
+                    raise ValidationError({'payment': 'Выбранная оплата не существует.'}) from None
+            if self.charge_id:
+                try:
+                    self.charge = Charge.objects.select_for_update(of=('self',)).get(pk=self.charge_id)
+                except Charge.DoesNotExist:
+                    raise ValidationError({'charge': 'Выбранное начисление не существует.'}) from None
+            return super().save(*args, **kwargs)
+
     def clean(self):
         if self.payment_id and self.charge_id and self.payment.account_id != self.charge.account_id:
             raise ValidationError('Оплату можно зачесть только на начисления того же лицевого счёта.')

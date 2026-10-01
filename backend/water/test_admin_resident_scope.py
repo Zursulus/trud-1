@@ -5,7 +5,7 @@ from io import StringIO
 import tempfile
 
 from django.contrib.auth.models import Group
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
@@ -16,7 +16,7 @@ from .access_control import AccessAssignment
 from .access_policy import ScopeType
 from .access_workflow import end_portal_grant, update_portal_grant_rights
 from .document_workflow import create_account_document, update_account_document
-from .finance_workflow import approve_charge, cancel_charge, create_payment, confirm_payment, reverse_payment, allocate_confirmed_payment
+from .finance_workflow import approve_billing_period, approve_charge, cancel_charge, create_payment, confirm_payment, reverse_payment, allocate_confirmed_payment
 from .models import Account, AccountDocument, BillingPeriod, BillingPolicy, Charge, DocumentCategory, Payment, PaymentAllocation, Person, User
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
@@ -132,6 +132,67 @@ class ServiceAccountScopeTests(TestCase):
             download = self.client.get(reverse("staff_workspace:account_document_download", args=[documents[0].pk]))
             self.assertEqual(download.status_code, 200)
             self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4\nSynthetic private content")
+
+    def test_disjoint_create_and_view_scopes_reject_hidden_account(self):
+        assignment = AccessAssignment.objects.get(person=self.person, role_code="synthetic_account_services")
+        assignment.capabilities = ["finance.view", "documents.account.view"]
+        assignment.save()
+        capabilities = ["finance.payment.create", "documents.account.create"]
+        AccessAssignment.objects.create(
+            person=self.person, role_code="synthetic_b_create", role_label="Create on B only",
+            allowed_capabilities=capabilities, capabilities=capabilities,
+            scope_type=ScopeType.ACCOUNT.value, scope_object_id=self.b.pk,
+            starts=self.today - timedelta(days=1), basis="Synthetic disjoint authority", granted_by=self.admin,
+        )
+        for url in ("/work/finance/payments/new/", "/work/documents/accounts/new/"):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(list(response.context["form"].fields["account"].queryset), [])
+        payment_response = self.client.post("/work/finance/payments/new/", {
+            "account": self.b.pk, "paid_on": self.today.isoformat(), "amount": "30.00", "method": "bank",
+        })
+        document_response = self.client.post("/work/documents/accounts/new/", {
+            "account": self.b.pk, "category": self.category.pk, "title": "Hidden account document",
+            "document": SimpleUploadedFile("hidden.pdf", b"%PDF-1.4\nSynthetic hidden content"),
+            "published_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "visible_to_residents": "on",
+        })
+        for response in (payment_response, document_response):
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("account", response.context["form"].errors)
+        self.assertEqual((Payment.objects.count(), AccountDocument.objects.count()), (0, 0))
+        self.assertEqual((Payment.history.count(), AccountDocument.history.count()), (0, 0))
+
+    def test_global_period_approval_checks_hidden_drafts(self):
+        capabilities = ["finance.period.approve"]
+        AccessAssignment.objects.create(
+            person=self.person, role_code="synthetic_global_period_approval", role_label="Global period approval",
+            allowed_capabilities=capabilities, capabilities=capabilities, scope_type=ScopeType.ALL.value,
+            starts=self.today - timedelta(days=1), basis="Synthetic global operation", granted_by=self.admin,
+        )
+        period = BillingPeriod.objects.create(starts=self.today - timedelta(days=30), ends=self.today, status="calculated")
+        own = Charge.objects.create(account=self.a, period=period, kind="service", amount=Decimal("100.00"), status="approved")
+        hidden = Charge.objects.create(account=self.b, period=period, kind="service", amount=Decimal("900.00"), status="draft")
+        url = f"/work/finance/periods/{period.pk}/"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item.pk for item in response.context["charges"]], [own.pk])
+        self.assertEqual(response.context["draft_count"], 0)
+        self.assertEqual(response.context["draft_amount"], Decimal("0.00"))
+        self.assertEqual(response.context["approved_amount"], Decimal("100.00"))
+        self.assertFalse(response.context["can_approve_period"])
+        with self.assertRaises(ValidationError):
+            approve_billing_period(period_id=period.pk, actor=self.user)
+        self.assertEqual(self.client.post(url, {"action": "approve_period"}).status_code, 302)
+        period.refresh_from_db()
+        own.refresh_from_db()
+        hidden.refresh_from_db()
+        self.assertEqual((period.status, own.status, hidden.status), ("calculated", "approved", "draft"))
+        self.assertEqual((period.history.count(), own.history.count(), hidden.history.count()), (1, 1, 1))
+        cancel_charge(charge_id=hidden.pk, actor=self.admin)
+        approve_billing_period(period_id=period.pk, actor=self.user)
+        period.refresh_from_db()
+        self.assertEqual((period.status, period.history.count()), ("approved", 2))
+        self.assertEqual(period.history.first().history_user_id, self.user.pk)
 
     def test_access_global_center_and_services_fail_closed_for_scoped_actor(self):
         grant = PortalGrant.objects.create(person=self.person, account=self.b, starts=self.today - timedelta(days=1),

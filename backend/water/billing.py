@@ -317,7 +317,7 @@ def policy_on_date(account, on_date):
 
 @transaction.atomic
 def allocate_payment(payment, *, actor=None):
-    payment = Payment.objects.select_for_update().select_related('account').get(pk=payment.pk)
+    payment = Payment.objects.select_for_update(of=('self',)).select_related('account').get(pk=payment.pk)
     if payment.status != 'confirmed':
         raise ValidationError('Распределять можно только подтверждённую оплату.')
     policy = policy_on_date(payment.account, payment.paid_on)
@@ -332,7 +332,9 @@ def allocate_payment(payment, *, actor=None):
         return [], 'Оплата уже распределена полностью.'
     charges = list(Charge.objects.filter(
         account=payment.account, status='approved', amount__gt=0,
-    ).select_related('period').order_by('period__starts', 'id'))
+    ).select_for_update(of=('self',)).select_related('period').order_by('id'))
+    # Lock debts in a stable order, then retain the business allocation order.
+    charges.sort(key=lambda charge: (charge.period.starts, charge.pk))
     candidates = []
     for charge in charges:
         used = charge.allocations.filter(payment__status='confirmed').aggregate(total=Sum('amount'))['total'] or Decimal('0')

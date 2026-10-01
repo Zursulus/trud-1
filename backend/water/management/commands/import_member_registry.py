@@ -52,62 +52,70 @@ def _read_registry(path):
         book = load_workbook(path, read_only=True, data_only=True)
     except Exception as error:
         raise CommandError('Не удалось открыть XLSX реестра.') from error
-    if SHEET_NAME not in book.sheetnames:
-        raise CommandError(f'В файле нет листа «{SHEET_NAME}». Используйте подготовленный XLSX.')
-    sheet = book[SHEET_NAME]
-    rows = sheet.iter_rows(values_only=True)
+    rows = None
     try:
-        header_values = next(rows)
-    except StopIteration as error:
-        raise CommandError('Лист закрытого реестра пуст.') from error
-    headers = [_text(value) for value in header_values]
-    missing = sorted(REQUIRED_COLUMNS - set(headers))
-    if missing:
-        raise CommandError('Не хватает колонок: ' + ', '.join(missing))
-    positions = {name: headers.index(name) for name in REQUIRED_COLUMNS}
-    legacy_account_position = (
-        headers.index(LEGACY_ACCOUNT_COLUMN)
-        if LEGACY_ACCOUNT_COLUMN in headers else None
-    )
-
-    result = []
-    seen = set()
-    for values in rows:
-        if not any(value not in (None, '') for value in values):
-            continue
-        rid = _int_or_none(values[positions['№ пользователя']])
-        if rid is None:
-            raise CommandError('Есть строка без № пользователя.')
-        if rid in seen:
-            raise CommandError(f'Повторяется № пользователя {rid}.')
-        seen.add(rid)
-        legacy_account_id = None
-        if legacy_account_position is not None and legacy_account_position < len(values):
-            legacy_account_id = _int_or_none(values[legacy_account_position])
-        result.append({
-            'resident_number': rid,
-            'phone': _text(values[positions['Телефон(ы) нормализованные']]),
-            'email': _text(values[positions['Email']]).lower(),
-            'address': _text(values[positions['Адрес участка']]),
-            'joined_year': _int_or_none(values[positions['Год вступления (точный)']]),
-            'membership_note': _text(values[positions['Источник года/основание']]),
-            'status': _text(values[positions['Статус']]),
-            'legacy_account_id': legacy_account_id,
-        })
-
-    missing_ids = sorted(BASE_EXPECTED_IDS - seen)
-    unsupported_ids = sorted(seen - ALLOWED_IDS)
-    if missing_ids or unsupported_ids:
-        details = []
-        if missing_ids:
-            details.append('нет обязательных №: ' + ', '.join(map(str, missing_ids[:20])))
-        if unsupported_ids:
-            details.append('недопустимые №: ' + ', '.join(map(str, unsupported_ids[:20])))
-        raise CommandError(
-            'Ожидались обязательные №1–300; дополнительно разрешены только резервные №301–310; '
-            + '; '.join(details)
+        if SHEET_NAME not in book.sheetnames:
+            raise CommandError(f'В файле нет листа «{SHEET_NAME}». Используйте подготовленный XLSX.')
+        sheet = book[SHEET_NAME]
+        rows = sheet.iter_rows(values_only=True)
+        try:
+            header_values = next(rows)
+        except StopIteration as error:
+            raise CommandError('Лист закрытого реестра пуст.') from error
+        headers = [_text(value) for value in header_values]
+        missing = sorted(REQUIRED_COLUMNS - set(headers))
+        if missing:
+            raise CommandError('Не хватает колонок: ' + ', '.join(missing))
+        positions = {name: headers.index(name) for name in REQUIRED_COLUMNS}
+        legacy_account_position = (
+            headers.index(LEGACY_ACCOUNT_COLUMN)
+            if LEGACY_ACCOUNT_COLUMN in headers else None
         )
-    return sorted(result, key=lambda row: row['resident_number'])
+
+        result = []
+        seen = set()
+        for values in rows:
+            if not any(value not in (None, '') for value in values):
+                continue
+            rid = _int_or_none(values[positions['№ пользователя']])
+            if rid is None:
+                raise CommandError('Есть строка без № пользователя.')
+            if rid in seen:
+                raise CommandError(f'Повторяется № пользователя {rid}.')
+            seen.add(rid)
+            legacy_account_id = None
+            if legacy_account_position is not None and legacy_account_position < len(values):
+                legacy_account_id = _int_or_none(values[legacy_account_position])
+            result.append({
+                'resident_number': rid,
+                'phone': _text(values[positions['Телефон(ы) нормализованные']]),
+                'email': _text(values[positions['Email']]).lower(),
+                'address': _text(values[positions['Адрес участка']]),
+                'joined_year': _int_or_none(values[positions['Год вступления (точный)']]),
+                'membership_note': _text(values[positions['Источник года/основание']]),
+                'status': _text(values[positions['Статус']]),
+                'legacy_account_id': legacy_account_id,
+            })
+
+        missing_ids = sorted(BASE_EXPECTED_IDS - seen)
+        unsupported_ids = sorted(seen - ALLOWED_IDS)
+        if missing_ids or unsupported_ids:
+            details = []
+            if missing_ids:
+                details.append('нет обязательных №: ' + ', '.join(map(str, missing_ids[:20])))
+            if unsupported_ids:
+                details.append('недопустимые №: ' + ', '.join(map(str, unsupported_ids[:20])))
+            raise CommandError(
+                'Ожидались обязательные №1–300; дополнительно разрешены только резервные №301–310; '
+                + '; '.join(details)
+            )
+        return sorted(result, key=lambda row: row['resident_number'])
+    finally:
+        try:
+            if rows is not None:
+                rows.close()
+        finally:
+            book.close()
 
 
 def _account_indexes():

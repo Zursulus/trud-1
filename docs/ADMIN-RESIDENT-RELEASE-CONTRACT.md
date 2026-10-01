@@ -1,4 +1,4 @@
-# Admin ↔ Resident: контракт выпуска и приёмки v1.0
+# Admin ↔ Resident: контракт выпуска и приёмки v1.1
 
 GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 Статус: implementation candidate; окончательная готовность требует evidence точного SHA, закрытия продуктовых решений и production-приёмки.
@@ -39,6 +39,10 @@ GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 | AR-10 | Document A: bounded list/form/card/download; B denied до открытия файла; metadata service проверяет объект | `test_document_scope_applies_before_file_open_and_metadata_mutation` |
 | AR-11 | Staff publish → exact resident bytes + attention → unpublish → old URL 404; featured news publish/unpublish меняет attention | `test_staff_publication_resident_download_attention_and_unpublication`; существующие publication/public feed/browser tests |
 | AR-12 | Scoped staff не входит в глобальный центр доступа и не меняет чужой grant даже через service | `test_access_global_center_and_services_fail_closed_for_scoped_actor`; стандартные ALL роли — `test_staff_workspace_access`, `test_access_workflow` |
+| AR-13 | Две оплаты по 150 при долге 200: manual/manual отклоняет второй ввод 150; automatic/automatic даёт 150+50; mixed допускает только два корректных последовательных результата; stale parent не обходит отмену | `test_payment_concurrency_contract`; три гонки требуют PostgreSQL. Baseline `8d92592` воспроизвёл два сохранённых ручных зачёта; исправление требует нового green CI |
+| AR-14 | Одно приглашение активируется одновременно двумя клиентами → 302/410, одна identity/grant/User; два разных модератора принимают одно показание → одна Reading 120 и одна финальная история | `test_access_water_concurrency_contract`; реальные HTTP login/CSRF, отдельные соединения PostgreSQL |
+
+AR-09/10 также проверяют раздельные create B / view A: ни одна форма не предлагает скрытый B и отказ не создаёт запись/историю. Глобальное утверждение периода учитывает скрытые draft B при ограниченном finance view A; снятие последнего draft допускает существующее глобальное полномочие.
 
 Денежные/водные expected values и список пяти событий истории заданы литералами, независимо от production helpers. Browser fixtures используют canonical PortalGrant без legacy ResidentAccess. Scoped staff fixtures не получают global permissions, которые скрыли бы дефект.
 
@@ -47,7 +51,7 @@ GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 - **P1 — требуется решение пользователя:** должен ли завершённый V2 grant окончательно подавлять действующий legacy-доступ? Текущий resolver возвращается к legacy, если активного grant нет. Эта семантика в этом candidate не меняется. Нельзя записывать универсальную гарантию «отозван весь доступ», пока правило не выбрано и не проверено.
 - Перенос identity с одного User на другой и архивирование Person не используются как автоматический отзыв/передача истории. Штатная перепривязка существующей identity приглашением запрещена. Новый transfer workflow в scope не включён.
 - Line self-review уже запрещён; финальная staff модерация собственного показания сохраняет текущую политику. Универсальный запрет/вторая подпись не вводятся автоматически.
-- AR-06 доказывает concurrency закрытия обращения. Реальные конкурентные redemption, water-finalize и payment-allocation ещё требуют отдельных PostgreSQL сценариев; последовательный повтор не считается их доказательством.
+- AR-06/13/14 проверяют конкуренцию закрытия обращения, redemption, water-finalize и payment-allocation. SQLite SKIP не является evidence; все эти сценарии должны пройти в PostgreSQL на точном candidate SHA. Это конечный набор гонок выпуска, без обещания проверки всех возможных комбинаций операций.
 - У news attention нет read/dismiss состояния; notifications отражают текущее разрешённое состояние. Не обещать внешний email/SMS или гарантированную доставку.
 - Sandbox host offline. Local SQLite проверяет логику; PostgreSQL CI — транзакции/row locks. Production-shaped staging/config/media/legacy drift и финальный live smoke пока не выполнены этим candidate.
 
