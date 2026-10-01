@@ -12,6 +12,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Разделы</h2></div>
   <div class="ws-card-grid">
+    {% if can_use_workbench %}<a class="ws-card" href="{% url 'staff_workspace:workbench' %}"><span class="ws-card-kicker">Новая панель · только просмотр</span><strong>Жители и участки</strong><p>Связи, личные доступы, служебные роли и счётчики.</p></a>{% endif %}
     {% if has_resident_access %}<a class="ws-card" href="{% url 'resident_dashboard' %}"><span class="ws-card-kicker">Личный режим</span><strong>Кабинет жителя</strong><p>Мои участки, показания, платежи, документы и обращения. Служебная роль не отменяет личный доступ.</p></a>{% endif %}
     {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:accounts' %}"><span class="ws-card-kicker">Реестр</span><strong>Участки и счета</strong><p>Список доступных вам объектов.</p></a>{% endif %}
     {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Вода</span><strong>Учёт воды</strong><p>Показания, проверки и баланс.</p></a>{% endif %}
@@ -34,3 +35,4 @@
 </details>
 {% endif %}
 {% endblock %}
+
