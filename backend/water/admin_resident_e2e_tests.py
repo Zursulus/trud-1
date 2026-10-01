@@ -176,6 +176,73 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
                     finally:
                         browser.close()
 
+    def _exercise_logout(self, browser, staff_only, label, width):
+        artifacts = Path(settings.BASE_DIR) / "test-artifacts"
+        artifacts.mkdir(exist_ok=True)
+        context = browser.new_context(viewport={"width": width, "height": 900})
+        context.route("**/ordzhonikidze-sunset.webp", lambda route: route.fulfill(
+            path=str(Path(settings.BASE_DIR).parent / "ordzhonikidze-sunset.webp"), content_type="image/webp",
+        ))
+        context.tracing.start(screenshots=True, snapshots=True, sources=True)
+        page = context.new_page()
+        try:
+            self._login(page, staff_only)
+            page.goto(self.live_server_url + "/work/more/")
+            expect(page.get_by_text("Кабинет жителя", exact=True)).to_have_count(0)
+            logout = page.get_by_role("button", name="Выйти", exact=True)
+            expect(logout).to_be_visible()
+            expect(page.locator(".ws-topbar-actions .ws-search-shortcut")).to_be_visible()
+            self.assertGreaterEqual(logout.bounding_box()["height"], 44)
+            self._assert_accessibility(page)
+            page.screenshot(path=str(artifacts / f"contract-logout-{label}-{width}.png"), full_page=True)
+
+            other_tab = context.new_page()
+            other_tab.goto(self.live_server_url + "/work/")
+            logout.focus()
+            with page.expect_response(lambda response: response.url.endswith("/admin/cabinet/logout/")
+                                      and response.request.method == "POST") as response:
+                page.keyboard.press("Enter")
+            self.assertEqual(response.value.status, 302)
+            page.wait_for_url("**/admin/cabinet/login/")
+            other_tab.reload()
+            expect(other_tab.locator("#login-form")).to_be_visible()
+
+            # The shared login page also keeps the staff re-login route clear.
+            page.get_by_role("link", name="Служебный вход", exact=True).click()
+            page.locator("#id_username").fill(staff_only.username)
+            page.locator("#id_password").fill(self.password)
+            page.locator('#login-form input[type="submit"]').click()
+            page.wait_for_url("**/work/")
+            page.get_by_role("button", name="Выйти", exact=True).click()
+            page.wait_for_url("**/admin/cabinet/login/")
+
+            self._login(page, self.resident)
+            expect(page.locator("body")).to_contain_text("Synthetic browser plot")
+            page.goto(self.live_server_url + "/work/")
+            expect(page.locator("#login-form")).to_be_visible()
+        finally:
+            try:
+                context.tracing.stop(path=str(artifacts / f"contract-logout-{label}-{width}.zip"))
+            finally:
+                context.close()
+
+    def test_staff_without_personal_access_logs_out_and_changes_user_same_browser(self):
+        staff_only = User.objects.create_user(
+            username="contract-staff-only", password=self.password, is_staff=True,
+        )
+        staff_only.groups.add(Group.objects.get(name="Администратор ТСН"))
+        self.assertFalse(ResidentIdentity.objects.filter(user=staff_only).exists())
+        self.assertFalse(ResidentAccess.objects.filter(user=staff_only).exists())
+        with sync_playwright() as playwright:
+            for label in ("chromium", "webkit"):
+                browser = getattr(playwright, label).launch(headless=True)
+                try:
+                    for width in (320, 390, 1280):
+                        with self.subTest(browser=label, width=width):
+                            self._exercise_logout(browser, staff_only, label, width)
+                finally:
+                    browser.close()
+
     def _exercise_revocation(self, browser, label):
         def fixture():
             account = Account.objects.create(number=f"REVOKE-{label}", plot=f"Synthetic revocation {label}")

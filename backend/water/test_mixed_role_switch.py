@@ -1,6 +1,10 @@
 from datetime import date
 
-from django.test import TestCase
+from django.contrib.auth import SESSION_KEY
+from django.test import Client, TestCase
+from django.urls import reverse
+from django_otp import DEVICE_ID_SESSION_KEY
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from .access_control import assignment_from_role
 from .access_policy import ScopeType
@@ -65,3 +69,48 @@ class MixedRoleModeSwitchTests(TestCase):
         self.assertEqual(staff.status_code, 200)
         self.assertNotContains(staff, "Кабинет жителя")
         self.assertNotContains(staff, 'href="/admin/cabinet/"')
+
+    def test_staff_only_logout_clears_session_and_can_login_as_resident(self):
+        staff = self.make_user("logout-staff", staff=True)
+        resident = self.make_user("logout-resident", resident=True)
+        resident.set_password("synthetic-logout-password")
+        resident.save()
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(staff)
+        device = TOTPDevice.objects.create(user=staff, name="synthetic-logout-device", confirmed=True)
+        session = client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session["logout-test-marker"] = "staff-session"
+        session.save()
+
+        page = client.get("/work/more/")
+        self.assertContains(page, 'action="/admin/cabinet/logout/"')
+        self.assertContains(page, 'type="submit" class="ws-secondary">Выйти</button>')
+        self.assertNotContains(page, "Кабинет жителя")
+        self.assertEqual(client.session[DEVICE_ID_SESSION_KEY], device.persistent_id)
+        grants_before = list(PortalGrant.objects.values())
+        logout = client.post(reverse("resident_logout"), {
+            "csrfmiddlewaretoken": client.cookies["csrftoken"].value,
+        })
+        self.assertRedirects(logout, reverse("resident_login"))
+        for key in (SESSION_KEY, DEVICE_ID_SESSION_KEY, "logout-test-marker"):
+            self.assertNotIn(key, client.session)
+        self.assertEqual(list(PortalGrant.objects.values()), grants_before)
+        self.assertEqual(client.get("/work/").status_code, 302)
+
+        login = client.post(reverse("resident_login"), {
+            "username": resident.username, "password": "synthetic-logout-password",
+            "csrfmiddlewaretoken": client.cookies["csrftoken"].value,
+        })
+        self.assertRedirects(login, reverse("resident_dashboard"))
+        self.assertEqual(client.session[SESSION_KEY], str(resident.pk))
+        self.assertEqual(client.get("/work/").status_code, 302)
+
+    def test_logout_requires_post_and_csrf_without_ending_session(self):
+        staff = self.make_user("logout-protected", staff=True)
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(staff)
+        self.assertEqual(client.get(reverse("resident_logout")).status_code, 405)
+        self.assertEqual(client.post(reverse("resident_logout")).status_code, 403)
+        self.assertEqual(client.session[SESSION_KEY], str(staff.pk))
+        self.assertEqual(client.get("/work/").status_code, 200)

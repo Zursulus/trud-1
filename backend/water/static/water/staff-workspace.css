@@ -25,12 +25,14 @@ button, input { font: inherit; }
 .ws-main { min-width: 0; }
 .ws-topbar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
   min-height: 64px; padding: 10px 16px;
   background: rgba(255,255,255,.96); border-bottom: 1px solid var(--ws-line);
   backdrop-filter: blur(12px);
 }
 .ws-topbar > div { display: grid; gap: 1px; }
+.ws-topbar > .ws-topbar-actions { display: flex; align-items: center; gap: 8px; }
+.ws-topbar-actions form { margin: 0; }
 .ws-topbar strong { font-size: 16px; }
 .ws-topbar span { color: var(--ws-muted); font-size: 12px; }
 .ws-search-shortcut, .ws-primary, .ws-secondary {

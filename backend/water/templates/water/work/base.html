@@ -34,7 +34,13 @@
           <strong>Рабочая база</strong>
           <span>ТСН «ТРУД-1»</span>
         </div>
-        {% if can_view_accounts %}<a class="ws-search-shortcut" href="{% url 'staff_workspace:search' %}" aria-label="Открыть поиск">Найти</a>{% endif %}
+        <div class="ws-topbar-actions">
+          {% if can_view_accounts %}<a class="ws-search-shortcut" href="{% url 'staff_workspace:search' %}" aria-label="Открыть поиск">Найти</a>{% endif %}
+          <form method="post" action="{% url 'resident_logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="ws-secondary">Выйти</button>
+          </form>
+        </div>
       </header>
       <main class="ws-content" id="main-content">
         {% if messages %}
