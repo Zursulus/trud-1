@@ -175,7 +175,7 @@ class ResidentDocumentFilterTests(TestCase):
             self.assertEqual(self.client.get(self.url, {"kind": kind}).status_code, 404)
         response = self.client.get(self._download_url(self.file))
         self.assertEqual(response.status_code, 200)
-        response.close()
+        self.assertEqual(b"".join(response.streaming_content), self.payload)
         grant.can_view_documents = True
         grant.save()
         self.assertEqual(self.client.get(self.url).status_code, 200)
