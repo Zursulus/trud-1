@@ -3,17 +3,21 @@ from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from axe_playwright_python.sync_playwright import Axe
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connections
+from django.test import override_settings
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
 
-from .models import Account, AppealCategory, Person, ResidentAccess, ResidentAppeal, User
+from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews
+from .models import Account, AccountDocument, AppealCategory, DocumentCategory, Person, ResidentAccess, ResidentAppeal, User
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
 
@@ -323,5 +327,120 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
                     browser = getattr(playwright, label).launch(headless=True)
                     try:
                         self._exercise_revocation(browser, label)
+                    finally:
+                        browser.close()
+
+    def test_document_filters_real_upload_download_mobile_desktop_chromium_webkit(self):
+        payload = b"%PDF-1.4\nSynthetic browser attachment\n%%EOF"
+        artifacts = Path(settings.BASE_DIR) / "test-artifacts"
+        artifacts.mkdir(exist_ok=True)
+        with TemporaryDirectory(prefix="trud-document-browser-") as folder, override_settings(MEDIA_ROOT=folder):
+            public_category = PublicDocumentCategory.objects.create(name="Synthetic common category")
+            personal_category = DocumentCategory.objects.create(name="Synthetic personal category")
+            PublicDocument.objects.create(
+                category=public_category, title="Synthetic common document",
+                document=SimpleUploadedFile("common.pdf", payload),
+                is_published=True, public_checked=True, document_date=timezone.localdate(),
+            )
+            PublicNews.objects.create(
+                title="Synthetic common news", summary="Synthetic summary",
+                is_published=True, public_checked=True, published_on=timezone.localdate(),
+            )
+            def fixture(label):
+                user = User.objects.create_user(username=f"document-browser-{label}", password=self.password)
+                account = Account.objects.create(number=f"DOC-{label}", plot="Synthetic document plot")
+                person = Person.objects.create(full_name=f"Synthetic document person {label}")
+                ResidentIdentity.objects.create(user=user, person=person, verified_by=self.staff, basis="Synthetic identity")
+                PortalGrant.objects.create(
+                    person=person, account=account, starts=timezone.localdate() - timedelta(days=1),
+                    can_view_documents=True, can_use_appeals=True, basis="Synthetic grant", verified_by=self.staff,
+                )
+                return user, account
+            with sync_playwright() as playwright:
+                for browser_name in ("chromium", "webkit"):
+                    browser = getattr(playwright, browser_name).launch(headless=True)
+                    try:
+                        for width in (390, 1280):
+                            label = f"{browser_name}-{width}"
+                            with self.subTest(browser=browser_name, width=width):
+                                user, account = self._db(lambda: fixture(label))
+                                context = browser.new_context(viewport={"width": width, "height": 900}, accept_downloads=True)
+                                context.route("**/ordzhonikidze-sunset.webp", lambda route: route.fulfill(
+                                    path=str(Path(settings.BASE_DIR).parent / "ordzhonikidze-sunset.webp"), content_type="image/webp",
+                                ))
+                                context.tracing.start(screenshots=True, snapshots=True, sources=True)
+                                page = context.new_page()
+                                errors = []
+                                page.on("pageerror", lambda exc: errors.append(str(exc)))
+                                try:
+                                    self._login(page, user)
+                                    documents = f"{self.live_server_url}/admin/cabinet/account/{account.pk}/documents/"
+                                    page.goto(documents)
+                                    tabs = page.locator(".document-tabs")
+                                    expect(page.locator(".document-row")).to_have_count(2)
+                                    # Native keyboard activation exercises actual links without JS.
+                                    tabs.get_by_role("link", name="Мои", exact=True).focus()
+                                    page.keyboard.press("Enter")
+                                    page.wait_for_url("**/documents/?kind=mine")
+                                    expect(page.locator(".empty-state")).to_have_text("Личных документов и вложений пока нет.")
+                                    page.goto(f"{self.live_server_url}/admin/cabinet/account/{account.pk}/appeal/new/")
+                                    page.locator("#id_category").select_option(str(self.category.pk))
+                                    page.locator("#id_subject").fill(f"Synthetic uploaded question {label}")
+                                    page.locator("#id_message").fill("Synthetic initial question")
+                                    filename = f"synthetic-evidence-{'a' * 40}-{label}.pdf"
+                                    page.locator("#id_attachment").set_input_files({
+                                        "name": filename, "mimeType": "application/pdf", "buffer": payload,
+                                    })
+                                    page.get_by_role("button", name="Отправить обращение", exact=True).click()
+                                    page.wait_for_url("**/appeal/*/")
+                                    expect(page.get_by_role("link").filter(has_text=filename)).to_be_visible()
+                                    page.goto(documents)
+                                    tabs.get_by_role("link", name="Мои", exact=True).click()
+                                    page.wait_for_url("**/documents/?kind=mine")
+                                    expect(page.locator(".document-row")).to_have_count(1)
+                                    expect(page.locator(".empty-state")).to_have_count(0)
+                                    attachment_link = page.locator("a.document-row").filter(has_text=filename)
+                                    expect(attachment_link).to_be_visible()
+                                    self.assertIn("/attachment/", attachment_link.get_attribute("href"))
+                                    with page.expect_download() as downloaded:
+                                        attachment_link.click()
+                                    download = downloaded.value
+                                    self.assertEqual(download.suggested_filename, filename)
+                                    self.assertEqual(Path(download.path()).read_bytes(), payload)
+                                    def personal_document():
+                                        AccountDocument.objects.create(
+                                            account=account, category=personal_category, title="Synthetic personal document",
+                                            document=SimpleUploadedFile("personal.pdf", payload),
+                                        )
+                                    self._db(personal_document)
+                                    page.reload()
+                                    expect(page.locator(".document-row")).to_have_count(2)
+                                    for kind, title, rows in (("mine", "Мои", 2), ("common", "Общие", 2), ("all", "Все", 4)):
+                                        tabs.get_by_role("link", name=title, exact=True).click()
+                                        page.wait_for_url(f"**/documents/?kind={kind}")
+                                        expect(tabs.locator('[aria-current="page"]')).to_have_count(1)
+                                        expect(tabs.locator('[aria-current="page"]')).to_have_text(title)
+                                        expect(page.locator(".document-row")).to_have_count(rows)
+                                        expect(page.get_by_text(filename, exact=True)).to_have_count(0 if kind == "common" else 1)
+                                        expect(page.get_by_text("Synthetic common document", exact=True)).to_have_count(0 if kind == "mine" else 1)
+                                        expect(page.get_by_text("Synthetic personal document", exact=True)).to_have_count(0 if kind == "common" else 1)
+                                        self._assert_accessibility(page)
+                                        self.assertTrue(tabs.locator("a").evaluate_all(
+                                            "links => links.every(a => a.getBoundingClientRect().height >= 44)",
+                                        ))
+                                        page.screenshot(path=str(artifacts / f"contract-documents-{label}-{kind}.png"), full_page=True)
+                                    page.reload()
+                                    expect(tabs.locator('[aria-current="page"]')).to_have_text("Все")
+                                    page.go_back()
+                                    expect(tabs.locator('[aria-current="page"]')).to_have_text("Общие")
+                                    page.goto(documents + "?kind=unknown")
+                                    expect(tabs.locator('[aria-current="page"]')).to_have_text("Все")
+                                    expect(page.locator(".document-row")).to_have_count(4)
+                                    self.assertEqual(errors, [])
+                                finally:
+                                    try:
+                                        context.tracing.stop(path=str(artifacts / f"contract-documents-{label}.zip"))
+                                    finally:
+                                        context.close()
                     finally:
                         browser.close()

@@ -19,7 +19,7 @@ from .portal_permissions import (
     resolved_access,
     resolved_accesses,
 )
-from .resident_models import ResidentAppealViewState
+from .resident_models import ResidentAppealAttachment, ResidentAppealViewState
 from .resident_numbers import ResidentNumberSlot
 
 
@@ -266,17 +266,27 @@ def documents(request, account_id):
         return denied
     access = _access_or_404(request.user, account_id, CAP_DOCUMENTS)
     today = timezone.localdate()
+    kind = request.GET.get('kind', 'all')
+    if kind not in ('all', 'common', 'mine'):
+        kind = 'all'
+    attachments = ResidentAppealAttachment.objects.none()
+    if kind != 'common' and resolved_access(request.user, account_id, CAP_APPEALS) is not None:
+        attachments = ResidentAppealAttachment.objects.filter(
+            appeal__account=access.account, appeal__author=request.user,
+        ).select_related('appeal').order_by('-created_at', '-id')
     context = _common(request, access, 'more')
     context.update({
+        'document_kind': kind,
+        'appeal_attachments': attachments,
         'personal_documents': AccountDocument.objects.filter(
             account=access.account, visible_to_residents=True, published_at__lte=timezone.now(),
-        ).select_related('category').order_by('-published_at', '-id'),
+        ).select_related('category').order_by('-published_at', '-id') if kind != 'common' else [],
         'public_documents': PublicDocument.objects.filter(
             is_published=True, public_checked=True, document_date__lte=today,
-        ).select_related('category').order_by('-document_date', '-id')[:60],
+        ).select_related('category').order_by('-document_date', '-id')[:60] if kind != 'mine' else [],
         'news': PublicNews.objects.filter(
             is_published=True, public_checked=True, published_on__lte=today,
-        ).order_by('-is_featured', '-published_on', '-id')[:20],
+        ).order_by('-is_featured', '-published_on', '-id')[:20] if kind != 'mine' else [],
     })
     return TemplateResponse(request, 'water/portal/documents.html', context)
 
