@@ -34,7 +34,7 @@ class WorkbenchTests(TestCase):
             with CaptureQueriesContext(connection) as queries:
                 response = self.client.get('/work/panel/', {'kind': kind, 'id': obj.pk})
             self.assertEqual(response.status_code, 200)
-            for text in ['PANEL-METER', 'Тестовый документ', 'PortalGrant', 'ResidentAccess']:
+            for text in ['PANEL-METER', 'Тестовый документ', 'Явные личные права', 'Ранее выданный доступ']:
                 self.assertContains(response, text)
             self.assertIn('no-store', response['Cache-Control'])
             self.assertIn('noindex', response['X-Robots-Tag'])
@@ -92,7 +92,7 @@ class WorkbenchTests(TestCase):
         response = self.client.get('/work/panel/', {'kind': 'account', 'id': self.account.pk})
         self.assertNotContains(response, 'Тестовое основание')
         self.assertContains(response, 'Связь с человеком не подтверждена')
-        self.assertContains(response, 'ResidentAccess')
+        self.assertContains(response, 'Ранее выданный доступ')
 
     def test_role_scope_does_not_invent_meter_group(self):
         assignment_from_role(person=self.person, role_code='controller', scope_type=ScopeType.SUPPLY_NODE,
