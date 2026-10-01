@@ -108,7 +108,7 @@ class AccessWaterConcurrencyContractTests(PostgreSQLConcurrencyMixin, Transactio
         before_history = list(observation.history.order_by("history_date", "history_id").values_list("status", "history_user_id"))
         self.assertEqual(before_history, [("pending", resident.pk), ("pending", senior.pk)])
         clients = [self._login_client(actor) for actor in self.staff]
-        url = reverse("admin:water_controllerreadingsubmission_approve", args=[observation.pk])
+        url = reverse("admin:water_controllerreading_approve", args=[observation.pk])
         results = self._concurrent_actions(ControllerReadingSubmission, observation.pk, [lambda c=c: self._post(c, url).status_code for c in clients])
         self.assertEqual(results, [302, 302])
         observation.refresh_from_db()
