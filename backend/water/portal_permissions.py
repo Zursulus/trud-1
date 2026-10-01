@@ -283,7 +283,18 @@ def _resident_appeal_clean_with_resolver(self):
     models.py and, importantly, makes admin/board saves obey the same access
     model as resident views.
     """
-    if self.author_id and self.account_id:
+    original = None
+    if not self._state.adding:
+        original = ResidentAppeal.objects.filter(pk=self.pk).values(
+            'author_id', 'account_id', 'opened_at',
+        ).first()
+    # Ended authority stops resident requests, but must not strand historical
+    # work for staff. Revalidate creation or a changed attribution/context.
+    context_changed = original is None or any(
+        original[field] != getattr(self, field)
+        for field in ('author_id', 'account_id', 'opened_at')
+    )
+    if context_changed and self.author_id and self.account_id:
         opened_on = self.opened_at.date() if self.opened_at else timezone.localdate()
         access = resolved_access_at(self.author, self.account_id, CAP_APPEALS, opened_on)
         if access is None:

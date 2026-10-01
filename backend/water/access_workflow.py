@@ -1,4 +1,4 @@
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -7,6 +7,17 @@ from .models import ResidentAccess, ResidentInvite, ResidentPasswordReset, User
 from .portal import issue_invite, issue_password_reset
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
+from .access_resolver import can
+from .access_scope import ScopeRef
+from .access_policy import ScopeType
+
+
+def _require_global(actor, capability, *, legacy_permission=None):
+    if not actor or not actor.is_staff or not (
+        can(actor, capability, scope=ScopeRef(ScopeType.ALL))
+        or (legacy_permission and actor.has_perm(legacy_permission))
+    ):
+        raise PermissionDenied
 
 
 def _required_note(value, label='Основание решения'):
@@ -20,6 +31,8 @@ def _required_note(value, label='Основание решения'):
 def approve_access_request(request_id, *, account, email, role, decision_note, actor):
     """Approve one immutable request and issue exactly one one-time invite."""
     locked = ResidentAccessRequest.objects.select_for_update().get(pk=request_id)
+    _require_global(actor, 'access.request.decide')
+    _require_global(actor, 'access.invite.issue')
     if locked.status != ResidentAccessRequest.STATUS_NEW:
         raise ValidationError('По этой заявке решение уже принято.')
     note = _required_note(decision_note)
@@ -46,6 +59,7 @@ def approve_access_request(request_id, *, account, email, role, decision_note, a
 def reject_access_request(request_id, *, decision_note, actor):
     """Reject one immutable access request without creating portal authority."""
     locked = ResidentAccessRequest.objects.select_for_update().get(pk=request_id)
+    _require_global(actor, 'access.request.decide')
     if locked.status != ResidentAccessRequest.STATUS_NEW:
         raise ValidationError('По этой заявке решение уже принято.')
     locked.status = ResidentAccessRequest.STATUS_REJECTED
@@ -59,6 +73,7 @@ def reject_access_request(request_id, *, decision_note, actor):
 @transaction.atomic
 def revoke_invite(invite_id, *, actor):
     invite = ResidentInvite.objects.select_for_update().get(pk=invite_id)
+    _require_global(actor, 'access.invite.revoke')
     if invite.used_at:
         raise ValidationError('Использованное приглашение нельзя отозвать.')
     if invite.revoked:
@@ -73,6 +88,7 @@ def revoke_invite(invite_id, *, actor):
 @transaction.atomic
 def revoke_password_reset(reset_id, *, actor):
     reset = ResidentPasswordReset.objects.select_for_update().get(pk=reset_id)
+    _require_global(actor, 'access.password_reset.revoke')
     if reset.used_at:
         raise ValidationError('Использованную ссылку восстановления нельзя отозвать.')
     if reset.revoked:
@@ -88,6 +104,7 @@ def revoke_password_reset(reset_id, *, actor):
 def end_resident_access(access_id, *, ends_on, actor):
     """End an active access interval; never delete or rewrite its beginning."""
     access = ResidentAccess.objects.select_for_update().get(pk=access_id)
+    _require_global(actor, 'access.grant.end', legacy_permission='water.change_residentaccess')
     if access.ends is not None:
         raise ValidationError('Доступ уже завершён.')
     access.ends = ends_on
@@ -101,12 +118,14 @@ def end_resident_access(access_id, *, ends_on, actor):
 @transaction.atomic
 def issue_access_password_reset(access_id, *, actor):
     access = ResidentAccess.objects.select_for_update().select_related('user').get(pk=access_id)
+    _require_global(actor, 'access.password_reset.issue')
     return issue_password_reset(access.user, actor=actor)
 
 
 @transaction.atomic
 def end_portal_grant(grant_id, *, ends_on, actor):
     grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    _require_global(actor, 'access.grant.end')
     if grant.ends is not None:
         raise ValidationError('Доступ уже завершён.')
     if ends_on <= grant.starts:
@@ -121,6 +140,7 @@ def end_portal_grant(grant_id, *, ends_on, actor):
 @transaction.atomic
 def issue_grant_password_reset(grant_id, *, actor):
     grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    _require_global(actor, 'access.password_reset.issue')
     identity = ResidentIdentity.objects.select_related('user').filter(person=grant.person).first()
     if identity is None:
         raise ValidationError('К этому доступу ещё не привязан активированный кабинет жителя.')
@@ -133,6 +153,7 @@ def update_portal_grant_rights(grant_id, *, actor, can_view_account, can_view_fi
                                can_represent):
     """Change only the capability snapshot of an active explicit resident grant."""
     grant = PortalGrant.objects.select_for_update().get(pk=grant_id)
+    _require_global(actor, 'access.grant.edit')
     today = timezone.localdate()
     if grant.ends is not None and grant.ends <= today:
         raise ValidationError('Завершённый доступ нельзя расширять или изменять.')

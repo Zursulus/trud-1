@@ -41,7 +41,7 @@
     <p>Индивидуальные приборы этого лицевого счёта.</p>
   </section>
   {% endif %}
-  {% if can_view_finance %}
+  {% if can_view_account_finance %}
   <section class="ws-summary{% if finance.balance > 0 %} ws-summary-attention{% endif %}">
     <span>Баланс</span>
     <strong>{{ finance.balance }} ₽</strong>
@@ -79,7 +79,7 @@
 </section>
 {% endif %}
 
-{% if can_view_finance %}
+{% if can_view_account_finance %}
 <section class="ws-section">
   <div class="ws-section-head"><h2>Финансы</h2></div>
   <div class="ws-finance-line"><span>Утверждено начислений</span><strong>{{ finance.charges }} ₽</strong></div>
@@ -93,7 +93,7 @@
 <section class="ws-section">
   <div class="ws-section-head"><h2>Связанные процессы</h2></div>
   <div class="ws-action-list">
-    {% if can_view_appeals %}<a class="ws-action-row" href="{% url 'staff_workspace:appeals' %}?state=open&account={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
+    {% if can_view_account_appeals %}<a class="ws-action-row" href="{% url 'staff_workspace:appeals' %}?state=open&account={{ account.pk }}"><span>Открытые обращения</span><strong>{{ open_appeals }}</strong></a>{% endif %}
     {% if can_view_account_documents %}<a class="ws-action-row" href="{% url 'staff_workspace:documents' %}?q={{ account.number|default:account.plot|urlencode }}"><span>Документы лицевого счёта</span><strong>{{ documents_count }}</strong></a>{% endif %}
     {% if can_view_access %}<a class="ws-action-row" href="{% url 'staff_workspace:access' %}?q={{ account.number|default:account.plot|urlencode }}"><span>Активные доступы кабинета</span><strong>{{ access_count }}</strong></a>{% endif %}
   </div>

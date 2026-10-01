@@ -18,6 +18,8 @@ from .appeal_workflow import (
     appeal_conversation_events,
     close_resolved_appeal,
     send_board_reply,
+    scoped_appeals,
+    can_for_appeal,
 )
 from .models import ResidentAppeal
 from .resident_models import APPEAL_ATTACHMENT_EXTENSIONS, APPEAL_ATTACHMENT_MAX_BYTES
@@ -61,12 +63,16 @@ def _require_view(request):
         raise PermissionDenied
 
 
-def _can_reply(request):
-    return request.user.is_superuser or can_any(request.user, "appeals.reply")
+def _can_reply(request, appeal=None):
+    if appeal is not None:
+        return can_for_appeal(request.user, "appeals.reply", appeal)
+    return can_any(request.user, "appeals.reply")
 
 
-def _can_close(request):
-    return request.user.is_superuser or can_any(request.user, "appeals.close")
+def _can_close(request, appeal=None):
+    if appeal is not None:
+        return can_for_appeal(request.user, "appeals.close", appeal)
+    return can_any(request.user, "appeals.close")
 
 
 def appeal_list(request):
@@ -80,8 +86,8 @@ def appeal_list(request):
     if not account_id.isdigit():
         account_id = ""
 
-    count_base = ResidentAppeal.objects.all()
-    base = ResidentAppeal.objects.select_related("account", "category")
+    count_base = scoped_appeals(request.user)
+    base = count_base.select_related("account", "category")
     if account_id:
         account_pk = int(account_id)
         count_base = count_base.filter(account_id=account_pk)
@@ -129,11 +135,11 @@ def appeal_list(request):
 def appeal_detail(request, appeal_id):
     _require_view(request)
     appeal = get_object_or_404(
-        ResidentAppeal.objects.select_related("account", "category", "responded_by"),
+        scoped_appeals(request.user).select_related("account", "category", "responded_by"),
         pk=appeal_id,
     )
-    can_reply = _can_reply(request)
-    can_close = _can_close(request)
+    can_reply = _can_reply(request, appeal)
+    can_close = _can_close(request, appeal)
     form = StaffAppealReplyForm(request.POST or None, request.FILES or None)
 
     if request.method == "POST":

@@ -3,12 +3,12 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
-from .access_resolver import can_any
+from .access_scope import can_on_record
 from .models import AccountDocument
 
 
-def _require(actor, capability):
-    if not actor.is_staff or not can_any(actor, capability):
+def _require(actor, capability, *, account_id):
+    if not actor.is_staff or not can_on_record(actor, capability, account_id=account_id):
         raise PermissionDenied
 
 
@@ -21,7 +21,7 @@ def _required_reason(value):
 
 @transaction.atomic
 def create_account_document(*, account, category, title, document, published_at, visible_to_residents, notes, actor):
-    _require(actor, "documents.account.create")
+    _require(actor, "documents.account.create", account_id=account.pk)
     item = AccountDocument(
         account=account,
         category=category,
@@ -50,8 +50,8 @@ def update_account_document(
     actor,
 ):
     """Change only metadata/visibility; the stored file is deliberately immutable."""
-    _require(actor, "documents.account.edit_metadata")
     item = AccountDocument.objects.select_for_update().get(pk=document_id)
+    _require(actor, "documents.account.edit_metadata", account_id=item.account_id)
     item.category = category
     item.title = (title or "").strip()
     item.published_at = published_at

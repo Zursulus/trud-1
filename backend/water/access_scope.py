@@ -18,7 +18,40 @@ class ScopeRef:
             if self.object_id is not None:
                 raise ValueError("all scope cannot have object_id")
         elif self.object_id is None:
-            raise ValueError(f"{self.type} scope requires object_id")
+                raise ValueError(f"{self.type} scope requires object_id")
+
+
+def scoped_records(queryset, actor, capability, *, account_field="account_id", person_field=None):
+    """Bound private service records to ACCOUNT/PERSON/ALL authority.
+
+    Historical records remain visible within their authorized scope. Other
+    scope types fail closed; topology-specific lists use their existing helper.
+    """
+    from .access_resolver import scopes_for
+    if not actor.is_staff:
+        return queryset.none()
+    predicate = Q(pk__in=[])
+    for scope in scopes_for(actor, capability):
+        if scope.type == ScopeType.ALL:
+            return queryset
+        if scope.type == ScopeType.ACCOUNT and account_field:
+            predicate |= Q(**{account_field: scope.object_id})
+        elif scope.type == ScopeType.PERSON and person_field:
+            predicate |= Q(**{person_field: scope.object_id})
+    return queryset.filter(predicate)
+
+
+def can_on_record(actor, capability, *, account_id=None, person_id=None):
+    """Check the actual subject; account authority never grants a login reset."""
+    from .access_resolver import can
+    if not actor.is_staff:
+        return False
+    scopes = [ScopeRef(ScopeType.ALL)]
+    if account_id is not None:
+        scopes.append(ScopeRef(ScopeType.ACCOUNT, account_id))
+    if person_id is not None:
+        scopes.append(ScopeRef(ScopeType.PERSON, person_id))
+    return any(can(actor, capability, scope=scope) for scope in scopes)
 
 
 def on_date_or_today(on_date: date | None) -> date:
