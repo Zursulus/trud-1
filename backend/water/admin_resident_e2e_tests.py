@@ -175,3 +175,86 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
                         self._exercise(browser, label)
                     finally:
                         browser.close()
+
+    def _exercise_revocation(self, browser, label):
+        def fixture():
+            account = Account.objects.create(number=f"REVOKE-{label}", plot=f"Synthetic revocation {label}")
+            person = ResidentIdentity.objects.get(user=self.resident).person
+            ResidentAccess.objects.create(
+                user=self.resident, account=account, role="owner", starts=timezone.localdate() - timedelta(days=60),
+            )
+            grant = PortalGrant.objects.create(
+                person=person, account=account, starts=timezone.localdate() - timedelta(days=1),
+                can_view_account=True, can_use_appeals=True, basis="Synthetic browser revocation", verified_by=self.staff,
+            )
+            return account.pk, grant.pk
+        account_id, grant_id = self._db(fixture)
+        artifacts = Path(settings.BASE_DIR) / "test-artifacts"
+        artifacts.mkdir(exist_ok=True)
+        contexts = [
+            ("resident", browser.new_context(viewport={"width": 390, "height": 844})),
+            ("staff", browser.new_context(viewport={"width": 1280, "height": 900})),
+        ]
+        pages = {}
+        for name, context in contexts:
+            context.route("**/ordzhonikidze-sunset.webp", lambda route: route.fulfill(
+                path=str(Path(settings.BASE_DIR).parent / "ordzhonikidze-sunset.webp"), content_type="image/webp",
+            ))
+            context.tracing.start(screenshots=True, snapshots=True, sources=True)
+            pages[name] = context.new_page()
+        resident, staff = pages["resident"], pages["staff"]
+        try:
+            self._login(resident, self.resident)
+            self._login(staff, self.staff)
+            resident.goto(f"{self.live_server_url}/admin/cabinet/account/{account_id}/appeal/new/")
+            resident.locator("#id_category").select_option(str(self.category.pk))
+            resident.locator("#id_subject").fill(f"Revocation {label}")
+            resident.locator("#id_message").fill("Before revocation")
+            resident.get_by_role("button", name="Отправить обращение", exact=True).click()
+            resident.wait_for_load_state("networkidle")
+            appeal_id = self._db(lambda: ResidentAppeal.objects.get(subject=f"Revocation {label}").pk)
+            resident_url = f"{self.live_server_url}/admin/cabinet/account/{account_id}/appeal/{appeal_id}/"
+            staff.goto(f"{self.live_server_url}/work/appeals/{appeal_id}/")
+            staff.locator("#id_body").fill("Please clarify before revocation")
+            staff.locator("#id_next_status").select_option("awaiting_resident")
+            staff.get_by_role("button", name="Отправить сообщение", exact=True).click()
+            staff.wait_for_load_state("networkidle")
+            resident.goto(resident_url)
+            resident.locator(".chat-compose #id_body").fill("Stale reply after revocation")
+            staff.goto(f"{self.live_server_url}/work/access/grants/{grant_id}/")
+            staff.locator("#id_ends_on").fill(timezone.localdate().isoformat())
+            staff.get_by_role("button", name="Завершить доступ", exact=True).click()
+            staff.wait_for_load_state("networkidle")
+            self.assertEqual(self._db(lambda: PortalGrant.objects.get(pk=grant_id).ends), timezone.localdate())
+            with resident.expect_response(lambda response: response.url == resident_url and response.request.method == "POST") as denied:
+                resident.get_by_role("button", name="Отправить", exact=True).click()
+            self.assertEqual(denied.value.status, 404)
+            resident.wait_for_load_state("networkidle")
+            self.assertEqual(resident.goto(f"{self.live_server_url}/admin/cabinet/account/{account_id}/").status, 404)
+            self.assertEqual(resident.goto(f"{self.live_server_url}/admin/cabinet/account/{self.account.pk}/").status, 200)
+            def snapshot():
+                appeal = ResidentAppeal.objects.get(pk=appeal_id)
+                return (
+                    appeal.resident_messages.count(), appeal.history.count(),
+                    (appeal.author_id, appeal.account_id, appeal.message, appeal.status),
+                    ResidentAccess.objects.get(user=self.resident, account_id=account_id).ends,
+                )
+            self.assertEqual(self._db(snapshot), (0, 2, (self.resident.pk, account_id, "Before revocation", "awaiting_resident"), None))
+            self._assert_accessibility(staff)
+        finally:
+            for name, context in contexts:
+                try:
+                    pages[name].screenshot(path=str(artifacts / f"contract-revocation-{label}-{name}.png"), full_page=True)
+                    context.tracing.stop(path=str(artifacts / f"contract-revocation-{label}-{name}.zip"))
+                finally:
+                    context.close()
+
+    def test_revoked_grant_blocks_legacy_open_form_chromium_and_webkit(self):
+        with sync_playwright() as playwright:
+            for label in ("chromium", "webkit"):
+                with self.subTest(browser=label):
+                    browser = getattr(playwright, label).launch(headless=True)
+                    try:
+                        self._exercise_revocation(browser, label)
+                    finally:
+                        browser.close()

@@ -1,4 +1,4 @@
-# Admin ↔ Resident: контракт выпуска и приёмки v1.1
+# Admin ↔ Resident: контракт выпуска и приёмки v1.2
 
 GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 Статус: implementation candidate; окончательная готовность требует evidence точного SHA, закрытия продуктовых решений и production-приёмки.
@@ -20,7 +20,7 @@ GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 - Для обращений, финансов и документов служебные списки/суммы/файлы ограничены ACCOUNT/ALL. Действие повторно проверяет свой capability и объект в application service. Глобальное право Django остаётся отдельным источником ALL.
 - Оба центра управления доступами требуют глобальных служебных полномочий: они показывают общую историю и целые логины. ACCOUNT/PERSON назначения не открывают эти операции. Их будущий ограниченный интерфейс требует отдельного контракта; не считать его реализованным.
 - Удаление/перепривязка истории не служит исправлением. Автор, счёт, исходное сообщение сохраняются; изменение attribution/context обращения повторно проверяет право.
-- Истечение единственного действующего источника личного доступа блокирует последующие resident-запросы и старые формы. Снятие активных V2 прав проверяется отдельно; fallback к legacy после завершения grant остаётся решением P1 ниже. Уже созданное обращение продолжает обрабатываться уполномоченным сотрудником, в том числе после отключения login автора.
+- Начавшийся PortalGrant для текущей подтверждённой Person и конкретного счёта заменяет legacy-доступ на этом счёте. После ends старые права не возвращаются: следующий доступ требует действующего явного разрешения. Другие счета, другие люди и исторические даты до starts не затрагиваются. Уже созданное обращение продолжает обрабатываться уполномоченным сотрудником, в том числе после отключения login автора.
 - Повтор, отказ в доступе, исключение транзакции и конкурирующие операции не создают лишний конечный эффект. Отказ проверяется вместе с неизменностью данных и истории.
 
 ## Проверяемые цепочки
@@ -28,10 +28,10 @@ GitHub #121. База: production `179c25405de75c2b37f0fab3cf2880f33168dc47`.
 | ID | Действия / ожидаемый результат | Доказательство |
 |---|---|---|
 | AR-01 | Реальные отдельные staff/resident logins; одна dual-role учётка в двух вкладках | `admin_resident_e2e_tests.AdminResidentBrowserTests` — Chromium + WebKit, mobile + desktop, CSRF, оба интерфейса |
-| AR-02 | Приглашение сотрудника → активация → identity/grant → реальный повторный вход → одноразовость → снятие прав при открытой сессии | `test_admin_resident_scope.ServiceAccountScopeTests.test_granular_invite_activation_real_login_and_rights_removal`; существующие invite expiry/ambiguity tests в `water.tests` и `test_staff_workspace_access` |
+| AR-02 | Приглашение сотрудника → активация → identity/grant → реальный повторный вход → одноразовость → снятие прав при открытой сессии; завершённый grant не возвращает legacy | `test_admin_resident_scope.ServiceAccountScopeTests.test_granular_invite_activation_real_login_and_rights_removal`; `test_portal_grant_revocation`; `admin_resident_e2e_tests.AdminResidentBrowserTests.test_revoked_grant_blocks_legacy_open_form_chromium_and_webkit`; существующие invite expiry/ambiguity tests в `water.tests` и `test_staff_workspace_access` |
 | AR-03 | Resident create → staff request → resident clarification → final response → close | `test_admin_resident_contract.AdminResidentContractTests.test_complete_conversation_has_both_parties_and_exact_audit` + AR-01 |
 | AR-04 | Другой житель того же/чужого счёта; staff A не читает/закрывает/скачивает B; истёкшая форма и разные capabilities | `test_shared_account_does_not_share_private_conversation`, `test_scoped_staff_cannot_read_reply_close_or_download_foreign_appeal`, `test_granular_view_does_not_authorize_appeal_or_foreign_reattribution` |
-| AR-05 | Завершение права/отключение автора не мешает staff resolution; отказ CSRF; rollback незавершённого staff reply | `test_granular_grant_without_legacy_access_can_complete_conversation`, `test_disabled_author_does_not_strand_staff_resolution`, `test_real_resident_login_preserves_csrf_denial`, `test_failed_staff_transition_rolls_back_message_and_history` |
+| AR-05 | Завершение права/отключение автора не мешает staff resolution; отказ CSRF; rollback незавершённого staff reply; старые формы/файлы и legacy не обходят отзыв | `test_granular_grant_without_legacy_access_can_complete_conversation`, `test_staff_revocation_blocks_legacy_session_forms_files_and_preserves_history`, `test_disabled_author_does_not_strand_staff_resolution`, `test_real_resident_login_preserves_csrf_denial`, `test_failed_staff_transition_rolls_back_message_and_history` |
 | AR-06 | Два независимых DB connections одновременно закрывают resolved appeal → один terminal history event | `test_admin_resident_contract.AppealConcurrencyContractTests`; обязателен PostgreSQL, SQLite SKIP не считается PASS |
 | AR-07 | Исходное 100; передача 119→120 обновляет одно наблюдение; line review → staff finalize → resident видит 120; repeat не создаёт вторую Reading | `test_water_submission_review_finalization_and_resident_result`; существующие `test_observation_workflow`, `test_controller_workspace`, `staff_workspace_water_e2e_tests` |
 | AR-08 | Норматив 20 × тариф 10 = 200; draft не виден в долге; approval → 200; pending payment 150 без эффекта; confirm/allocate → 50; повтор без дубля; reversal → 200 с сохранением allocation | `test_finance_partial_payment_repeat_and_reversal_oracle`; существующие `test_staff_workspace_finance`, `staff_workspace_finance_e2e_tests` |
@@ -48,12 +48,12 @@ AR-09/10 также проверяют раздельные create B / view A: �
 
 ## Открытые продуктовые решения и границы evidence
 
-- **P1 — требуется решение пользователя:** должен ли завершённый V2 grant окончательно подавлять действующий legacy-доступ? Текущий resolver возвращается к legacy, если активного grant нет. Эта семантика в этом candidate не меняется. Нельзя записывать универсальную гарантию «отозван весь доступ», пока правило не выбрано и не проверено.
+- **P1 — принято пользователем 2026-10-01: «Да, блокируем».** После начала PortalGrant старый ResidentAccess этого же человека/счёта больше не является fallback, в том числе после ends и в промежутке между разрешениями. Новый действующий grant предоставляет только свой набор прав; будущий первый grant не изменяет даты до starts. Независимое проверенное делегирование остаётся отдельным явным источником права, а производное делегирование теряет право при окончании своего источника. Legacy-записи и их история сохраняются.
 - Перенос identity с одного User на другой и архивирование Person не используются как автоматический отзыв/передача истории. Штатная перепривязка существующей identity приглашением запрещена. Новый transfer workflow в scope не включён.
 - Line self-review уже запрещён; финальная staff модерация собственного показания сохраняет текущую политику. Универсальный запрет/вторая подпись не вводятся автоматически.
 - AR-06/13/14 проверяют конкуренцию закрытия обращения, redemption, water-finalize и payment-allocation. SQLite SKIP не является evidence; все эти сценарии должны пройти в PostgreSQL на точном candidate SHA. Это конечный набор гонок выпуска, без обещания проверки всех возможных комбинаций операций.
 - У news attention нет read/dismiss состояния; notifications отражают текущее разрешённое состояние. Не обещать внешний email/SMS или гарантированную доставку.
-- Sandbox host offline. Local SQLite проверяет логику; PostgreSQL CI — транзакции/row locks. Production-shaped staging/config/media/legacy drift и финальный live smoke пока не выполнены этим candidate.
+- Предыдущий candidate `6ed079c` прошёл CI451 backend +28 ops +21 browser и отдельный sandbox451 backend на PostgreSQL16; DEBUG=0, собственный Nginx HTTPS/HTTP Gunicorn, code rollback и отдельное восстановление БД/приватного архива проверены. Новый P1 diff требует нового exact-head CI и затронутого staging acceptance. Production privileged config/legacy drift и финальный live smoke не подтверждены; стенд не считается эквивалентом production.
 
 ## Запуск и сохранение evidence
 

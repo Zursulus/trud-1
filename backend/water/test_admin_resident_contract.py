@@ -181,6 +181,62 @@ class AdminResidentContractTests(TestCase):
         self.assertEqual(self.resident_client.post(url, {"body": "Old open form"}).status_code, 404)
         self.assertFalse(ResidentAppealMessage.objects.exists())
 
+    def test_staff_revocation_blocks_legacy_session_forms_files_and_preserves_history(self):
+        person = Person.objects.create(full_name="Synthetic migrated resident")
+        ResidentIdentity.objects.create(user=self.resident, person=person, verified_by=self.staff, basis="Synthetic identity")
+        grant = PortalGrant.objects.create(
+            person=person, account=self.account, starts=self.today - timedelta(days=1),
+            can_view_account=True, can_use_appeals=True, basis="Synthetic migrated grant", verified_by=self.staff,
+        )
+        ResidentAccess.objects.create(
+            user=self.resident, account=self.other, role="owner", starts=self.today - timedelta(days=60),
+        )
+        appeal = self._new_appeal()
+        url = f"/admin/cabinet/account/{self.account.pk}/appeal/{appeal.pk}/"
+        self.assertEqual(self.resident_client.get(url).status_code, 200)
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            attachment = ResidentAppealAttachment.objects.create(
+                appeal=appeal, uploaded_by=self.resident,
+                document=SimpleUploadedFile("revocation.pdf", b"%PDF-revocation-private", content_type="application/pdf"),
+            )
+            download_url = f"{url}attachment/{attachment.pk}/"
+            download = self.resident_client.get(download_url)
+            self.assertEqual(download.status_code, 200)
+            self.assertEqual(b"".join(download.streaming_content), b"%PDF-revocation-private")
+            self.assertEqual(self.staff_client.post(f"/work/access/grants/{grant.pk}/", {
+                "action": "end", "ends_on": self.today.isoformat(),
+            }).status_code, 302)
+            grant.refresh_from_db()
+            self.assertEqual(grant.ends, self.today)
+            self.assertEqual(grant.history.count(), 2)
+            self.assertEqual(grant.history.first().history_user_id, self.staff.pk)
+            for old_url in (url, download_url, f"/admin/cabinet/account/{self.account.pk}/"):
+                self.assertEqual(self.resident_client.get(old_url).status_code, 404)
+            self.assertEqual(self.resident_client.post(url, {"body": "Old open form"}).status_code, 404)
+            self.assertEqual(self.resident_client.post(f"/admin/cabinet/account/{self.account.pk}/appeal/new/", {
+                "category": self.category.pk, "subject": "After revocation", "message": "Must not save",
+            }).status_code, 404)
+            self.assertEqual(self.resident_client.get(f"/admin/cabinet/account/{self.other.pk}/").status_code, 200)
+            self.assertEqual(ResidentAppeal.objects.count(), 1)
+            self.assertFalse(ResidentAppealMessage.objects.exists())
+            self.assertEqual(appeal.history.count(), 1)
+            self.assertEqual(list(ResidentAccess.objects.filter(user=self.resident).values_list("ends", flat=True)), [None, None])
+            self.assertEqual(self.staff_client.post(f"/work/appeals/{appeal.pk}/", {
+                "action": "reply", "body": "Historical final answer", "next_status": "resolved",
+            }).status_code, 302)
+            appeal.refresh_from_db()
+            self.assertEqual((appeal.account_id, appeal.author_id, appeal.message, appeal.status),
+                             (self.account.pk, self.resident.pk, "Initial question", "resolved"))
+            self.assertEqual(list(appeal.history.order_by("history_date", "history_id").values_list("status", "history_user_id")),
+                             [("new", self.resident.pk), ("resolved", self.staff.pk)])
+            PortalGrant.objects.create(
+                person=person, account=self.account, starts=self.today, can_view_account=True,
+                basis="Synthetic renewed basic grant", verified_by=self.staff,
+            )
+            self.assertEqual(self.resident_client.get(f"/admin/cabinet/account/{self.account.pk}/").status_code, 200)
+            self.assertEqual(self.resident_client.get(url).status_code, 404)
+            self.assertEqual(self.resident_client.get(download_url).status_code, 404)
+
     def test_dual_role_routes_keep_personal_account_boundary(self):
         person = Person.objects.create(full_name="Synthetic dual role")
         ResidentIdentity.objects.create(user=self.staff, person=person, verified_by=self.staff, basis="Synthetic identity")
