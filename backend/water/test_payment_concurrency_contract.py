@@ -19,7 +19,7 @@ from .models import Account, BillingPeriod, BillingPolicy, Charge, Payment, Paym
 
 class PostgreSQLConcurrencyMixin:
     def _concurrent_actions(self, model, object_id, operations):
-        """Hold the shared debt until both independent workers reach a real DB lock."""
+        """Hold the shared object until both independent workers reach a real DB lock."""
         ready = Queue()
 
         def worker(operation):
@@ -37,9 +37,9 @@ class PostgreSQLConcurrencyMixin:
         with ThreadPoolExecutor(max_workers=2) as executor:
             with transaction.atomic():
                 model.objects.select_for_update(of=("self",)).get(pk=object_id)
-                futures = [executor.submit(worker, operation) for operation in operations]
-                pids = [ready.get(timeout=15) for _ in futures]
                 deadline = monotonic() + 15
+                futures = [executor.submit(worker, operation) for operation in operations]
+                pids = [ready.get(timeout=max(0.001, deadline - monotonic())) for _ in futures]
                 while monotonic() < deadline:
                     with connection.cursor() as cursor:
                         # Activity snapshots otherwise remain fixed inside atomic().
