@@ -8,11 +8,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
-from .appeal_workflow import OPEN_APPEAL_STATES
+from .appeal_workflow import OPEN_APPEAL_STATES, scoped_appeals
 from .billing import account_totals
 from .access_policy import ScopeType
 from .access_resolver import can, can_any, scopes_for
-from .access_scope import ScopeRef, scoped_accounts as accounts_in_scope
+from .access_scope import ScopeRef, scoped_accounts as accounts_in_scope, scoped_records, can_on_record
 from .models import (
     Account,
     AccountDocument,
@@ -111,7 +111,7 @@ def _capabilities(user):
     )
     can_manage_access = user.is_superuser or all(
         user.has_perm(permission) for permission in access_management_permissions
-    ) or can_any(user, "access.view")
+    ) or can(user, "access.view", scope=ScopeRef(ScopeType.ALL))
     line_senior = can_any(user, "water.line_submission.submit") or can_any(user, "water.observation.review_line")
     return {
         "can_view_accounts": can_any(user, "accounts.view"),
@@ -184,7 +184,7 @@ def dashboard(request):
                 "url": reverse("staff_workspace:water"),
             })
     if context["can_view_appeals"]:
-        count = ResidentAppeal.objects.filter(status__in=OPEN_APPEAL_STATES).count()
+        count = scoped_appeals(request.user).filter(status__in=OPEN_APPEAL_STATES).count()
         if count:
             attention.append({
                 "label": "Открытые обращения",
@@ -192,21 +192,22 @@ def dashboard(request):
                 "url": reverse("staff_workspace:appeals") + "?state=open",
             })
     if context["can_use_finance_workspace"]:
-        draft_count = Charge.objects.filter(status="draft").count()
+        draft_count = scoped_records(Charge.objects.filter(status="draft"), request.user, "finance.view").count()
         if draft_count:
             attention.append({
                 "label": "Черновики начислений на проверке",
                 "count": draft_count,
                 "url": reverse("staff_workspace:finance"),
             })
-        pending_count = Payment.objects.filter(status="pending").count()
+        pending_count = scoped_records(Payment.objects.filter(status="pending"), request.user, "finance.view").count()
         if pending_count:
             attention.append({
                 "label": "Оплаты на проверке",
                 "count": pending_count,
                 "url": reverse("staff_workspace:finance_payments") + "?state=pending",
             })
-        calculated_periods = BillingPeriod.objects.filter(status="calculated").count()
+        calculated_periods = scoped_records(BillingPeriod.objects.filter(status="calculated"), request.user,
+                                           "finance.view", account_field="charge__account_id").distinct().count()
         if calculated_periods:
             attention.append({
                 "label": "Рассчитанные периоды ждут завершения",
@@ -373,13 +374,16 @@ def account_detail(request, account_id):
         "meters": _meter_rows(request.user, account),
     })
 
-    if context["can_view_finance"]:
+    context["can_view_account_finance"] = can_on_record(request.user, "finance.view", account_id=account.pk)
+    if context["can_view_account_finance"]:
         context["finance"] = account_totals(account)
-    if context["can_view_appeals"]:
-        context["open_appeals"] = ResidentAppeal.objects.filter(
+    context["can_view_account_appeals"] = can_on_record(request.user, "appeals.view", account_id=account.pk)
+    if context["can_view_account_appeals"]:
+        context["open_appeals"] = scoped_appeals(request.user).filter(
             account=account, status__in=OPEN_APPEAL_STATES
         ).count()
-    if context["can_view_documents"]:
+    context["can_view_account_documents"] = can_on_record(request.user, "documents.account.view", account_id=account.pk)
+    if context["can_view_account_documents"]:
         context["documents_count"] = AccountDocument.objects.filter(account=account).count()
     if context["can_view_access"]:
         context["access_count"] = ResidentAccess.objects.filter(

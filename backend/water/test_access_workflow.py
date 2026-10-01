@@ -58,6 +58,8 @@ class AccessRoleBoundaryTests(TestCase):
 class AccessWorkflowTests(TestCase):
     def setUp(self):
         self.actor = User.objects.create_user(username='access-actor', password='test', is_staff=True)
+        call_command('setup_roles', stdout=StringIO())
+        self.actor.groups.add(Group.objects.get(name=ADMIN), Group.objects.get(name=PRIVATE))
         self.account = Account.objects.create(number='ACCESS-1', plot='Лесная 1')
         self.request = ResidentAccessRequest.objects.create(
             full_name='Тестовый Заявитель',

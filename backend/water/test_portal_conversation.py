@@ -144,6 +144,7 @@ class ResidentConversationTests(TestCase):
             download = self.client.get(f'/admin/water/residentappeal/attachment/{attachment.pk}/')
             self.assertEqual(download.status_code, 200)
             self.assertIn('private, no-store', download['Cache-Control'])
+            self.assertEqual(b''.join(download.streaming_content), b'PNG-private')
 
             self.client.force_login(self.resident)
             response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/')

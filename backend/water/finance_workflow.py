@@ -2,12 +2,14 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from .access_resolver import can_any
+from .access_scope import can_on_record, scoped_records
 from .billing import allocate_payment, calculate_period
 from .models import Account, BillingPeriod, Charge, Payment
 
 
-def _require(actor, capability):
-    if not actor.is_staff or not can_any(actor, capability):
+def _require(actor, capability, *, account_id=None):
+    allowed = can_any(actor, capability) if account_id is None else can_on_record(actor, capability, account_id=account_id)
+    if not actor.is_staff or not allowed:
         raise PermissionDenied
 
 
@@ -21,7 +23,8 @@ def calculate_billing_period(*, period_id, actor):
 @transaction.atomic
 def approve_charge(*, charge_id, actor):
     _require(actor, "finance.charge.approve")
-    charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
+    charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
+    _require(actor, "finance.charge.approve", account_id=charge.account_id)
     if charge.status != "draft":
         raise ValidationError("Изменить статус можно только у черновика начисления.")
     charge.status = "approved"
@@ -34,7 +37,8 @@ def approve_charge(*, charge_id, actor):
 @transaction.atomic
 def cancel_charge(*, charge_id, actor):
     _require(actor, "finance.charge.cancel")
-    charge = Charge.objects.select_for_update().select_related("period", "account").get(pk=charge_id)
+    charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
+    _require(actor, "finance.charge.cancel", account_id=charge.account_id)
     if charge.status != "draft":
         raise ValidationError("Отменить можно только черновик начисления.")
     charge.status = "cancelled"
@@ -76,7 +80,7 @@ def close_billing_period(*, period_id, actor):
 
 @transaction.atomic
 def create_payment(*, actor, account, paid_on, amount, method, reference="", notes=""):
-    _require(actor, "finance.payment.create")
+    _require(actor, "finance.payment.create", account_id=account.pk)
     if account.archived:
         raise ValidationError("Нельзя добавить новую оплату в архивный лицевой счёт.")
     payment = Payment(
@@ -97,7 +101,8 @@ def create_payment(*, actor, account, paid_on, amount, method, reference="", not
 @transaction.atomic
 def confirm_payment(*, payment_id, actor):
     _require(actor, "finance.payment.confirm")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
+    _require(actor, "finance.payment.confirm", account_id=payment.account_id)
     if payment.status != "pending":
         raise ValidationError("Подтвердить можно только оплату, ожидающую проверки.")
     payment.status = "confirmed"
@@ -110,7 +115,8 @@ def confirm_payment(*, payment_id, actor):
 @transaction.atomic
 def reverse_payment(*, payment_id, actor):
     _require(actor, "finance.payment.reverse")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
+    _require(actor, "finance.payment.reverse", account_id=payment.account_id)
     if payment.status != "confirmed":
         raise ValidationError("Отменить можно только подтверждённую оплату.")
     payment.status = "reversed"
@@ -123,9 +129,11 @@ def reverse_payment(*, payment_id, actor):
 @transaction.atomic
 def allocate_confirmed_payment(*, payment_id, actor):
     _require(actor, "finance.payment.allocate")
-    payment = Payment.objects.select_for_update().select_related("account").get(pk=payment_id)
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("account").get(pk=payment_id)
+    _require(actor, "finance.payment.allocate", account_id=payment.account_id)
     return allocate_payment(payment, actor=actor)
 
 
-def payment_account_queryset():
-    return Account.objects.filter(archived=False).order_by("plot", "number", "id")
+def payment_account_queryset(*, actor):
+    accounts = scoped_records(Account.objects.filter(archived=False), actor, "finance.payment.create", account_field="pk")
+    return scoped_records(accounts, actor, "finance.view", account_field="pk").order_by("plot", "number", "id")

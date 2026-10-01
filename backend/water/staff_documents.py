@@ -15,6 +15,7 @@ from public_site.models import PublicDocument, PublicDocumentCategory, PublicNew
 from public_site.publication_workflow import PUBLICATION_CONFIRMATION_ERROR, apply_publication_state
 
 from .access_resolver import can_any
+from .access_scope import can_on_record, scoped_records
 from .document_workflow import create_account_document, update_account_document
 from .models import Account, AccountDocument, DocumentCategory
 from .staff_workspace import _base_context
@@ -62,9 +63,12 @@ class AccountDocumentCreateForm(forms.Form):
     visible_to_residents = forms.BooleanField(label="Показывать жителям", required=False, initial=True)
     notes = forms.CharField(label="Служебное примечание", required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["account"].queryset = Account.objects.filter(archived=False).order_by("plot", "number", "id")
+        self.fields["account"].queryset = scoped_records(
+            Account.objects.filter(archived=False), actor, "documents.account.create", account_field="pk",
+        ).order_by("plot", "number", "id")
+        self.fields["account"].queryset = scoped_records(self.fields["account"].queryset, actor, "documents.account.view", account_field="pk")
         self.fields["category"].queryset = DocumentCategory.objects.filter(active=True).order_by("sort_order", "name")
         if not self.is_bound:
             self.fields["published_at"].initial = timezone.localtime().strftime(DATETIME_FORMAT)
@@ -198,7 +202,10 @@ def dashboard(request):
     })
 
     if can_account:
-        queryset = AccountDocument.objects.select_related("account", "category")
+        documents = scoped_records(
+            AccountDocument.objects.select_related("account", "category"), request.user, "documents.account.view",
+        )
+        queryset = documents
         if q:
             queryset = queryset.filter(
                 Q(title__icontains=q)
@@ -208,8 +215,8 @@ def dashboard(request):
                 | Q(category__name__icontains=q)
             )
         context.update({
-            "account_document_count": AccountDocument.objects.count(),
-            "resident_visible_count": AccountDocument.objects.filter(
+            "account_document_count": documents.count(),
+            "resident_visible_count": documents.filter(
                 visible_to_residents=True, published_at__lte=timezone.now()
             ).count(),
             "account_documents": list(queryset.order_by("-published_at", "-id")[:40]),
@@ -245,7 +252,7 @@ def dashboard(request):
 def account_document_create(request):
     if not _can(request.user, "documents.account.create"):
         raise PermissionDenied
-    form = AccountDocumentCreateForm(request.POST or None, request.FILES or None)
+    form = AccountDocumentCreateForm(request.POST or None, request.FILES or None, actor=request.user)
     if request.method == "POST" and form.is_valid():
         try:
             item = create_account_document(actor=request.user, **form.cleaned_data)
@@ -262,8 +269,11 @@ def account_document_create(request):
 def account_document_detail(request, document_id):
     if not _can(request.user, "documents.account.view"):
         raise PermissionDenied
-    item = get_object_or_404(AccountDocument.objects.select_related("account", "category"), pk=document_id)
-    can_change = _can(request.user, "documents.account.edit_metadata")
+    item = get_object_or_404(
+        scoped_records(AccountDocument.objects.select_related("account", "category"), request.user, "documents.account.view"),
+        pk=document_id,
+    )
+    can_change = can_on_record(request.user, "documents.account.edit_metadata", account_id=item.account_id)
     bound_data = request.POST if request.method == "POST" and can_change else None
     form = AccountDocumentEditForm(bound_data, item=item)
     if request.method == "POST":
@@ -285,7 +295,9 @@ def account_document_detail(request, document_id):
 def account_document_download(request, document_id):
     if not _can(request.user, "documents.account.download"):
         raise PermissionDenied
-    item = get_object_or_404(AccountDocument, pk=document_id)
+    item = get_object_or_404(
+        scoped_records(AccountDocument.objects.all(), request.user, "documents.account.download"), pk=document_id,
+    )
     try:
         stream = item.document.open("rb")
     except (FileNotFoundError, OSError) as error:

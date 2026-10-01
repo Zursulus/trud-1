@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .access_resolver import can_any
+from .access_scope import can_on_record, scoped_records
 from .billing import account_totals
 from .finance_workflow import (
     allocate_confirmed_payment,
@@ -41,9 +42,9 @@ class PaymentCreateForm(forms.Form):
     reference = forms.CharField(label="Номер / назначение платежа", max_length=300, required=False)
     notes = forms.CharField(label="Примечание", required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["account"].queryset = payment_account_queryset()
+        self.fields["account"].queryset = payment_account_queryset(actor=actor)
         if not self.is_bound:
             self.fields["paid_on"].initial = timezone.localdate()
 
@@ -53,8 +54,14 @@ def _require_finance_view(request):
         raise PermissionDenied
 
 
-def _can(user, capability):
+def _can(user, capability, *, account_id=None):
+    if account_id is not None:
+        return can_on_record(user, capability, account_id=account_id)
     return user.is_superuser or can_any(user, capability)
+
+
+def _finance_periods(user):
+    return scoped_records(BillingPeriod.objects.all(), user, "finance.view", account_field="charge__account_id").distinct()
 
 
 def _payments_with_remaining(queryset):
@@ -73,18 +80,19 @@ def _payments_with_remaining(queryset):
 def finance_dashboard(request):
     _require_finance_view(request)
     context = _base_context(request, section="finance")
-    draft_charges = Charge.objects.filter(status="draft")
-    pending_payments = Payment.objects.filter(status="pending")
-    unallocated = _payments_with_remaining(Payment.objects.filter(status="confirmed")).filter(remaining__gt=0)
+    draft_charges = scoped_records(Charge.objects.filter(status="draft"), request.user, "finance.view")
+    payments = scoped_records(Payment.objects.all(), request.user, "finance.view")
+    pending_payments = payments.filter(status="pending")
+    unallocated = _payments_with_remaining(payments.filter(status="confirmed")).filter(remaining__gt=0)
     context.update({
         "draft_charge_count": draft_charges.count(),
         "draft_charge_amount": draft_charges.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
         "pending_payment_count": pending_payments.count(),
         "pending_payment_amount": pending_payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
         "unallocated_payment_count": unallocated.count(),
-        "periods": list(BillingPeriod.objects.order_by("-starts", "-id")[:8]),
+        "periods": list(_finance_periods(request.user).order_by("-starts", "-id")[:8]),
         "recent_payments": list(
-            _payments_with_remaining(Payment.objects.select_related("account"))
+            _payments_with_remaining(payments.select_related("account"))
             .order_by("-paid_on", "-id")[:8]
         ),
         "can_add_payment": _can(request.user, "finance.payment.create"),
@@ -94,7 +102,7 @@ def finance_dashboard(request):
 
 def period_detail(request, period_id):
     _require_finance_view(request)
-    period = get_object_or_404(BillingPeriod, pk=period_id)
+    period = get_object_or_404(_finance_periods(request.user), pk=period_id)
 
     if request.method == "POST":
         action = request.POST.get("action") or ""
@@ -110,7 +118,7 @@ def period_detail(request, period_id):
                 )
             elif action in {"approve_charge", "cancel_charge"}:
                 charge_id = request.POST.get("charge_id")
-                charge = get_object_or_404(Charge, pk=charge_id, period=period)
+                charge = get_object_or_404(scoped_records(Charge.objects.all(), request.user, "finance.view"), pk=charge_id, period=period)
                 if action == "approve_charge":
                     approve_charge(charge_id=charge.pk, actor=request.user)
                     messages.success(request, f"Начисление №{charge.pk} утверждено.")
@@ -131,10 +139,13 @@ def period_detail(request, period_id):
 
     period.refresh_from_db()
     charges = list(
-        Charge.objects.filter(period=period)
+        scoped_records(Charge.objects.filter(period=period), request.user, "finance.view")
         .select_related("account")
         .order_by("status", "account__plot", "account__number", "id")
     )
+    for charge in charges:
+        charge.can_approve = _can(request.user, "finance.charge.approve", account_id=charge.account_id)
+        charge.can_cancel = _can(request.user, "finance.charge.cancel", account_id=charge.account_id)
     draft_count = sum(1 for charge in charges if charge.status == "draft")
     context = _base_context(request, section="finance")
     context.update({
@@ -144,8 +155,8 @@ def period_detail(request, period_id):
         "approved_amount": sum((charge.amount for charge in charges if charge.status == "approved"), Decimal("0.00")),
         "draft_amount": sum((charge.amount for charge in charges if charge.status == "draft"), Decimal("0.00")),
         "can_calculate": _can(request.user, "finance.period.calculate") and period.status not in ("approved", "closed"),
-        "can_change_charge": (_can(request.user, "finance.charge.approve") or _can(request.user, "finance.charge.cancel")),
-        "can_approve_period": _can(request.user, "finance.period.approve") and period.status == "calculated" and draft_count == 0,
+        "can_change_charge": any(charge.can_approve or charge.can_cancel for charge in charges),
+        "can_approve_period": _can(request.user, "finance.period.approve") and period.status == "calculated" and not Charge.objects.filter(period=period, status="draft").exists(),
         "can_close_period": _can(request.user, "finance.period.close") and period.status == "approved",
     })
     return TemplateResponse(request, "water/work/finance/period.html", context)
@@ -157,7 +168,7 @@ def payment_list(request):
     if state not in {"attention", "pending", "unallocated", "confirmed", "reversed", "all"}:
         state = "attention"
     q = " ".join((request.GET.get("q") or "").split())[:160]
-    payments = _payments_with_remaining(Payment.objects.select_related("account"))
+    payments = _payments_with_remaining(scoped_records(Payment.objects.select_related("account"), request.user, "finance.view"))
     if state == "attention":
         payments = payments.filter(Q(status="pending") | Q(status="confirmed", remaining__gt=0))
     elif state == "pending":
@@ -189,7 +200,7 @@ def payment_create(request):
     _require_finance_view(request)
     if not _can(request.user, "finance.payment.create"):
         raise PermissionDenied
-    form = PaymentCreateForm(request.POST or None)
+    form = PaymentCreateForm(request.POST or None, actor=request.user)
     if request.method == "POST" and form.is_valid():
         try:
             payment = create_payment(actor=request.user, **form.cleaned_data)
@@ -205,7 +216,7 @@ def payment_create(request):
 
 def payment_detail(request, payment_id):
     _require_finance_view(request)
-    payment = get_object_or_404(Payment.objects.select_related("account"), pk=payment_id)
+    payment = get_object_or_404(scoped_records(Payment.objects.select_related("account"), request.user, "finance.view"), pk=payment_id)
     if request.method == "POST":
         action = request.POST.get("action") or ""
         try:
@@ -241,16 +252,16 @@ def payment_detail(request, payment_id):
         "allocations": allocations,
         "allocated_total": allocated_total,
         "remaining": remaining,
-        "can_confirm": _can(request.user, "finance.payment.confirm") and payment.status == "pending",
-        "can_allocate": _can(request.user, "finance.payment.allocate") and payment.status == "confirmed" and remaining > 0,
-        "can_reverse": _can(request.user, "finance.payment.reverse") and payment.status == "confirmed",
+        "can_confirm": _can(request.user, "finance.payment.confirm", account_id=payment.account_id) and payment.status == "pending",
+        "can_allocate": _can(request.user, "finance.payment.allocate", account_id=payment.account_id) and payment.status == "confirmed" and remaining > 0,
+        "can_reverse": _can(request.user, "finance.payment.reverse", account_id=payment.account_id) and payment.status == "confirmed",
     })
     return TemplateResponse(request, "water/work/finance/payment.html", context)
 
 
 def account_finance(request, account_id):
     _require_finance_view(request)
-    account = get_object_or_404(Account, pk=account_id)
+    account = get_object_or_404(scoped_records(Account.objects.all(), request.user, "finance.view", account_field="pk"), pk=account_id)
     charges = list(
         Charge.objects.filter(account=account)
         .select_related("period")

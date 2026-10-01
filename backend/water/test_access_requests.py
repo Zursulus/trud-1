@@ -125,6 +125,10 @@ class InviteDisambiguationTests(TestCase):
             message='', submission_key='bound-request', requester_user=resident,
         )
         actor = User.objects.create_user(username='reviewer', is_staff=True)
+        actor.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label='water',
+            codename__in=['access_private_registry', 'change_residentaccessrequest', 'add_residentinvite'],
+        ))
         _decided, _invite, raw = approve_access_request(
             request_obj.pk, account=second, email=request_obj.email, role='payer',
             decision_note='Основание проверено', actor=actor,

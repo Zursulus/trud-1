@@ -11,7 +11,7 @@ from django.views.decorators.cache import never_cache
 
 from .access_resolver import can_any
 
-from .appeal_workflow import send_board_reply
+from .appeal_workflow import scoped_appeals, send_board_reply
 from .models import ResidentAppeal
 from .resident_models import (
     APPEAL_ATTACHMENT_EXTENSIONS,
@@ -43,7 +43,7 @@ class BoardAppealMessageForm(forms.Form):
 def manage_appeal_attachments(request, appeal_id):
     if not request.user.is_staff or not can_any(request.user, 'appeals.reply'):
         raise PermissionDenied
-    appeal = get_object_or_404(ResidentAppeal.objects.select_related('account', 'author'), pk=appeal_id)
+    appeal = get_object_or_404(scoped_appeals(request.user, 'appeals.reply').select_related('account', 'author'), pk=appeal_id)
     can_reply = appeal.status not in ('resolved', 'closed')
     form = BoardAppealMessageForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and not can_reply:
@@ -79,7 +79,11 @@ def manage_appeal_attachments(request, appeal_id):
 def download_appeal_attachment(request, attachment_id):
     if not request.user.is_staff or not can_any(request.user, 'appeals.attachment.view'):
         raise PermissionDenied
-    attachment = get_object_or_404(ResidentAppealAttachment.objects.select_related('appeal'), pk=attachment_id)
+    attachment = get_object_or_404(
+        ResidentAppealAttachment.objects.select_related('appeal').filter(
+            appeal__in=scoped_appeals(request.user, 'appeals.attachment.view'),
+        ), pk=attachment_id,
+    )
     try:
         stream = attachment.document.open('rb')
     except (FileNotFoundError, OSError) as error:

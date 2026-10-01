@@ -175,8 +175,8 @@ def _from_delegation(account, capabilities):
 
 def _from_legacy(access):
     # Legacy ResidentAccess historically unlocked the whole account workspace.
-    # Preserve that behaviour exactly until each real user is migrated to an
-    # explicit PortalGrant. Representative actions are the only future-only
+    # Preserve that behaviour only until explicit authority starts for this
+    # person/account. Representative actions are the only future-only
     # capability and therefore stay limited to owner/representative roles.
     return ResolvedPortalAccess(
         account=access.account,
@@ -192,18 +192,24 @@ def _from_legacy(access):
 
 
 def resolved_accesses_at(user, on_date, capability=None):
-    """Resolve portal authority at an exact date without unioning sources."""
+    """Resolve dated authority; started explicit grants permanently replace legacy."""
     if not getattr(user, 'is_authenticated', False) or not user.is_active:
         return []
 
     resolved = {}
+    managed_account_ids = set()
     identity = ResidentIdentity.objects.filter(user=user).select_related('person').first()
     if identity:
-        grants = PortalGrant.objects.filter(
+        started_grants = PortalGrant.objects.filter(
             person=identity.person,
             account__archived=False,
             starts__lte=on_date,
-        ).filter(_active_period_filter(on_date)).select_related('account').order_by('account_id', '-starts', '-id')
+        )
+        # An ended grant is still the explicit authority record for its account.
+        # Its absence from active grants must never revive broad legacy rights.
+        # Future-only grants do not change the historical period before starts.
+        managed_account_ids = set(started_grants.values_list('account_id', flat=True))
+        grants = started_grants.filter(_active_period_filter(on_date)).select_related('account').order_by('account_id', '-starts', '-id')
         for grant in grants:
             if grant.account_id not in resolved:
                 resolved[grant.account_id] = _from_grant(grant)
@@ -241,7 +247,7 @@ def resolved_accesses_at(user, on_date, capability=None):
         starts__lte=on_date,
     ).filter(_active_period_filter(on_date)).select_related('account').order_by('account_id', '-starts', '-id')
     for access in legacy:
-        if access.account_id not in resolved:
+        if access.account_id not in resolved and access.account_id not in managed_account_ids:
             resolved[access.account_id] = _from_legacy(access)
 
     rows = sorted(
@@ -254,7 +260,7 @@ def resolved_accesses_at(user, on_date, capability=None):
 
 
 def resolved_accesses(user, capability=None):
-    """Resolve current portal rights, explicit grants first and legacy as fallback."""
+    """Resolve current rights; legacy applies only before explicit authority starts."""
     return resolved_accesses_at(user, timezone.localdate(), capability)
 
 
@@ -283,7 +289,18 @@ def _resident_appeal_clean_with_resolver(self):
     models.py and, importantly, makes admin/board saves obey the same access
     model as resident views.
     """
-    if self.author_id and self.account_id:
+    original = None
+    if not self._state.adding:
+        original = ResidentAppeal.objects.filter(pk=self.pk).values(
+            'author_id', 'account_id', 'opened_at',
+        ).first()
+    # Ended authority stops resident requests, but must not strand historical
+    # work for staff. Revalidate creation or a changed attribution/context.
+    context_changed = original is None or any(
+        original[field] != getattr(self, field)
+        for field in ('author_id', 'account_id', 'opened_at')
+    )
+    if context_changed and self.author_id and self.account_id:
         opened_on = self.opened_at.date() if self.opened_at else timezone.localdate()
         access = resolved_access_at(self.author, self.account_id, CAP_APPEALS, opened_on)
         if access is None:
