@@ -9,6 +9,7 @@ from . import (
     staff_governance,
     staff_line_workspace,
     staff_more,
+    staff_workbench,
     staff_security,
     staff_tasks,
     staff_workspace,
@@ -18,6 +19,7 @@ from . import (
 app_name = "staff_workspace"
 
 urlpatterns = [
+    path("panel/", staff_workbench.workspace_workbench, name="workbench"),
     path("", staff_workspace.workspace_dashboard, name="home"),
     path("tasks/", staff_tasks.workspace_tasks, name="tasks"),
     path("search/", staff_workspace.workspace_search, name="search"),
