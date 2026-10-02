@@ -5,6 +5,7 @@
   <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Финансы</h1><p>Расчёт начислений, проверка оплат, распределение и баланс.</p></div>
   <div class="ws-actions">
     <a class="ws-secondary" href="{% url 'staff_workspace:finance_payments' %}">Оплаты</a>
+    {% if can_export_vtb %}<a class="ws-secondary" href="{% url 'staff_workspace:finance_vtb_debt' %}">VTB · задолженность</a>{% endif %}
     {% if can_add_payment %}<a class="ws-primary" href="{% url 'staff_workspace:finance_payment_create' %}">Внести оплату</a>{% endif %}
   </div>
 </section>
