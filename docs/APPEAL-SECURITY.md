@@ -44,17 +44,16 @@ Production работает fail-closed: если обязательный ан�
 
 ## Production prerequisite
 
-До deploy установить и проверить ClamAV daemon. Для Debian 12 рабочий контур должен иметь `clamdscan` (обычно `/usr/bin/clamdscan`) и доступ приложения к работающему daemon.
+Production не запускает локальный clamd: приложение использует `clamdscan` и приватный loopback TCP endpoint `127.0.0.1:3310`, который через ограниченный reverse-SSH tunnel ведёт к clamd на sandbox. clamd не публикуется наружу.
 
 Перед deploy обязательно:
+- sandbox `clamav-daemon`, `clamav-freshclam` и tunnel active;
+- официальные CVD/CLD signature databases присутствуют и актуальны;
+- на production `127.0.0.1:3310` отвечает clamd;
+- clean `INSTREAM` возвращает OK, EICAR `INSTREAM` возвращает FOUND;
+- приложение запускает `clamdscan --stream`, чтобы remote clamd не пытался открыть production-local pathname.
 
-```sh
-command -v clamdscan
-systemctl is-active clamav-daemon
-sudo -u trudsite clamdscan --fdpass --no-summary /etc/hosts
-```
-
-Имя системного пользователя сверить с фактическим unit приложения; не копировать команду вслепую, если deployment использует другого пользователя.
+Scanner-loss должен оставаться fail-closed: при недоступном tunnel новый upload отклоняется, а malware-scan requirement не отключается.
 
 Production defaults:
 
