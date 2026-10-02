@@ -95,7 +95,7 @@ def finance_dashboard(request):
             _payments_with_remaining(payments.select_related("account"))
             .order_by("-paid_on", "-id")[:8]
         ),
-        "can_add_payment": _can(request.user, "finance.payment.create"),
+        "can_add_payment": _can(request.user, "finance.payment.create"),\n        "can_export_vtb": _can(request.user, "finance.export"),
     })
     return TemplateResponse(request, "water/work/finance/dashboard.html", context)
 
