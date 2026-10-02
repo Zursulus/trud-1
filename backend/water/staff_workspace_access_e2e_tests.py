@@ -249,7 +249,11 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                         f"{self.live_server_url}/work/panel/?q=%2B70000000001",
                         wait_until="networkidle",
                     )
-                    page.get_by_role("link", name=self.person.full_name, exact=False).first.click()
+                    person_result = page.locator(
+                        f'.wb-results a[href*="kind=person"][href*="id={self.person.pk}"]'
+                    )
+                    expect(person_result).to_have_count(1)
+                    person_result.click()
                     page.wait_for_load_state("networkidle")
                     page.get_by_role("link", name="Редактировать данные", exact=True).click()
                     page.locator("#id_phone").fill("+79990000011")
