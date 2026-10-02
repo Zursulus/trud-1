@@ -19,7 +19,7 @@ class VtbDryRunCommandTests(TestCase):
             handle.write(payload)
             handle.flush()
             stdout = StringIO()
-            call_command("vtb_registry_dryrun", handle.name, stdout=stdout)
+            call_command("vtb_registry_dryrun", handle.name, encoding="cp1251", stdout=stdout)
         output = stdout.getvalue()
         self.assertIn("matched=1", output)
         self.assertIn("NO DATABASE WRITES PERFORMED", output)
