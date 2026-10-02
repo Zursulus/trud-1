@@ -2,9 +2,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .access_policy import ScopeType
-from .access_resolver import can, scopes_for
-from .access_scope import ScopeRef
+from .access_resolver import can_any
 from .models import ResidentAppeal
 from .resident_models import ResidentAppealAttachment, ResidentAppealBoardMessage
 
@@ -14,25 +12,8 @@ FINAL_APPEAL_STATES = ("resolved", "closed")
 STAFF_REPLY_STATES = ("in_progress", "awaiting_resident", "resolved")
 
 
-def scoped_appeals(actor, capability="appeals.view"):
-    """Bound lists by appeal authority, retaining historical/archived accounts."""
-    if not actor.is_staff:
-        return ResidentAppeal.objects.none()
-    scopes = scopes_for(actor, capability)
-    if any(scope.type == ScopeType.ALL for scope in scopes):
-        return ResidentAppeal.objects.all()
-    account_ids = [scope.object_id for scope in scopes if scope.type == ScopeType.ACCOUNT]
-    return ResidentAppeal.objects.filter(account_id__in=account_ids)
-
-
-def can_for_appeal(actor, capability, appeal):
-    return actor.is_staff and can(
-        actor, capability, scope=ScopeRef(ScopeType.ACCOUNT, appeal.account_id),
-    )
-
-
-def _require_capability(actor, capability, appeal):
-    if not can_for_appeal(actor, capability, appeal):
+def _require_capability(actor, capability):
+    if not actor.is_staff or not can_any(actor, capability):
         raise PermissionDenied
 
 
@@ -43,6 +24,11 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
     the resident portal and existing audited admin records. Non-final replies use the
     immutable ResidentAppealBoardMessage stream.
     """
+    _require_capability(actor, "appeals.reply")
+    if document:
+        _require_capability(actor, "appeals.attachment.manage")
+    if next_status is not None:
+        _require_capability(actor, "appeals.status.change")
     text = (body or "").strip()
     if not text:
         raise ValidationError("Введите сообщение жителю.")
@@ -51,11 +37,6 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
 
     with transaction.atomic():
         appeal = ResidentAppeal.objects.select_for_update().get(pk=appeal_id)
-        _require_capability(actor, "appeals.reply", appeal)
-        if document:
-            _require_capability(actor, "appeals.attachment.manage", appeal)
-        if next_status is not None:
-            _require_capability(actor, "appeals.status.change", appeal)
         if appeal.status in FINAL_APPEAL_STATES:
             raise ValidationError("Обращение уже завершено. Для нового вопроса нужен новый диалог.")
 
@@ -103,9 +84,9 @@ def send_board_reply(*, appeal_id, actor, body, document=None, next_status=None)
 
 
 def close_resolved_appeal(*, appeal_id, actor):
+    _require_capability(actor, "appeals.close")
     with transaction.atomic():
         appeal = ResidentAppeal.objects.select_for_update().get(pk=appeal_id)
-        _require_capability(actor, "appeals.close", appeal)
         if appeal.status == "closed":
             return appeal
         if appeal.status != "resolved" or not appeal.response.strip():
