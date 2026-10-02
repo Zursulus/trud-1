@@ -1,4 +1,3 @@
-[Reading 78 lines from start (total: 78 lines, 0 remaining)]
 
 # Безопасность вложений обращений
 
