@@ -1,4 +1,3 @@
-[Reading 202 lines from start (total: 202 lines, 0 remaining)]
 
 from datetime import timedelta
 from io import BytesIO, StringIO
