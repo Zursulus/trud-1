@@ -1,3 +1,5 @@
+[Reading 154 lines from start (total: 154 lines, 0 remaining)]
+
 from datetime import date
 import tempfile
 
@@ -74,7 +76,7 @@ class ResidentConversationTests(TestCase):
                 },
             )
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, 'Разрешены только PDF, JPG и PNG')
+            self.assertContains(response, 'запрещён из соображений безопасности')
             self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
 
     def test_oversized_attachment_is_rejected_with_form_error(self):
@@ -133,7 +135,9 @@ class ResidentConversationTests(TestCase):
                 f'/admin/water/residentappeal/{self.appeal.pk}/attachments/',
                 {
                     'body': 'Документ подготовлен.',
-                    'document': SimpleUploadedFile('ответ.png', b'PNG-private', content_type='image/png'),
+                    'document': SimpleUploadedFile(
+                        'ответ.png', b'\x89PNG\r\n\x1a\nPNG-private', content_type='image/png',
+                    ),
                 },
             )
             self.assertEqual(response.status_code, 302)
@@ -150,3 +154,5 @@ class ResidentConversationTests(TestCase):
             response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/')
             self.assertContains(response, 'Документ подготовлен.')
             self.assertContains(response, 'ответ.png')
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
