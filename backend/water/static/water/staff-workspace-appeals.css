@@ -1,3 +1,5 @@
+[Reading 72 lines from start (total: 72 lines, 0 remaining)]
+
 .ws-flash-stack { display: grid; gap: 8px; margin: 0 0 18px; }
 .ws-flash { padding: 12px 14px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); line-height: 1.4; }
 .ws-flash-success { border-color: #b7dfc8; background: #edf8f1; color: var(--ws-success); }
@@ -20,6 +22,10 @@
 .ws-message-body { line-height: 1.55; overflow-wrap: anywhere; }
 .ws-attachments { display: grid; gap: 6px; margin-top: 10px; }
 .ws-attachments a { width: fit-content; max-width: 100%; color: var(--ws-brand); font-size: 13px; overflow-wrap: anywhere; }
+.ws-attachment-card { display: inline-flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--ws-line); border-radius: 10px; background: rgba(255,255,255,.72); text-decoration: none; }
+.ws-attachment-card > span:last-child { min-width: 0; display: grid; gap: 1px; }
+.ws-attachment-card strong { overflow-wrap: anywhere; }
+.ws-attachment-card small { color: var(--ws-muted); }
 
 .ws-form-panel { padding: 18px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); box-shadow: var(--ws-shadow); }
 .ws-form { display: grid; gap: 15px; }
@@ -28,9 +34,28 @@
 .ws-field small { color: var(--ws-muted); line-height: 1.4; }
 .ws-field textarea, .ws-field select, .ws-field input[type="file"] { width: 100%; max-width: 100%; font: inherit; color: var(--ws-text); }
 .ws-field textarea, .ws-field select { min-height: 48px; padding: 11px 12px; border: 1px solid #cbd3dd; border-radius: 12px; background: #fff; outline: none; }
-.ws-field textarea { resize: vertical; min-height: 132px; }
+.ws-field textarea { resize: vertical; min-height: 112px; max-height: 260px; }
 .ws-field textarea:focus, .ws-field select:focus { border-color: var(--ws-brand); box-shadow: 0 0 0 3px rgba(36,91,71,.12); }
 .errorlist { margin: 0; padding: 0; list-style: none; color: var(--ws-danger); font-size: 13px; line-height: 1.4; }
+
+.ws-composer { gap: 12px; }
+.ws-composer-tools { display: flex; flex-wrap: wrap; gap: 7px; }
+.ws-composer-tool { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 11px; border: 1px solid var(--ws-line); border-radius: 10px; background: #fff; color: var(--ws-text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ws-composer-tool:focus-visible, .ws-composer-panel button:focus-visible, .ws-selected-file button:focus-visible { outline: 3px solid rgba(36,91,71,.24); outline-offset: 2px; }
+.ws-composer-panel { display: flex; flex-wrap: wrap; gap: 7px; padding: 10px; border: 1px solid var(--ws-line); border-radius: 12px; background: #fafbfc; }
+.ws-composer-panel[hidden] { display: none; }
+.ws-composer-panel button { min-height: 38px; padding: 0 10px; border: 1px solid var(--ws-line); border-radius: 9px; background: #fff; color: var(--ws-text); font: inherit; cursor: pointer; }
+.ws-emoji-panel button { min-width: 40px; padding: 0; font-size: 20px; }
+.ws-quick-replies button { font-size: 13px; }
+.ws-composer.is-enhanced .ws-native-file-field input[type="file"],
+.ws-composer.is-enhanced .ws-native-file-field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.ws-selected-file { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 10px 12px; border: 1px solid #cbded6; border-radius: 12px; background: #f2f8f5; }
+.ws-selected-file[hidden] { display: none; }
+.ws-selected-file > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+.ws-selected-file strong { overflow-wrap: anywhere; }
+.ws-selected-file small { color: var(--ws-muted); }
+.ws-selected-file button { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--ws-muted); font-size: 22px; cursor: pointer; }
+.ws-composer-send[disabled] { opacity: .65; cursor: wait; }
 
 .ws-bottom-nav { display: flex; }
 .ws-bottom-nav a { flex: 1 1 0; }
@@ -38,8 +63,14 @@
 @media (max-width: 520px) {
   .ws-message { width: 96%; }
   .ws-result-tail .ws-badge { max-width: 92px; text-align: center; justify-content: center; }
+  .ws-form-panel { padding: 14px; }
+  .ws-composer-tools { display: grid; grid-template-columns: auto auto minmax(0,1fr); }
+  .ws-composer-tool { padding-inline: 9px; }
+  .ws-composer-send { width: 100%; }
 }
 
 @media (min-width: 920px) {
   .ws-bottom-nav { display: none; }
 }
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
