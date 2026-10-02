@@ -9,6 +9,7 @@ from . import (
     staff_governance,
     staff_line_workspace,
     staff_more,
+    staff_registry_edit,
     staff_workbench,
     staff_tasks,
     staff_workspace,
