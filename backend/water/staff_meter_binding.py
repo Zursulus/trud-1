@@ -48,6 +48,14 @@ def meter_bind(request, account_id):
             scope=ScopeRef(ScopeType.SUPPLY_NODE, node.pk),
         ):
             raise PermissionDenied
+        if Meter.objects.filter(node=node, serial=form.cleaned_data["serial"].strip()).exists():
+            form.add_error("serial", "Счётчик с таким номером уже существует на выбранном узле.")
+            context = _base_context(request, section="more")
+            context.update(account=account, form=form)
+            response = TemplateResponse(request, "water/work/meter_bind.html", context)
+            response["Cache-Control"] = "private, no-store"
+            response["X-Robots-Tag"] = "noindex, nofollow"
+            return response
         meter = Meter(
             serial=form.cleaned_data["serial"].strip(),
             kind="individual",
