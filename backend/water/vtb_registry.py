@@ -80,21 +80,28 @@ def _money(value: str, field: str) -> Decimal:
     return amount
 
 
-def decode_vtb_text(payload: bytes) -> tuple[str, str]:
+def decode_vtb_text(payload: bytes, *, encoding: str = "auto") -> tuple[str, str]:
+    aliases = {"win-1251": "cp1251", "windows-1251": "cp1251", "koi8r": "koi8-r"}
+    encoding = aliases.get((encoding or "auto").lower(), (encoding or "auto").lower())
+    if encoding not in {"auto", "utf-8", "cp1251", "koi8-r"}:
+        raise VtbRegistryError("unsupported registry encoding")
+    if encoding != "auto":
+        try:
+            return payload.decode(encoding), encoding
+        except UnicodeDecodeError as error:
+            raise VtbRegistryError(f"registry is not valid {encoding}") from error
     if payload.startswith(b"\xef\xbb\xbf"):
         return payload.decode("utf-8-sig"), "utf-8-sig"
-    for encoding in ("utf-8", "cp1251", "koi8-r"):
-        try:
-            text = payload.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-        if "\ufffd" not in text:
-            return text, encoding
-    raise VtbRegistryError("registry encoding is not UTF-8, WIN-1251 or KOI8-R")
+    try:
+        return payload.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError as error:
+        raise VtbRegistryError(
+            "single-byte encoding is ambiguous; choose WIN-1251 or KOI8-R explicitly"
+        ) from error
 
 
-def parse_payment_registry(payload: bytes) -> VtbPaymentRegistry:
-    text, encoding = decode_vtb_text(payload)
+def parse_payment_registry(payload: bytes, *, encoding: str = "auto") -> VtbPaymentRegistry:
+    text, encoding = decode_vtb_text(payload, encoding=encoding)
     lines = [line.strip("\r") for line in text.splitlines() if line.strip()]
     if len(lines) < 2:
         raise VtbRegistryError("registry must contain payment rows and one control row")
