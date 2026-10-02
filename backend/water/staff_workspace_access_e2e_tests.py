@@ -179,7 +179,7 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                         page.on('pageerror', lambda error: errors.append(str(error)))
                         try:
                             page.goto(self.live_server_url + '/work/more/')
-                            page.get_by_role('link', name='Новая панель · только просмотр Жители и участки', exact=False).click()
+                            page.get_by_role('link', name='Рабочая панель · контакты и адреса Жители и участки', exact=False).click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name='Жители и участки', exact=True).is_visible())
                             page.get_by_label('Адрес, имя, логин, телефон, e-mail или ID').fill('Тестовый адрес 2')
