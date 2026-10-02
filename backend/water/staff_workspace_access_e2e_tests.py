@@ -246,9 +246,11 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                 page.on("pageerror", lambda exc: page_errors.append(str(exc)))
                 try:
                     page.goto(
-                        f"{self.live_server_url}/work/access/people/{self.person.pk}/",
+                        f"{self.live_server_url}/work/panel/?q=%2B70000000001",
                         wait_until="networkidle",
                     )
+                    page.get_by_role("link", name=self.person.full_name, exact=False).first.click()
+                    page.wait_for_load_state("networkidle")
                     page.get_by_role("link", name="Редактировать данные", exact=True).click()
                     page.locator("#id_phone").fill("+79990000011")
                     page.locator("#id_email").fill(f"editor-{engine}@example.test")
@@ -257,7 +259,7 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                     self.assertTrue(page.get_by_text("+79990000011", exact=False).is_visible())
 
                     page.goto(
-                        f"{self.live_server_url}/work/accounts/{self.account.pk}/",
+                        f"{self.live_server_url}/work/panel/?kind=account&id={self.account.pk}",
                         wait_until="networkidle",
                     )
                     page.get_by_role("link", name="Редактировать карточку", exact=True).click()
@@ -267,6 +269,10 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                     page.wait_for_load_state("networkidle")
                     self.assertTrue(page.get_by_role("heading", name=f"Горная 2 · {engine}", exact=True).is_visible())
 
+                    page.goto(
+                        f"{self.live_server_url}/work/panel/?kind=plot&id={self.plot.pk}",
+                        wait_until="networkidle",
+                    )
                     page.get_by_role("link", name="Изменить адрес", exact=True).click()
                     page.locator("#id_address").fill(f"Горная 2, ориентир {engine}")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
