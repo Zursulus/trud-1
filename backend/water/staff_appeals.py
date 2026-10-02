@@ -1,4 +1,3 @@
-[Reading 200 lines from start (total: 200 lines, 0 remaining)]
 
 from django import forms
 from django.contrib import admin, messages
