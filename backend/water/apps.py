@@ -1,3 +1,5 @@
+[Reading 42 lines from start (total: 42 lines, 0 remaining)]
+
 from django.apps import AppConfig
 
 
@@ -15,6 +17,9 @@ class WaterConfig(AppConfig):
         from . import finance_models  # noqa: F401
         from . import controller_scope  # noqa: F401
         from . import board_polls  # noqa: F401
+        from . import security_models  # noqa: F401
+        # Security policy is registered only after attachment/security models exist.
+        from . import appeal_security  # noqa: F401
         from . import portal_permissions
         from . import access_control  # noqa: F401
         from . import observation_policy  # noqa: F401
@@ -37,3 +42,5 @@ class WaterConfig(AppConfig):
         from . import finance_admin  # noqa: F401
         from . import controller_scope_admin  # noqa: F401
         from . import board_poll_admin  # noqa: F401
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
