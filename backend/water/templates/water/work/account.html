@@ -26,7 +26,7 @@
   <section class="ws-summary">
     <span>Участки</span>
     <strong>{{ land_plots|length }}</strong>
-    {% for plot in land_plots %}<p>{{ plot.label }}{% if plot.address %} · {{ plot.address }}{% endif %}{% if plot.archived %} · архив{% endif %}</p>{% empty %}<p>Связанный LandPlot пока не указан.</p>{% endfor %}
+    {% for plot in land_plots %}<p>{{ plot.label }}{% if plot.address %} · {{ plot.address }}{% endif %}{% if plot.archived %} · архив{% endif %}{% if can_edit_land_plots %} · <a href="{% url 'staff_workspace:plot_edit' plot.pk %}">Изменить адрес</a>{% endif %}</p>{% empty %}<p>Связанный LandPlot пока не указан.</p>{% endfor %}
   </section>
   {% endif %}
   {% if can_view_water %}
@@ -103,6 +103,6 @@
 <section class="ws-section ws-muted-panel">
   <h2>Служебная карточка</h2>
   <p>Исправления реестра выполняются через существующий audited workflow; рабочие процессы постепенно переносятся в этот интерфейс.</p>
-  {% if can_edit_accounts %}<a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Открыть в Django Admin</a>{% endif %}
+  {% if can_edit_accounts %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:account_edit' account.pk %}">Редактировать карточку</a><a class="ws-secondary" href="{% url 'admin:water_account_change' account.pk %}">Технический Django Admin</a></div>{% endif %}
 </section>
 {% endblock %}
