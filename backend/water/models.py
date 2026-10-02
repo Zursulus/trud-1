@@ -993,9 +993,6 @@ class ResidentAppealMessage(RecordedModel):
         return f'{self.appeal} · {self.created_at:%d.%m.%Y %H:%M}'
 
 
-
-from .security_models import SecurityAlert  # noqa: E402,F401
-
 class DocumentCategory(RecordedModel):
     name = models.CharField('Вид документа', max_length=120, unique=True)
     active = models.BooleanField('Можно выбирать', default=True)
