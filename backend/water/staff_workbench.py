@@ -69,7 +69,12 @@ def workbench(request):
         predicates = {
             "account": Q(plot__icontains=q) | Q(number__icontains=q),
             "plot": Q(label__icontains=q) | Q(address__icontains=q) | Q(cadastral_number__icontains=q),
-            "person": Q(full_name__icontains=q) | Q(resident_identity__user__username__icontains=q),
+            "person": (
+                Q(full_name__icontains=q)
+                | Q(phone__icontains=q)
+                | Q(email__icontains=q)
+                | Q(resident_identity__user__username__icontains=q)
+            ),
         }
         labels = {"account": "Лицевой счёт", "plot": "Участок", "person": "Житель"}
         for result_kind, model in models.items():
@@ -118,7 +123,21 @@ def workbench(request):
         fields = ("can_view_account", "can_view_finance", "can_submit_water", "can_view_documents", "can_use_appeals", "can_represent")
         for grant in context["grants"]:
             grant.rights_label = "; ".join(str(PortalGrant._meta.get_field(f).verbose_name) for f in fields if getattr(grant, f)) or "Активные функции не указаны"
-        context.update(selected=selected, kind=kind, detail_truncated=detail_truncated, today=today)
+        edit_url = None
+        edit_label = None
+        if kind == "person" and can(request.user, "registry.edit", scope=ScopeRef(ScopeType.PERSON, selected.pk)):
+            edit_url = reverse("staff_workspace:person_edit", args=[selected.pk])
+            edit_label = "Редактировать данные"
+        elif kind == "plot" and can(request.user, "plots.edit", scope=ScopeRef(ScopeType.LAND_PLOT, selected.pk)):
+            edit_url = reverse("staff_workspace:plot_edit", args=[selected.pk])
+            edit_label = "Изменить адрес"
+        elif kind == "account" and can(request.user, "accounts.edit", scope=ScopeRef(ScopeType.ACCOUNT, selected.pk)):
+            edit_url = reverse("staff_workspace:account_edit", args=[selected.pk])
+            edit_label = "Редактировать карточку"
+        context.update(
+            selected=selected, kind=kind, detail_truncated=detail_truncated, today=today,
+            edit_url=edit_url, edit_label=edit_label,
+        )
     response = TemplateResponse(request, "water/work/workbench.html", context)
     response["Cache-Control"] = "private, no-store"
     response["X-Robots-Tag"] = "noindex, nofollow"
