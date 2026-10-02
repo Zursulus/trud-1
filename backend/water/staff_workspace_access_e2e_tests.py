@@ -1,4 +1,6 @@
-from datetime import date\nfrom decimal import Decimal\nfrom io import StringIO
+from datetime import date
+from decimal import Decimal
+from io import StringIO
 
 from axe_playwright_python.sync_playwright import Axe
 from django.conf import settings
