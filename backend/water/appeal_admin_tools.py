@@ -94,5 +94,3 @@ def download_appeal_attachment(request, attachment_id):
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
     return response
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
