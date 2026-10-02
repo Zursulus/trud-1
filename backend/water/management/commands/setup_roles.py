@@ -1,3 +1,5 @@
+[Reading 110 lines from start (total: 110 lines, 0 remaining)]
+
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -80,6 +82,7 @@ class Command(BaseCommand):
         })
         administrator.update({'export_account', 'export_reading', 'view_chargeobligation'})
         administrator.update({'view_portalgrant', 'change_portalgrant', 'view_historicalportalgrant'})
+        administrator.update({'view_securityalert', 'change_securityalert'})
         administrator.update({f'view_{name}' for name in BOARD_VIEW})
         administrator.update({f'{action}_{name}' for name in BOARD_MANAGE for action in ('add', 'change')})
         administrator.add('add_boardprotocol')
@@ -107,3 +110,5 @@ class Command(BaseCommand):
             group, _ = Group.objects.get_or_create(name=name)
             group.permissions.set(permissions)
             self.stdout.write(f'{name}: {len(permissions)} прав')
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
