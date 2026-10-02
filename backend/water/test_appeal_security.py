@@ -200,6 +200,26 @@ class AppealSpamAlertTests(TestCase):
             self.assertEqual(caught.exception.code, 'appeal_rate_limited')
         self.assertEqual(SecurityAlert.objects.filter(kind=SecurityAlert.KIND_SPAM).count(), 1)
 
+
+    def test_ts_admin_can_open_and_resolve_security_alert(self):
+        call_command('setup_roles', stdout=StringIO())
+        admin_user = User.objects.create_user(username='security-review-admin', is_staff=True)
+        admin_user.groups.add(Group.objects.get(name='Администратор ТСН'))
+        alert = SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_SUSPICIOUS_FILE,
+            severity=SecurityAlert.SEVERITY_WARNING,
+            fingerprint='a' * 64,
+            detail='test_review',
+        )
+        self.client.force_login(admin_user)
+        response = self.client.get(reverse('staff_workspace:security'))
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(reverse('staff_workspace:security'), {'alert_id': alert.pk})
+        self.assertEqual(response.status_code, 302)
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.resolved_at)
+        self.assertEqual(alert.resolved_by, admin_user)
+
     def test_admin_role_sees_security_queue_without_resident_username(self):
         call_command('setup_roles', stdout=StringIO())
         admin_user = User.objects.create_user(username='security-admin', is_staff=True)
