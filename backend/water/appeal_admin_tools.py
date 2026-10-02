@@ -1,4 +1,3 @@
-[Reading 94 lines from start (total: 94 lines, 0 remaining)]
 
 from django import forms
 from django.contrib import admin
