@@ -7,7 +7,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from .access_requests import ResidentAccessRequest
 from .models import Account, LandPlot, Person, ResidentAccess, ResidentInvite, User
