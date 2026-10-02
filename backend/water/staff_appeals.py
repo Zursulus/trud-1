@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -12,30 +10,37 @@ from django.urls import reverse
 
 from .access_resolver import can_any
 from .appeal_admin_tools import download_appeal_attachment
+from .appeal_security import (
+    APPEAL_ATTACHMENT_HELP,
+    record_form_upload_rejection,
+    validate_appeal_attachment,
+)
 from .appeal_workflow import (
     FINAL_APPEAL_STATES,
     OPEN_APPEAL_STATES,
     appeal_conversation_events,
     close_resolved_appeal,
     send_board_reply,
-    scoped_appeals,
-    can_for_appeal,
 )
 from .models import ResidentAppeal
-from .resident_models import APPEAL_ATTACHMENT_EXTENSIONS, APPEAL_ATTACHMENT_MAX_BYTES
 from .staff_workspace import _base_context
+
+
+FILE_ACCEPT = '.pdf,.jpg,.jpeg,.png,.docx,.xlsx'
 
 
 class StaffAppealReplyForm(forms.Form):
     body = forms.CharField(
         label="Сообщение жителю",
         max_length=5000,
-        widget=forms.Textarea(attrs={"rows": 6}),
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Напишите сообщение…"}),
     )
     document = forms.FileField(
         label="Вложение",
         required=False,
-        help_text="Необязательно. PDF, JPG или PNG до 10 МБ.",
+        help_text=f"Необязательно. {APPEAL_ATTACHMENT_HELP}",
+        validators=[validate_appeal_attachment],
+        widget=forms.ClearableFileInput(attrs={"accept": FILE_ACCEPT}),
     )
     next_status = forms.ChoiceField(
         label="После отправки",
@@ -47,32 +52,18 @@ class StaffAppealReplyForm(forms.Form):
         initial="in_progress",
     )
 
-    def clean_document(self):
-        upload = self.cleaned_data.get("document")
-        if not upload:
-            return upload
-        if upload.size > APPEAL_ATTACHMENT_MAX_BYTES:
-            raise forms.ValidationError("Файл должен быть не больше 10 МБ.")
-        if Path(upload.name).suffix.lower() not in APPEAL_ATTACHMENT_EXTENSIONS:
-            raise forms.ValidationError("Разрешены только PDF, JPG и PNG.")
-        return upload
-
 
 def _require_view(request):
     if not request.user.is_staff or not can_any(request.user, "appeals.view"):
         raise PermissionDenied
 
 
-def _can_reply(request, appeal=None):
-    if appeal is not None:
-        return can_for_appeal(request.user, "appeals.reply", appeal)
-    return can_any(request.user, "appeals.reply")
+def _can_reply(request):
+    return request.user.is_superuser or can_any(request.user, "appeals.reply")
 
 
-def _can_close(request, appeal=None):
-    if appeal is not None:
-        return can_for_appeal(request.user, "appeals.close", appeal)
-    return can_any(request.user, "appeals.close")
+def _can_close(request):
+    return request.user.is_superuser or can_any(request.user, "appeals.close")
 
 
 def appeal_list(request):
@@ -86,8 +77,8 @@ def appeal_list(request):
     if not account_id.isdigit():
         account_id = ""
 
-    count_base = scoped_appeals(request.user)
-    base = count_base.select_related("account", "category")
+    count_base = ResidentAppeal.objects.all()
+    base = ResidentAppeal.objects.select_related("account", "category")
     if account_id:
         account_pk = int(account_id)
         count_base = count_base.filter(account_id=account_pk)
@@ -135,11 +126,11 @@ def appeal_list(request):
 def appeal_detail(request, appeal_id):
     _require_view(request)
     appeal = get_object_or_404(
-        scoped_appeals(request.user).select_related("account", "category", "responded_by"),
+        ResidentAppeal.objects.select_related("account", "category", "responded_by"),
         pk=appeal_id,
     )
-    can_reply = _can_reply(request, appeal)
-    can_close = _can_close(request, appeal)
+    can_reply = _can_reply(request)
+    can_close = _can_close(request)
     form = StaffAppealReplyForm(request.POST or None, request.FILES or None)
 
     if request.method == "POST":
@@ -159,20 +150,31 @@ def appeal_detail(request, appeal_id):
             else:
                 messages.success(request, "Обращение закрыто.")
             return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
-        if action == "reply" and form.is_valid():
-            try:
-                send_board_reply(
-                    appeal_id=appeal.pk,
+        if action == "reply":
+            valid = form.is_valid()
+            if not valid:
+                record_form_upload_rejection(
+                    form=form,
+                    field_name="document",
+                    request=request,
                     actor=request.user,
-                    body=form.cleaned_data["body"],
-                    document=form.cleaned_data.get("document"),
-                    next_status=form.cleaned_data["next_status"],
+                    account=appeal.account,
+                    appeal=appeal,
                 )
-            except ValidationError as error:
-                form.add_error(None, "; ".join(error.messages))
             else:
-                messages.success(request, "Сообщение отправлено жителю.")
-                return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
+                try:
+                    send_board_reply(
+                        appeal_id=appeal.pk,
+                        actor=request.user,
+                        body=form.cleaned_data["body"],
+                        document=form.cleaned_data.get("document"),
+                        next_status=form.cleaned_data["next_status"],
+                    )
+                except ValidationError as error:
+                    form.add_error(None, "; ".join(error.messages))
+                else:
+                    messages.success(request, "Сообщение отправлено жителю.")
+                    return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
 
     appeal.refresh_from_db()
     context = _base_context(request, section="appeals")
