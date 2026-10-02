@@ -1,3 +1,5 @@
+[Reading 68 lines from start (total: 68 lines, 0 remaining)]
+
 {% load static %}
 <!doctype html>
 <html lang="ru">
@@ -43,6 +45,12 @@
         </div>
       </header>
       <main class="ws-content" id="main-content">
+        {% if can_view_security_alerts and security_alert_count %}
+        <div class="ws-banner ws-banner-warning" role="status">
+          <strong>Безопасность: {{ security_alert_count }} сигнал{% if security_alert_count != 1 %}ов{% endif %} требуют проверки{% if security_critical_count %}; критических — {{ security_critical_count }}{% endif %}.</strong>
+          <div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:security' %}">Открыть сигналы</a></div>
+        </div>
+        {% endif %}
         {% if messages %}
         <div class="ws-flash-stack" aria-live="polite">
           {% for message in messages %}<div class="ws-flash{% if message.tags %} ws-flash-{{ message.tags }}{% endif %}">{{ message }}</div>{% endfor %}
@@ -60,3 +68,5 @@
   </nav>
 </body>
 </html>
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
