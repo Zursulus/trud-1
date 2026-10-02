@@ -134,9 +134,21 @@ def workbench(request):
         elif kind == "account" and can(request.user, "accounts.edit", scope=ScopeRef(ScopeType.ACCOUNT, selected.pk)):
             edit_url = reverse("staff_workspace:account_edit", args=[selected.pk])
             edit_label = "Редактировать карточку"
+        access_url = None
+        meter_bind_url = None
+        if kind == "person" and can(
+            request.user, "access.view", scope=ScopeRef(ScopeType.ALL)
+        ):
+            access_url = reverse("staff_workspace:access_person", args=[selected.pk])
+        if kind == "account" and any(
+            can(request.user, "water.topology.manage", scope=ScopeRef(ScopeType.SUPPLY_NODE, node.pk))
+            for node in SupplyNode.objects.all()
+        ):
+            meter_bind_url = reverse("staff_workspace:meter_bind", args=[selected.pk])
         context.update(
             selected=selected, kind=kind, detail_truncated=detail_truncated, today=today,
-            edit_url=edit_url, edit_label=edit_label,
+            edit_url=edit_url, edit_label=edit_label, access_url=access_url,
+            meter_bind_url=meter_bind_url,
         )
     response = TemplateResponse(request, "water/work/workbench.html", context)
     response["Cache-Control"] = "private, no-store"
