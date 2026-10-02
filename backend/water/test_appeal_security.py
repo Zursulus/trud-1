@@ -134,7 +134,10 @@ class AppealAttachmentSecurityTests(TestCase):
         self.assertEqual(ResidentAppeal.objects.count(), 0)
         command = run.call_args.args[0]
         self.assertNotIn('--fdpass', command)
+        self.assertIn('--stream', command)
         self.assertIn('--no-summary', command)
+        self.assertEqual(command[-1], '-')
+        self.assertIsNotNone(run.call_args.kwargs.get('stdin'))
 
 
 @override_settings(APPEAL_MALWARE_SCAN_REQUIRED=False, APPEAL_CLAMDSCAN_PATH='')
