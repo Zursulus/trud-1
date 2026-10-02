@@ -25,7 +25,7 @@ class VtbDryRunViewTests(TestCase):
 
     def test_exact_account_match_is_preview_only(self):
         self.client.force_login(self.staff)
-        response = self.client.post("/work/finance/vtb/payments/dry-run/", {"registry": self._file()})
+        response = self.client.post("/work/finance/vtb/payments/dry-run/", {"encoding": "cp1251", "registry": self._file()})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Совпало:</strong> 1")
         self.assertContains(response, "Никаких записей не выполнено")
@@ -33,7 +33,7 @@ class VtbDryRunViewTests(TestCase):
 
     def test_unknown_account_is_not_guessed_from_name_or_address(self):
         self.client.force_login(self.staff)
-        response = self.client.post("/work/finance/vtb/payments/dry-run/", {"registry": self._file("UNKNOWN")})
+        response = self.client.post("/work/finance/vtb/payments/dry-run/", {"encoding": "cp1251", "registry": self._file("UNKNOWN")})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Не найдено:</strong> 1")
         self.assertEqual(Payment.objects.count(), 0)
