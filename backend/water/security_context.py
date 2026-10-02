@@ -1,4 +1,3 @@
-[Reading 29 lines from start (total: 29 lines, 0 remaining)]
 
 from django.db.models import Count, Q
 
