@@ -1,4 +1,3 @@
-[Reading 219 lines from start (total: 219 lines, 0 remaining)]
 
 from django import forms
 from django.core.exceptions import ValidationError
