@@ -1,4 +1,3 @@
-[Reading 76 lines from start (total: 76 lines, 0 remaining)]
 
 from django.db import models
 from django.utils import timezone
