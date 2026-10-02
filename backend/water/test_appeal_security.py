@@ -136,6 +136,7 @@ class AppealAttachmentSecurityTests(TestCase):
         self.assertEqual(ResidentAppeal.objects.count(), 0)
         command = run.call_args.args[0]
         self.assertNotIn('--fdpass', command)
+        self.assertIn('--stream', command)
         self.assertIn('--no-summary', command)
 
 
