@@ -120,7 +120,7 @@ class AppealAttachmentSecurityTests(TestCase):
     @patch('water.appeal_security.subprocess.run')
     def test_scanner_failure_rejects_upload_fail_closed(self, run, _scanner_path):
         run.return_value = SimpleNamespace(returncode=2, stdout='', stderr='scanner unavailable')
-        upload = SimpleUploadedFile('statement.pdf', b'%PDF-1.7\\nbody')
+        upload = SimpleUploadedFile('statement.pdf', b'%PDF-1.7\nbody')
         with self.assertRaises(ValidationError) as caught:
             validate_appeal_attachment(upload)
         self.assertEqual(caught.exception.code, 'appeal_scanner_unavailable')
