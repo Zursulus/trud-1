@@ -3,8 +3,11 @@ from io import StringIO
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 
+from .access_control import AccessAssignment
 from .models import Account, LandPlot, Person, User
+from .resident_models import ResidentIdentity
 
 
 class StaffRegistryEditorTests(TestCase):
@@ -111,6 +114,34 @@ class StaffRegistryEditorTests(TestCase):
         self.assertEqual(self.client.get(f"/work/access/people/{self.person.pk}/edit/").status_code, 403)
         self.assertEqual(self.client.get(f"/work/accounts/{self.account.pk}/edit/").status_code, 403)
         self.assertEqual(self.client.get(f"/work/plots/{self.plot.pk}/edit/").status_code, 403)
+
+
+    def test_account_scoped_editor_cannot_open_another_account(self):
+        scoped_user = User.objects.create_user(username="scoped-account-editor", is_staff=True)
+        scoped_person = Person.objects.create(full_name="Ограниченный редактор")
+        ResidentIdentity.objects.create(
+            user=scoped_user, person=scoped_person, verified_by=self.editor, basis="Тест scope",
+        )
+        AccessAssignment.objects.create(
+            person=scoped_person,
+            role_code="test-account-editor",
+            role_version=1,
+            role_label="Редактор одного счёта",
+            allowed_capabilities=["accounts.view", "accounts.edit"],
+            capabilities=["accounts.view", "accounts.edit"],
+            scope_type="account",
+            scope_object_id=self.account.pk,
+            starts=timezone.localdate(),
+            basis="Тест ограниченной области",
+            granted_by=self.editor,
+        )
+        other = Account.objects.create(number="EDIT-OTHER", plot="Чужой участок")
+
+        self.client.force_login(scoped_user)
+        allowed = self.client.get(f"/work/accounts/{self.account.pk}/edit/")
+        self.assertEqual(allowed.status_code, 200)
+        denied = self.client.get(f"/work/accounts/{other.pk}/edit/")
+        self.assertEqual(denied.status_code, 404)
 
     def test_validation_error_keeps_original_person_data(self):
         self.client.force_login(self.editor)
