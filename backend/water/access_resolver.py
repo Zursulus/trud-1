@@ -60,8 +60,10 @@ LINE_SENIOR_CAPABILITIES = {
 # than guessing a broader permission.
 LEGACY_PERMISSION_REQUIREMENTS = {
     "accounts.view": ("water.view_account",),
+    "accounts.edit": ("water.change_account",),
     "accounts.export": ("water.export_account",),
     "plots.view": ("water.view_landplot",),
+    "plots.edit": ("water.change_landplot",),
     "relations.view": ("water.view_historicalplotrelation",),
     "water.view": ("water.view_meter",),
     "water.meters.view": ("water.view_meter",),

@@ -7,10 +7,10 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from .access_requests import ResidentAccessRequest
-from .models import Account, Person, ResidentAccess, ResidentInvite, User
+from .models import Account, LandPlot, Person, ResidentAccess, ResidentInvite, User
 
 
 class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
@@ -203,3 +203,106 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                             context.close()
                 finally:
                     browser.close()
+
+
+class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
+    def setUp(self):
+        call_command("setup_roles", stdout=StringIO())
+        self.staff = User.objects.create_user(
+            username="registry-editor-e2e", is_staff=True, is_superuser=True,
+        )
+        self.person = Person.objects.create(
+            full_name="Житель Редактор E2E", phone="+70000000001", email="editor-old@example.test",
+        )
+        self.account = Account.objects.create(
+            number="EDITOR-E2E", plot="Старый адрес E2E", contact_name="Житель Редактор E2E",
+            phone="+70000000002",
+        )
+        self.plot = LandPlot.objects.create(
+            label="Участок редактора E2E", address="Старый ориентир E2E", account=self.account,
+        )
+
+    def _verified_session_cookie(self):
+        device = TOTPDevice.objects.create(user=self.staff, name="registry editor e2e device")
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
+        return self.client.cookies[settings.SESSION_COOKIE_NAME].value
+
+    def test_person_phone_and_plot_address_edit_mobile_chromium_webkit(self):
+        cookie = self._verified_session_cookie()
+        with sync_playwright() as playwright:
+            for engine in ("chromium", "webkit"):
+                browser = getattr(playwright, engine).launch(headless=True)
+                context = browser.new_context(viewport={"width": 390, "height": 844})
+                context.add_cookies([{
+                    "name": settings.SESSION_COOKIE_NAME,
+                    "value": cookie,
+                    "url": self.live_server_url,
+                }])
+                page = context.new_page()
+                page_errors = []
+                page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+                try:
+                    page.goto(
+                        f"{self.live_server_url}/work/panel/?q=%D0%96%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%20%D0%A0%D0%B5%D0%B4%D0%B0%D0%BA%D1%82%D0%BE%D1%80%20E2E",
+                        wait_until="networkidle",
+                    )
+                    person_result = page.locator(
+                        f'.wb-results a[href*="kind=person"][href*="id={self.person.pk}"]'
+                    )
+                    expect(person_result).to_have_count(1)
+                    person_result.click()
+                    page.wait_for_load_state("networkidle")
+                    page.get_by_role("link", name="Редактировать данные", exact=True).click()
+                    page.locator("#id_phone").fill("+79990000011")
+                    page.locator("#id_email").fill(f"editor-{engine}@example.test")
+                    page.get_by_role("button", name="Сохранить изменения", exact=True).click()
+                    page.wait_for_load_state("networkidle")
+                    self.assertTrue(page.get_by_text("+79990000011", exact=False).is_visible())
+
+                    page.goto(
+                        f"{self.live_server_url}/work/panel/?kind=account&id={self.account.pk}",
+                        wait_until="networkidle",
+                    )
+                    page.get_by_role("link", name="Редактировать карточку", exact=True).click()
+                    page.locator("#id_plot").fill(f"Горная 2 · {engine}")
+                    page.locator("#id_phone").fill("+79990000022")
+                    page.get_by_role("button", name="Сохранить изменения", exact=True).click()
+                    page.wait_for_load_state("networkidle")
+                    self.assertTrue(page.get_by_role("heading", name=f"Горная 2 · {engine}", exact=True).is_visible())
+
+                    page.goto(
+                        f"{self.live_server_url}/work/panel/?kind=plot&id={self.plot.pk}",
+                        wait_until="networkidle",
+                    )
+                    page.get_by_role("link", name="Изменить адрес", exact=True).click()
+                    page.locator("#id_address").fill(f"Горная 2, ориентир {engine}")
+                    page.get_by_role("button", name="Сохранить изменения", exact=True).click()
+                    page.wait_for_load_state("networkidle")
+                    self.assertTrue(page.get_by_text(f"Горная 2, ориентир {engine}", exact=False).is_visible())
+                    self.assertTrue(page.evaluate(
+                        "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+                    ))
+                    blocking = [
+                        violation for violation in Axe().run(page).response.get("violations", [])
+                        if violation.get("impact") in {"serious", "critical"}
+                        and any(str(tag).startswith("wcag") for tag in violation.get("tags") or [])
+                    ]
+                    self.assertEqual(blocking, [])
+                    self.assertEqual(page_errors, [])
+                finally:
+                    context.close()
+                    browser.close()
+
+        self.person.refresh_from_db()
+        self.account.refresh_from_db()
+        self.plot.refresh_from_db()
+        self.assertEqual(self.person.phone, "+79990000011")
+        self.assertEqual(self.account.phone, "+79990000022")
+        self.assertTrue(self.account.plot.startswith("Горная 2"))
+        self.assertTrue(self.plot.address.startswith("Горная 2, ориентир"))
+        self.assertGreaterEqual(self.person.history.count(), 3)
+        self.assertGreaterEqual(self.account.history.count(), 3)
+        self.assertGreaterEqual(self.plot.history.count(), 3)

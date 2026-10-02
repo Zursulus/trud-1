@@ -409,6 +409,9 @@ def person_detail(request, person_id):
         'can_manage_assignments': _can_manage_assignments(request.user),
         'can_review_delegations': _can_review_delegations(request.user),
         'can_view_contacts': _can_view_contacts(request.user),
+        'can_edit_person': _can_view_contacts(request.user) and can(
+            request.user, 'registry.edit', scope=ScopeRef(ScopeType.PERSON, person.pk)
+        ),
     })
     return TemplateResponse(request, 'water/work/access/person_detail.html', context)
 

@@ -136,6 +136,7 @@ def _capabilities(user):
         "can_manage_finance_policy": can_any(user, "finance.policy.manage"),
         "can_view_reading_history": can_any(user, "water.reading.view"),
         "can_edit_accounts": can_any(user, "accounts.edit"),
+        "can_edit_land_plots": can_any(user, "plots.edit"),
         "can_view_access": can_manage_access,
         "can_review_access_requests": can_review_access_requests,
         "can_manage_access": can_manage_access,
