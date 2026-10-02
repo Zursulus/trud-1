@@ -1,4 +1,3 @@
-[Reading 42 lines from start (total: 42 lines, 0 remaining)]
 
 from django.apps import AppConfig
 
