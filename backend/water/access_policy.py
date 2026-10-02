@@ -260,6 +260,7 @@ ROLE_TEMPLATES = {
             "governance.board.view", "governance.poll.create", "governance.poll.edit",
             "governance.poll.close", "governance.protocol.add", "governance.audit.view",
             "governance.membership.manage",
+            "security.alert.view", "security.alert.review",
             "system.import.stage", "system.import.apply",
         )),
     ]
