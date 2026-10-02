@@ -81,7 +81,8 @@ def render_vtb_debt_registry(rows):
         ";".join((row.account_number, row.payer_name, row.address, row.period, f"{row.amount:.2f}"))
         for row in rows
     ]
-    text = "\r\n".join(lines)
+    text = "\r
+".join(lines)
     try:
         return text.encode("cp1251")
     except UnicodeEncodeError as error:
