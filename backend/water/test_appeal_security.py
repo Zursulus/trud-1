@@ -140,6 +140,26 @@ class AppealAttachmentSecurityTests(TestCase):
         self.assertIsNotNone(run.call_args.kwargs.get('stdin'))
 
 
+    @override_settings(APPEAL_MALWARE_SCAN_REQUIRED=True, APPEAL_CLAMDSCAN_PATH='/fake/clamdscan')
+    @patch('water.appeal_security._scanner_path', return_value='/fake/clamdscan')
+    @patch('water.appeal_security.subprocess.run')
+    def test_scanner_unavailable_fails_closed_without_saving(self, run, _scanner_path):
+        run.return_value = SimpleNamespace(returncode=2, stdout='', stderr='scanner unavailable')
+        response = self.client.post(
+            reverse('resident_appeal_new', args=[self.account.pk]),
+            {
+                'category': self.category.pk,
+                'subject': 'Сканер недоступен',
+                'message': 'Проверка fail-closed.',
+                'attachment': SimpleUploadedFile('clean.pdf', b'%PDF-1.7\nbody'),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Проверка файла временно недоступна')
+        self.assertEqual(ResidentAppeal.objects.count(), 0)
+        self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
+
+
 @override_settings(APPEAL_MALWARE_SCAN_REQUIRED=False, APPEAL_CLAMDSCAN_PATH='')
 class AppealSpamAlertTests(TestCase):
     def setUp(self):
