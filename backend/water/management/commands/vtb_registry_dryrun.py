@@ -13,11 +13,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("path")
         parser.add_argument("--json", action="store_true", dest="as_json")
+        parser.add_argument("--encoding", choices=("auto", "utf-8", "cp1251", "koi8-r"), default="auto")
 
     def handle(self, *args, **options):
         path = Path(options["path"])
         try:
-            registry = parse_payment_registry(path.read_bytes())
+            registry = parse_payment_registry(path.read_bytes(), encoding=options["encoding"])
         except (OSError, VtbRegistryError) as error:
             raise CommandError(str(error)) from error
 
