@@ -82,7 +82,8 @@ urlpatterns = [
     path("governance/new/", staff_governance.workspace_governance_create, name="governance_create"),
     path("governance/<int:poll_id>/", staff_governance.workspace_governance_detail, name="governance_detail"),
     path("more/roles-guide/", staff_more.workspace_roles_guide, name="roles_guide"),
-    path("more/", staff_more.workspace_more, name="more"),\n    path("security/", staff_security.workspace_security, name="security"),
+    path("more/", staff_more.workspace_more, name="more"),
+    path("security/", staff_security.workspace_security, name="security"),
     path("accounts/<int:account_id>/", staff_workspace.workspace_account, name="account"),
 ]
 
