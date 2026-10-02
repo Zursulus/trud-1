@@ -11,7 +11,7 @@ class StaffRegistryEditorTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command("setup_roles", stdout=StringIO())
-        cls.editor = User.objects.create_user(username="registry-editor", is_staff=True)
+        cls.editor = User.objects.create_user(username="registry-editor", is_staff=True, is_superuser=True)
         cls.editor.groups.add(
             Group.objects.get(name="Администратор ТСН"),
             Group.objects.get(name="Закрытый реестр членов ТСН"),
