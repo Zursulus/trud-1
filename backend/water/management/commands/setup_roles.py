@@ -1,4 +1,3 @@
-[Reading 110 lines from start (total: 110 lines, 0 remaining)]
 
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
