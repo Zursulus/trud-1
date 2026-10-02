@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -28,7 +28,7 @@ from .finance_workflow import (
     reverse_payment,
 )
 from .models import Account, BillingPeriod, Charge, Payment, PaymentAllocation
-from .staff_workspace import _base_context
+from .staff_workspace import _base_context\nfrom .vtb_debt_export import build_vtb_debt_export, render_vtb_debt_registry
 
 
 MONEY_FIELD = DecimalField(max_digits=14, decimal_places=2)
@@ -287,3 +287,23 @@ workspace_finance_payments = admin.site.admin_view(payment_list)
 workspace_finance_payment_create = admin.site.admin_view(payment_create)
 workspace_finance_payment = admin.site.admin_view(payment_detail)
 workspace_finance_account = admin.site.admin_view(account_finance)
+
+
+def vtb_debt_registry(request):
+    _require_finance_view(request)
+    if not _can(request.user, "finance.export"):
+        raise PermissionDenied
+    rows, skipped = build_vtb_debt_export()
+    if request.GET.get("download") == "1":
+        try:
+            payload = render_vtb_debt_registry(rows)
+        except ValueError as error:
+            messages.error(request, str(error))
+        else:
+            response = HttpResponse(payload, content_type="text/plain; charset=windows-1251")
+            response["Content-Disposition"] = 'attachment; filename="TEST_VTB_DEBT_MMDD.txt"'
+            response["Cache-Control"] = "private, no-store"
+            return response
+    context = _base_context(request, section="finance")
+    context.update(rows=rows, skipped=skipped)
+    return TemplateResponse(request, "water/work/finance/vtb_debt.html", context)
