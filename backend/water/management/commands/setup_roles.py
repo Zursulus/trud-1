@@ -110,5 +110,3 @@ class Command(BaseCommand):
             group, _ = Group.objects.get_or_create(name=name)
             group.permissions.set(permissions)
             self.stdout.write(f'{name}: {len(permissions)} прав')
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
