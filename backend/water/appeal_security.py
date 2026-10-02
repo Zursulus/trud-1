@@ -182,13 +182,16 @@ def _scan_malware(fileobj):
                     break
                 temporary.write(chunk)
             temporary.flush()
-            # Do not use --fdpass here: it only works with a local Unix socket.
-            # Without it clamdscan automatically streams when needed, which also
-            # supports a clamd reached over a private TCP tunnel.
-            command = [scanner, "--no-summary", temporary.name]
+            # Production clamd is reached through a private loopback TCP tunnel.
+            # Always stream the bytes over the clamd protocol: passing the local
+            # temporary pathname would make the remote daemon try to open a path
+            # that exists only on the web host.
+            command = [scanner, "--stream", "--no-summary", "-"]
+            temporary.seek(0)
             try:
                 result = subprocess.run(
                     command,
+                    stdin=temporary,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
