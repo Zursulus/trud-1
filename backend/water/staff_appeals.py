@@ -1,4 +1,4 @@
-from pathlib import Path
+[Reading 200 lines from start (total: 200 lines, 0 remaining)]
 
 from django import forms
 from django.contrib import admin, messages
@@ -12,6 +12,11 @@ from django.urls import reverse
 
 from .access_resolver import can_any
 from .appeal_admin_tools import download_appeal_attachment
+from .appeal_security import (
+    APPEAL_ATTACHMENT_HELP,
+    record_form_upload_rejection,
+    validate_appeal_attachment,
+)
 from .appeal_workflow import (
     FINAL_APPEAL_STATES,
     OPEN_APPEAL_STATES,
@@ -22,20 +27,24 @@ from .appeal_workflow import (
     can_for_appeal,
 )
 from .models import ResidentAppeal
-from .resident_models import APPEAL_ATTACHMENT_EXTENSIONS, APPEAL_ATTACHMENT_MAX_BYTES
 from .staff_workspace import _base_context
+
+
+FILE_ACCEPT = '.pdf,.jpg,.jpeg,.png,.docx,.xlsx'
 
 
 class StaffAppealReplyForm(forms.Form):
     body = forms.CharField(
         label="Сообщение жителю",
         max_length=5000,
-        widget=forms.Textarea(attrs={"rows": 6}),
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Напишите сообщение…"}),
     )
     document = forms.FileField(
         label="Вложение",
         required=False,
-        help_text="Необязательно. PDF, JPG или PNG до 10 МБ.",
+        help_text=f"Необязательно. {APPEAL_ATTACHMENT_HELP}",
+        validators=[validate_appeal_attachment],
+        widget=forms.ClearableFileInput(attrs={"accept": FILE_ACCEPT}),
     )
     next_status = forms.ChoiceField(
         label="После отправки",
@@ -46,16 +55,6 @@ class StaffAppealReplyForm(forms.Form):
         ],
         initial="in_progress",
     )
-
-    def clean_document(self):
-        upload = self.cleaned_data.get("document")
-        if not upload:
-            return upload
-        if upload.size > APPEAL_ATTACHMENT_MAX_BYTES:
-            raise forms.ValidationError("Файл должен быть не больше 10 МБ.")
-        if Path(upload.name).suffix.lower() not in APPEAL_ATTACHMENT_EXTENSIONS:
-            raise forms.ValidationError("Разрешены только PDF, JPG и PNG.")
-        return upload
 
 
 def _require_view(request):
@@ -159,20 +158,31 @@ def appeal_detail(request, appeal_id):
             else:
                 messages.success(request, "Обращение закрыто.")
             return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
-        if action == "reply" and form.is_valid():
-            try:
-                send_board_reply(
-                    appeal_id=appeal.pk,
+        if action == "reply":
+            valid = form.is_valid()
+            if not valid:
+                record_form_upload_rejection(
+                    form=form,
+                    field_name="document",
+                    request=request,
                     actor=request.user,
-                    body=form.cleaned_data["body"],
-                    document=form.cleaned_data.get("document"),
-                    next_status=form.cleaned_data["next_status"],
+                    account=appeal.account,
+                    appeal=appeal,
                 )
-            except ValidationError as error:
-                form.add_error(None, "; ".join(error.messages))
             else:
-                messages.success(request, "Сообщение отправлено жителю.")
-                return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
+                try:
+                    send_board_reply(
+                        appeal_id=appeal.pk,
+                        actor=request.user,
+                        body=form.cleaned_data["body"],
+                        document=form.cleaned_data.get("document"),
+                        next_status=form.cleaned_data["next_status"],
+                    )
+                except ValidationError as error:
+                    form.add_error(None, "; ".join(error.messages))
+                else:
+                    messages.success(request, "Сообщение отправлено жителю.")
+                    return HttpResponseRedirect(reverse("staff_workspace:appeal", args=[appeal.pk]))
 
     appeal.refresh_from_db()
     context = _base_context(request, section="appeals")
@@ -190,3 +200,5 @@ def appeal_detail(request, appeal_id):
 workspace_appeals = admin.site.admin_view(appeal_list)
 workspace_appeal = admin.site.admin_view(appeal_detail)
 workspace_appeal_attachment = admin.site.admin_view(download_appeal_attachment)
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
