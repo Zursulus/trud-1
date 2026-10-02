@@ -1,4 +1,3 @@
-[Reading 91 lines from start (total: 91 lines, 0 remaining)]
 
 from django.urls import path
 
