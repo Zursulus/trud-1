@@ -37,6 +37,7 @@ class WorkbenchMeterBindingTests(TestCase):
             {"node": self.node.pk, "serial": "DUP-131", "commissioned_on": "", "seal_number": "", "notes": ""},
         )
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Счётчик с таким номером уже существует")
         self.assertEqual(Meter.objects.filter(serial="DUP-131", node=self.node).count(), 1)
 
     def test_staff_without_capability_is_denied(self):
