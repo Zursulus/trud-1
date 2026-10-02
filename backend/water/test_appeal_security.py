@@ -227,7 +227,7 @@ class AppealSpamAlertTests(TestCase):
             starts=timezone.localdate() - timedelta(days=1),
         )
         other_appeal = ResidentAppeal.objects.create(
-            account=other, author=other_resident, category=self.category,
+            account=other, author=other_resident, category=self.appeal.category,
             subject='Чужое обращение', message='Не показывать',
         )
         attachment = ResidentAppealAttachment.objects.create(
