@@ -249,13 +249,21 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                         f"{self.live_server_url}/work/panel/?q=%D0%96%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%20%D0%A0%D0%B5%D0%B4%D0%B0%D0%BA%D1%82%D0%BE%D1%80%20E2E",
                         wait_until="networkidle",
                     )
+                    self.assertTrue(page.get_by_label(
+                        "Адрес, имя, логин, телефон, e-mail или ID"
+                    ).is_visible())
                     person_result = page.locator(
                         f'.wb-results a[href*="kind=person"][href*="id={self.person.pk}"]'
                     )
                     expect(person_result).to_have_count(1)
                     person_result.click()
                     page.wait_for_load_state("networkidle")
-                    page.get_by_role("link", name="Редактировать данные", exact=True).click()
+                    edit_link = page.get_by_role("link", name="Редактировать данные", exact=True)
+                    self.assertEqual(
+                        edit_link.evaluate("el => getComputedStyle(el).color"),
+                        "rgb(255, 255, 255)",
+                    )
+                    edit_link.click()
                     page.locator("#id_phone").fill("+79990000011")
                     page.locator("#id_email").fill(f"editor-{engine}@example.test")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
