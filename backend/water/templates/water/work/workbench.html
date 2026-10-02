@@ -4,7 +4,7 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'water/workbench.css' %}">
 <div class="wb">
-  <div class="wb-notice">Реальные данные · только просмотр. Добавление и изменение через эту панель пока недоступны.</div>
+  <div class="wb-notice">Реальные данные. Телефон, e-mail и адрес можно исправлять прямо из карточки; связи, права и назначения меняются только через отдельные проверяемые процессы.</div>
   <header class="wb-head"><div><p class="wb-eyebrow">РЕЕСТР И СВЯЗИ</p><h1>Жители и участки</h1><p>Человек, его участки, доступы и счётчики — в одной карточке.</p></div><a href="{% url 'staff_workspace:more' %}">Вернуться в рабочую базу</a></header>
   <div class="wb-layout">
     <aside class="wb-card wb-search" aria-label="Поиск объектов и жителей">
@@ -21,6 +21,7 @@
         <p class="wb-eyebrow">{% if kind == 'person' %}КАРТОЧКА ЖИТЕЛЯ{% elif kind == 'plot' %}КАРТОЧКА УЧАСТКА{% else %}ЛИЦЕВОЙ СЧЁТ{% endif %}</p>
         <h2>{% if kind == 'person' %}{{ selected.full_name }}{% elif kind == 'plot' %}{{ selected.label }}{% else %}{{ selected.plot|default:'Адрес не указан' }}{% endif %}</h2>
         <p class="wb-muted">ID {{ selected.pk }}{% if selected.archived %} · Архивная запись{% endif %}</p>
+        {% if edit_url %}<p><a class="ws-primary" href="{{ edit_url }}">{{ edit_label }}</a></p>{% endif %}
         {% if kind == 'account' %}<p>Номер лицевого счёта: {{ selected.number|default:'не указан' }}</p>{% elif kind == 'plot' %}<p>Адрес: {{ selected.address|default:'не указан' }}<br>Кадастровый номер: {{ selected.cadastral_number|default:'не указан' }}</p>{% else %}<p>Логин: {{ selected.resident_identity.user.username|default:'не привязан' }}</p>{% endif %}
         <p class="wb-footnote">Связи и назначения действуют на {{ today|date:'d.m.Y' }}. Дата окончания не включается. Счётчики показаны также снятые с учёта.</p>
       </section>
