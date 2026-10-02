@@ -1,4 +1,4 @@
-from pathlib import Path
+[Reading 94 lines from start (total: 94 lines, 0 remaining)]
 
 from django import forms
 from django.contrib import admin
@@ -10,33 +10,24 @@ from django.urls import reverse
 from django.views.decorators.cache import never_cache
 
 from .access_resolver import can_any
-
+from .appeal_security import (
+    APPEAL_ATTACHMENT_HELP,
+    record_form_upload_rejection,
+    validate_appeal_attachment,
+)
 from .appeal_workflow import scoped_appeals, send_board_reply
 from .models import ResidentAppeal
-from .resident_models import (
-    APPEAL_ATTACHMENT_EXTENSIONS,
-    APPEAL_ATTACHMENT_MAX_BYTES,
-    ResidentAppealAttachment,
-    ResidentAppealBoardMessage,
-)
+from .resident_models import ResidentAppealAttachment, ResidentAppealBoardMessage
 
 
 class BoardAppealMessageForm(forms.Form):
     body = forms.CharField(label='Сообщение жителю', max_length=5000, widget=forms.Textarea(attrs={'rows': 5}))
     document = forms.FileField(
         label='Вложение', required=False,
-        help_text='Необязательно. PDF, JPG или PNG до 10 МБ.',
+        help_text=f'Необязательно. {APPEAL_ATTACHMENT_HELP}',
+        validators=[validate_appeal_attachment],
+        widget=forms.ClearableFileInput(attrs={'accept': '.pdf,.jpg,.jpeg,.png,.docx,.xlsx'}),
     )
-
-    def clean_document(self):
-        upload = self.cleaned_data.get('document')
-        if not upload:
-            return upload
-        if upload.size > APPEAL_ATTACHMENT_MAX_BYTES:
-            raise forms.ValidationError('Файл должен быть не больше 10 МБ.')
-        if Path(upload.name).suffix.lower() not in APPEAL_ATTACHMENT_EXTENSIONS:
-            raise forms.ValidationError('Разрешены только PDF, JPG и PNG.')
-        return upload
 
 
 @never_cache
@@ -48,18 +39,29 @@ def manage_appeal_attachments(request, appeal_id):
     form = BoardAppealMessageForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and not can_reply:
         form.add_error(None, 'Обращение уже завершено. Для нового вопроса нужен новый диалог.')
-    elif request.method == 'POST' and form.is_valid():
-        try:
-            send_board_reply(
-                appeal_id=appeal.pk,
+    elif request.method == 'POST':
+        valid = form.is_valid()
+        if not valid:
+            record_form_upload_rejection(
+                form=form,
+                field_name='document',
+                request=request,
                 actor=request.user,
-                body=form.cleaned_data['body'],
-                document=form.cleaned_data.get('document'),
+                account=appeal.account,
+                appeal=appeal,
             )
-        except ValidationError as error:
-            form.add_error(None, '; '.join(error.messages))
         else:
-            return HttpResponseRedirect(reverse('admin_appeal_attachments', args=[appeal.pk]))
+            try:
+                send_board_reply(
+                    appeal_id=appeal.pk,
+                    actor=request.user,
+                    body=form.cleaned_data['body'],
+                    document=form.cleaned_data.get('document'),
+                )
+            except ValidationError as error:
+                form.add_error(None, '; '.join(error.messages))
+            else:
+                return HttpResponseRedirect(reverse('admin_appeal_attachments', args=[appeal.pk]))
     attachments = ResidentAppealAttachment.objects.filter(appeal=appeal).select_related(
         'uploaded_by', 'message', 'board_message',
     )
@@ -92,3 +94,5 @@ def download_appeal_attachment(request, attachment_id):
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
     return response
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
