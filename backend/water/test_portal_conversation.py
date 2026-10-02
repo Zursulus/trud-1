@@ -1,4 +1,3 @@
-[Reading 154 lines from start (total: 154 lines, 0 remaining)]
 
 from datetime import date
 import tempfile
