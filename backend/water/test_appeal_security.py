@@ -217,5 +217,3 @@ class AppealSpamAlertTests(TestCase):
         self.assertContains(response, 'SPAM-1')
         security_response = self.client.get(reverse('staff_workspace:security'))
         self.assertEqual(security_response.status_code, 200)
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
