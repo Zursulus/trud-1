@@ -49,7 +49,7 @@ Production использует `clamdscan` как клиент и приват�
 ```sh
 command -v clamdscan
 systemctl is-active clamav-daemon
-sudo -u trudsite clamdscan --no-summary /etc/hosts
+printf 'clean\n' | sudo -u trudsite clamdscan --stream --no-summary -
 ```
 
 Имя системного пользователя сверить с фактическим unit приложения; не копировать команду вслепую, если deployment использует другого пользователя.
