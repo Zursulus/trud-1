@@ -1,4 +1,3 @@
-[Reading 57 lines from start (total: 57 lines, 0 remaining)]
 
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
