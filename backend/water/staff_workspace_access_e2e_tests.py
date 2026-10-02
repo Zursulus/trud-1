@@ -10,7 +10,7 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from playwright.sync_api import expect, sync_playwright
 
 from .access_requests import ResidentAccessRequest
-from .models import Account, LandPlot, Person, ResidentAccess, ResidentInvite, User
+from .models import Account, LandPlot, Meter, Person, ResidentAccess, ResidentInvite, SupplyNode, User
 
 
 class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
@@ -306,3 +306,57 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
         self.assertGreaterEqual(self.person.history.count(), 3)
         self.assertGreaterEqual(self.account.history.count(), 3)
         self.assertGreaterEqual(self.plot.history.count(), 3)
+
+
+class WorkbenchMeterBindingBrowserTests(StaticLiveServerTestCase):
+    def setUp(self):
+        call_command("setup_roles", stdout=StringIO())
+        self.staff = User.objects.create_user(
+            username="meter-workbench-e2e", is_staff=True, is_superuser=True,
+        )
+        self.account = Account.objects.create(number="METER-E2E", plot="Тестовый участок Meter E2E")
+        self.node = SupplyNode.objects.create(name="Тестовый узел Meter E2E")
+
+    def _cookie(self):
+        device = TOTPDevice.objects.create(user=self.staff, name="meter workbench e2e")
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
+        return self.client.cookies[settings.SESSION_COOKIE_NAME].value
+
+    def test_bind_meter_from_workbench_mobile_chromium_webkit(self):
+        cookie = self._cookie()
+        with sync_playwright() as playwright:
+            for engine in ("chromium", "webkit"):
+                browser = getattr(playwright, engine).launch(headless=True)
+                context = browser.new_context(viewport={"width": 390, "height": 844})
+                context.add_cookies([{
+                    "name": settings.SESSION_COOKIE_NAME, "value": cookie, "url": self.live_server_url,
+                }])
+                page = context.new_page()
+                try:
+                    page.goto(
+                        f"{self.live_server_url}/work/panel/?kind=account&id={self.account.pk}",
+                        wait_until="networkidle",
+                    )
+                    page.get_by_role("link", name="Привязать счётчик", exact=True).click()
+                    page.locator("#id_node").select_option(str(self.node.pk))
+                    serial = f"E2E-{engine}"
+                    page.locator("#id_serial").fill(serial)
+                    page.get_by_role("button", name="Создать и привязать", exact=True).click()
+                    page.wait_for_load_state("networkidle")
+                    expect(page.get_by_text(serial, exact=False)).to_be_visible()
+                    self.assertTrue(page.evaluate(
+                        "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+                    ))
+                    blocking = [
+                        v for v in Axe().run(page).response.get("violations", [])
+                        if v.get("impact") in {"serious", "critical"}
+                        and any(str(tag).startswith("wcag") for tag in v.get("tags") or [])
+                    ]
+                    self.assertEqual(blocking, [])
+                finally:
+                    context.close()
+                    browser.close()
+        self.assertEqual(Meter.objects.filter(account=self.account, kind="individual").count(), 2)
