@@ -1,4 +1,3 @@
-[Reading 43 lines from start (total: 43 lines, 0 remaining)]
 
 from django.conf import settings
 from django.db import migrations, models
