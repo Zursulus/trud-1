@@ -138,6 +138,9 @@ _CAPS = [
     cap("governance.audit.view", "Просмотр аудита правления", (S.ALL,), require_mfa=True),
     cap("governance.membership.manage", "Управление составом правления", (S.PERSON, S.ALL), require_mfa=True, maker_checker=True),
 
+    cap("security.alert.view", "Просмотр сигналов безопасности", (S.ALL,), require_mfa=True),
+    cap("security.alert.review", "Обработка сигнала безопасности", (S.ALL,), require_mfa=True, maker_checker=True),
+
     cap("system.import.stage", "Предварительный импорт", (S.ALL,), require_mfa=True),
     cap("system.import.apply", "Применение импорта", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("system.user.manage", "Управление логинами", (S.ALL,), require_mfa=True, maker_checker=True),
