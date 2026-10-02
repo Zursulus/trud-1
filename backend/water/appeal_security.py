@@ -1,5 +1,3 @@
-[Reading 457 lines from start (total: 457 lines, 0 remaining)]
-
 from datetime import timedelta
 import hashlib
 import logging
