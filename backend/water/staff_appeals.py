@@ -200,5 +200,3 @@ def appeal_detail(request, appeal_id):
 workspace_appeals = admin.site.admin_view(appeal_list)
 workspace_appeal = admin.site.admin_view(appeal_detail)
 workspace_appeal_attachment = admin.site.admin_view(download_appeal_attachment)
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
