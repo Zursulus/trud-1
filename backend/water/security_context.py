@@ -29,5 +29,3 @@ def security_alerts(request):
         "security_alert_count": counts["total"] or 0,
         "security_critical_count": counts["critical"] or 0,
     }
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
