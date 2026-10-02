@@ -182,7 +182,7 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                             page.get_by_role('link', name='Новая панель · только просмотр Жители и участки', exact=False).click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name='Жители и участки', exact=True).is_visible())
-                            page.get_by_label('Адрес, имя, логин или ID').fill('Тестовый адрес 2')
+                            page.get_by_label('Адрес, имя, логин, телефон, e-mail или ID').fill('Тестовый адрес 2')
                             page.get_by_role('button', name='Найти', exact=True).click()
                             page.wait_for_load_state('networkidle')
                             page.locator('.wb-results a').first.click()
@@ -191,7 +191,7 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                             page.locator('.wb-detail a[href^="?kind=person&id=%s&"]' % person.pk).first.click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name=person.full_name, exact=True).is_visible())
-                            self.assertEqual(page.get_by_label('Адрес, имя, логин или ID').input_value(), 'Тестовый адрес 2')
+                            self.assertEqual(page.get_by_label('Адрес, имя, логин, телефон, e-mail или ID').input_value(), 'Тестовый адрес 2')
                             self.assertTrue(page.get_by_text('BROWSER-METER', exact=True).is_visible())
                             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
                             blocking = [v for v in Axe().run(page).response.get('violations', []) if v.get('impact') in {'serious', 'critical'} and any(t.startswith('wcag') for t in v.get('tags', []))]
