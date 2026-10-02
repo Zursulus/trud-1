@@ -1,0 +1,30 @@
+{% extends 'water/work/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs" aria-label="Хлебные крошки">
+  <a href="{{ cancel_url }}">Назад к карточке</a><span aria-hidden="true">›</span><span>Редактирование</span>
+</nav>
+
+<section class="ws-object-head">
+  <div>
+    <p class="ws-eyebrow">{{ eyebrow }}</p>
+    <h1>{{ title }}</h1>
+    <p>{{ explanation }}</p>
+  </div>
+</section>
+
+<section class="ws-section">
+  <div class="ws-banner ws-banner-warning">
+    <strong>Проверьте данные перед сохранением.</strong><br>
+    Эта форма не выдаёт и не отзывает доступ, не меняет собственника и не переносит участок между счетами.
+  </div>
+  <form class="ws-finance-form" method="post" novalidate>
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="ws-actions">
+      <button class="ws-primary" type="submit">Сохранить изменения</button>
+      <a class="ws-secondary" href="{{ cancel_url }}">Отмена</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
