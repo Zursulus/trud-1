@@ -116,6 +116,15 @@ class StaffRegistryEditorTests(TestCase):
         self.assertEqual(self.client.get(f"/work/plots/{self.plot.pk}/edit/").status_code, 403)
 
 
+    def test_workbench_search_finds_person_by_phone_and_email(self):
+        self.client.force_login(self.editor)
+        for query in (self.person.phone, self.person.email):
+            with self.subTest(query=query):
+                response = self.client.get("/work/panel/", {"q": query})
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, self.person.full_name)
+                self.assertContains(response, f"kind=person&amp;id={self.person.pk}")
+
     def test_account_scoped_editor_cannot_open_another_account(self):
         scoped_user = User.objects.create_user(username="scoped-account-editor", is_staff=True)
         scoped_person = Person.objects.create(full_name="Ограниченный редактор")
