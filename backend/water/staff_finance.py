@@ -28,7 +28,8 @@ from .finance_workflow import (
     reverse_payment,
 )
 from .models import Account, BillingPeriod, Charge, Payment, PaymentAllocation
-from .staff_workspace import _base_context\nfrom .vtb_debt_export import build_vtb_debt_export, render_vtb_debt_registry
+from .staff_workspace import _base_context
+from .vtb_debt_export import build_vtb_debt_export, render_vtb_debt_registry
 
 
 MONEY_FIELD = DecimalField(max_digits=14, decimal_places=2)
@@ -95,7 +96,8 @@ def finance_dashboard(request):
             _payments_with_remaining(payments.select_related("account"))
             .order_by("-paid_on", "-id")[:8]
         ),
-        "can_add_payment": _can(request.user, "finance.payment.create"),\n        "can_export_vtb": _can(request.user, "finance.export"),
+        "can_add_payment": _can(request.user, "finance.payment.create"),
+        "can_export_vtb": _can(request.user, "finance.export"),
     })
     return TemplateResponse(request, "water/work/finance/dashboard.html", context)
 
