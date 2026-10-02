@@ -13,8 +13,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .appeal_security import enforce_resident_submission_limits, validate_appeal_attachment
-from .models import Account, AppealCategory, ResidentAccess, ResidentAppeal, ResidentAppealMessage, User
-from .resident_models import ResidentAppealAttachment
+from .access_control import AccessAssignment
+from .models import Account, AppealCategory, Person, ResidentAccess, ResidentAppeal, ResidentAppealMessage, User
+from .resident_models import ResidentAppealAttachment, ResidentIdentity
 from .security_models import SecurityAlert
 
 
@@ -200,6 +201,48 @@ class AppealSpamAlertTests(TestCase):
             self.assertEqual(caught.exception.code, 'appeal_rate_limited')
         self.assertEqual(SecurityAlert.objects.filter(kind=SecurityAlert.KIND_SPAM).count(), 1)
 
+
+    def test_account_scoped_staff_cannot_open_or_download_other_account_appeal(self):
+        call_command('setup_roles', stdout=StringIO())
+        staff = User.objects.create_user(username='scoped-appeal-staff', is_staff=True)
+        person = Person.objects.create(full_name='Scoped appeal staff')
+        ResidentIdentity.objects.create(user=staff, person=person, verified_by=None, basis='test')
+        AccessAssignment.objects.create(
+            person=person,
+            role_code='test-appeal-scope',
+            role_version=1,
+            role_label='Scoped appeals',
+            allowed_capabilities=['appeals.view', 'appeals.reply', 'appeals.attachment.view'],
+            capabilities=['appeals.view', 'appeals.reply', 'appeals.attachment.view'],
+            scope_type='account',
+            scope_object_id=self.account.pk,
+            starts=timezone.localdate(),
+            basis='test',
+        )
+        other = Account.objects.create(number='SEC-OTHER', plot='Чужой счёт')
+        other_resident = User.objects.create_user(username='other-appeal-resident')
+        ResidentAccess.objects.create(
+            user=other_resident, account=other, role='owner',
+            starts=timezone.localdate() - timedelta(days=1),
+        )
+        other_appeal = ResidentAppeal.objects.create(
+            account=other, author=other_resident, category=self.category,
+            subject='Чужое обращение', message='Не показывать',
+        )
+        attachment = ResidentAppealAttachment.objects.create(
+            appeal=other_appeal,
+            uploaded_by=other_resident,
+            document=SimpleUploadedFile('safe.pdf', b'%PDF-1.7\\nbody'),
+        )
+        self.client.force_login(staff)
+        self.assertEqual(
+            self.client.get(reverse('staff_workspace:appeal', args=[other_appeal.pk])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(reverse('staff_workspace:appeal_attachment', args=[attachment.pk])).status_code,
+            404,
+        )
 
     def test_ts_admin_can_open_and_resolve_security_alert(self):
         call_command('setup_roles', stdout=StringIO())
