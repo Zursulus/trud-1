@@ -13,6 +13,11 @@ MAX_REGISTRY_BYTES = 5 * 1024 * 1024
 
 
 class VtbPaymentDryRunForm(forms.Form):
+    encoding = forms.ChoiceField(
+        label="Кодировка",
+        choices=(("cp1251", "WIN-1251"), ("utf-8", "UTF-8"), ("koi8-r", "KOI8-R")),
+        initial="cp1251",
+    )
     registry = forms.FileField(label="Реестр принятых платежей ВТБ")
 
     def clean_registry(self):
@@ -29,7 +34,9 @@ def payment_registry_dryrun(request):
     report = None
     if request.method == "POST" and form.is_valid():
         try:
-            registry = parse_payment_registry(form.cleaned_data["registry"].read())
+            registry = parse_payment_registry(
+                form.cleaned_data["registry"].read(), encoding=form.cleaned_data["encoding"]
+            )
         except VtbRegistryError as error:
             form.add_error("registry", str(error))
         else:
