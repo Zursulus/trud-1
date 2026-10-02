@@ -154,5 +154,3 @@ class ResidentConversationTests(TestCase):
             response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/')
             self.assertContains(response, 'Документ подготовлен.')
             self.assertContains(response, 'ответ.png')
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
