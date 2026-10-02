@@ -218,6 +218,7 @@ class AppealSpamAlertTests(TestCase):
             scope_object_id=self.account.pk,
             starts=timezone.localdate(),
             basis='test',
+            granted_by=staff,
         )
         other = Account.objects.create(number='SEC-OTHER', plot='Чужой счёт')
         other_resident = User.objects.create_user(username='other-appeal-resident')
