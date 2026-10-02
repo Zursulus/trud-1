@@ -1,4 +1,3 @@
-[Reading 116 lines from start (total: 116 lines, 0 remaining)]
 
 """Production defaults; local testing requires explicit DJANGO_DEBUG=1."""
 import os
