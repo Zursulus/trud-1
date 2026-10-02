@@ -42,14 +42,14 @@ Production работает fail-closed: если обязательный ан�
 
 ## Production prerequisite
 
-До deploy установить и проверить ClamAV daemon. Для Debian 12 рабочий контур должен иметь `clamdscan` (обычно `/usr/bin/clamdscan`) и доступ приложения к работающему daemon.
+Production использует `clamdscan` как клиент и приватный loopback TCP endpoint `127.0.0.1:3310`, который через ограниченный reverse-SSH tunnel ведёт к sandbox clamd. clamd не публикуется наружу.
 
 Перед deploy обязательно:
 
 ```sh
 command -v clamdscan
 systemctl is-active clamav-daemon
-sudo -u trudsite clamdscan --fdpass --no-summary /etc/hosts
+sudo -u trudsite clamdscan --no-summary /etc/hosts
 ```
 
 Имя системного пользователя сверить с фактическим unit приложения; не копировать команду вслепую, если deployment использует другого пользователя.
@@ -68,7 +68,7 @@ TRUD_APPEAL_CLAMDSCAN_TIMEOUT=20
 2. проверить backup/rollback readiness;
 3. установить/проверить ClamAV;
 4. выполнить `python manage.py check --deploy` — `water.E901` должен отсутствовать;
-5. применить migration `0029_security_alert`;
+5. применить production-linear migration `0034_security_alert`;
 6. выполнить `python manage.py setup_roles`;
 7. controlled deploy;
 8. проверить service/marker/HTTP;
