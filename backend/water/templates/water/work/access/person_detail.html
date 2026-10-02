@@ -2,7 +2,7 @@
 {% block title %}{{ person.full_name }} · Полномочия{% endblock %}
 {% block content %}
 <nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступы</a><span>›</span><a href="{% url 'staff_workspace:access_people' %}">Люди</a><span>›</span><span>{{ person.full_name }}</span></nav>
-<section class="ws-object-head"><div><p class="ws-eyebrow">Person #{{ person.pk }}</p><h1>{{ person.full_name }}</h1><p>{% if identity %}Логин: {{ identity.user.username }}{% if identity.user.is_staff %} · служебный вход включён{% endif %}{% else %}Логин ещё не связан{% endif %}{% if can_view_contacts and person.email %} · {{ person.email }}{% endif %}{% if can_view_contacts and person.phone %} · {{ person.phone }}{% endif %}</p></div></section>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Person #{{ person.pk }}</p><h1>{{ person.full_name }}</h1><p>{% if identity %}Логин: {{ identity.user.username }}{% if identity.user.is_staff %} · служебный вход включён{% endif %}{% else %}Логин ещё не связан{% endif %}{% if can_view_contacts and person.email %} · {{ person.email }}{% endif %}{% if can_view_contacts and person.phone %} · {{ person.phone }}{% endif %}</p></div>{% if can_edit_person %}<a class="ws-primary" href="{% url 'staff_workspace:person_edit' person.pk %}">Редактировать данные</a>{% endif %}</section>
 
 <div class="ws-summary-grid">
   <div class="ws-summary"><span>Личные доступы</span><strong>{{ grants|length }} V2{% if legacy_accesses %} + {{ legacy_accesses|length }} прежн.{% endif %}</strong><p>Явные права V2{% if legacy_accesses %}; прежние доступы продолжают действовать{% endif %}.</p></div>
