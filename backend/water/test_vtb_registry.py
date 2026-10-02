@@ -23,9 +23,15 @@ class VtbRegistryTests(SimpleTestCase):
         self.assertEqual(registry.control.transfer_total, Decimal("800.00"))
 
     def test_parse_win1251_registry(self):
-        registry = parse_payment_registry(SAMPLE.encode("cp1251"))
+        registry = parse_payment_registry(SAMPLE.encode("cp1251"), encoding="cp1251")
         self.assertEqual(registry.encoding, "cp1251")
         self.assertEqual(registry.rows[1].payer_name, "Петров Петр Петрович")
+
+    def test_ambiguous_single_byte_encoding_requires_explicit_choice(self):
+        with self.assertRaises(VtbRegistryError):
+            parse_payment_registry(SAMPLE.encode("koi8-r"))
+        registry = parse_payment_registry(SAMPLE.encode("koi8-r"), encoding="koi8-r")
+        self.assertEqual(registry.rows[0].payer_name, "Иванов Иван Иванович")
 
     def test_control_mismatch_fails_closed(self):
         broken = SAMPLE.replace("=2;815.20", "=3;999.99")
