@@ -43,5 +43,3 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['resolved_at', 'created_at'], name='water_sec_alert_state_idx'),
         ),
     ]
-
-[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
