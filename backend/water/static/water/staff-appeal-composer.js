@@ -1,4 +1,3 @@
-[Reading 97 lines from start (total: 97 lines, 0 remaining)]
 
 (() => {
   const composer = document.querySelector('[data-appeal-composer]');
