@@ -246,7 +246,7 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                 page.on("pageerror", lambda exc: page_errors.append(str(exc)))
                 try:
                     page.goto(
-                        f"{self.live_server_url}/work/panel/?q=%2B70000000001",
+                        f"{self.live_server_url}/work/panel/?q=%D0%96%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%20%D0%A0%D0%B5%D0%B4%D0%B0%D0%BA%D1%82%D0%BE%D1%80%20E2E",
                         wait_until="networkidle",
                     )
                     person_result = page.locator(
