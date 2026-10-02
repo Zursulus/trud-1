@@ -179,10 +179,10 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                         page.on('pageerror', lambda error: errors.append(str(error)))
                         try:
                             page.goto(self.live_server_url + '/work/more/')
-                            page.get_by_role('link', name='Новая панель · только просмотр Жители и участки', exact=False).click()
+                            page.get_by_role('link', name='Рабочая панель · контакты и адреса Жители и участки', exact=False).click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name='Жители и участки', exact=True).is_visible())
-                            page.get_by_label('Адрес, имя, логин или ID').fill('Тестовый адрес 2')
+                            page.get_by_label('Адрес, имя, логин, телефон, e-mail или ID').fill('Тестовый адрес 2')
                             page.get_by_role('button', name='Найти', exact=True).click()
                             page.wait_for_load_state('networkidle')
                             page.locator('.wb-results a').first.click()
@@ -191,7 +191,7 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                             page.locator('.wb-detail a[href^="?kind=person&id=%s&"]' % person.pk).first.click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name=person.full_name, exact=True).is_visible())
-                            self.assertEqual(page.get_by_label('Адрес, имя, логин или ID').input_value(), 'Тестовый адрес 2')
+                            self.assertEqual(page.get_by_label('Адрес, имя, логин, телефон, e-mail или ID').input_value(), 'Тестовый адрес 2')
                             self.assertTrue(page.get_by_text('BROWSER-METER', exact=True).is_visible())
                             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
                             blocking = [v for v in Axe().run(page).response.get('violations', []) if v.get('impact') in {'serious', 'critical'} and any(t.startswith('wcag') for t in v.get('tags', []))]
@@ -249,13 +249,21 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                         f"{self.live_server_url}/work/panel/?q=%D0%96%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%20%D0%A0%D0%B5%D0%B4%D0%B0%D0%BA%D1%82%D0%BE%D1%80%20E2E",
                         wait_until="networkidle",
                     )
+                    self.assertTrue(page.get_by_label(
+                        "Адрес, имя, логин, телефон, e-mail или ID"
+                    ).is_visible())
                     person_result = page.locator(
                         f'.wb-results a[href*="kind=person"][href*="id={self.person.pk}"]'
                     )
                     expect(person_result).to_have_count(1)
                     person_result.click()
                     page.wait_for_load_state("networkidle")
-                    page.get_by_role("link", name="Редактировать данные", exact=True).click()
+                    edit_link = page.get_by_role("link", name="Редактировать данные", exact=True)
+                    self.assertEqual(
+                        edit_link.evaluate("el => getComputedStyle(el).color"),
+                        "rgb(255, 255, 255)",
+                    )
+                    edit_link.click()
                     page.locator("#id_phone").fill("+79990000011")
                     page.locator("#id_email").fill(f"editor-{engine}@example.test")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
