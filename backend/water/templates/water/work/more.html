@@ -1,3 +1,5 @@
+[Reading 39 lines from start (total: 39 lines, 0 remaining)]
+
 {% extends 'water/work/base.html' %}
 {% block title %}Ещё{% endblock %}
 {% block content %}
@@ -21,6 +23,7 @@
     {% if can_use_access_workspace %}<a class="ws-card" href="{% url 'staff_workspace:access' %}"><span class="ws-card-kicker">Доступ</span><strong>Доступ жителей</strong><p>Заявки, приглашения и восстановление.</p></a>{% endif %}
     {% if can_view_documents %}<a class="ws-card" href="{% url 'staff_workspace:documents' %}"><span class="ws-card-kicker">Документы</span><strong>Документы и новости</strong><p>Материалы жителей и публикации сайта.</p></a>{% endif %}
     {% if can_view_governance %}<a class="ws-card" href="{% url 'staff_workspace:governance' %}"><span class="ws-card-kicker">Правление</span><strong>Опросы правления</strong><p>Внутренние опросы, результаты и протоколы.</p></a>{% endif %}
+    {% if can_view_security_alerts %}<a class="ws-card" href="{% url 'staff_workspace:security' %}"><span class="ws-card-kicker">Контроль</span><strong>Безопасность{% if security_alert_count %} · {{ security_alert_count }}{% endif %}</strong><p>Подозрительные вложения, спам и состояние антивирусной проверки.</p></a>{% endif %}
     <a class="ws-card" href="{% url 'staff_workspace:roles_guide' %}"><span class="ws-card-kicker">Инструкция · версия {{ roles_guide_version }}</span><strong>Роли и полномочия</strong><p>Выдача ролей и совмещённые полномочия.</p></a>
   </div>
 </section>
@@ -36,3 +39,5 @@
 {% endif %}
 {% endblock %}
 
+
+[executed on device: sandbox (2ce8fd8f-c8b1-4737-95b3-20fa4189189e)]
