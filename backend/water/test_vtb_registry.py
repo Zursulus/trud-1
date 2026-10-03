@@ -63,3 +63,22 @@ class VtbRegistryTests(SimpleTestCase):
             payload.decode("cp1251"),
             "ACC-001;Иванов Иван Иванович;г.Тест, ул. Первая, 1;0120;715.20",
         )
+
+    def test_render_debt_registry_rejects_structural_characters(self):
+        base = {
+            "personal_account": "ACC-001",
+            "payer_name": "Иванов Иван",
+            "payer_address": "г.Тест, дом 1",
+            "payment_period": "0120",
+            "accrued_amount": "715.20",
+        }
+        for field, bad_value in (
+            ("personal_account", "ACC;001"),
+            ("payer_name", "Иванов\rИван"),
+            ("payer_address", "г.Тест\nдом 1"),
+        ):
+            with self.subTest(field=field):
+                row = dict(base)
+                row[field] = bad_value
+                with self.assertRaises(VtbRegistryError):
+                    render_debt_registry([row])

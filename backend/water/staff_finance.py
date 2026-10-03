@@ -295,7 +295,7 @@ def vtb_debt_registry(request):
     _require_finance_view(request)
     if not _can(request.user, "finance.export"):
         raise PermissionDenied
-    rows, skipped = build_vtb_debt_export()
+    rows, skipped = build_vtb_debt_export(actor=request.user)
     if request.GET.get("download") == "1":
         try:
             payload = render_vtb_debt_registry(rows)

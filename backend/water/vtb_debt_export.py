@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db.models import Prefetch
 
+from .access_scope import scoped_records
 from .models import Charge, PaymentAllocation
 
 
@@ -26,17 +27,19 @@ def _validate_text(value, *, maximum, label):
     value = (value or "").strip()
     if not value:
         return None, f"{label}: не заполнено"
+    if any(marker in value for marker in (";", "\r", "\n")):
+        return None, f"{label}: содержит разделитель или перевод строки"
     if len(value) > maximum:
         return None, f"{label}: больше {maximum} символов"
     return value, None
 
 
-def build_vtb_debt_export():
+def build_vtb_debt_export(*, actor):
     confirmed_allocations = PaymentAllocation.objects.filter(
         payment__status="confirmed",
     ).select_related("payment")
     charges = (
-        Charge.objects.filter(status="approved")
+        scoped_records(Charge.objects.filter(status="approved"), actor, "finance.export")
         .select_related("account", "period")
         .prefetch_related(Prefetch("allocations", queryset=confirmed_allocations, to_attr="confirmed_allocations"))
         .order_by("account_id", "period__starts", "id")
@@ -81,7 +84,7 @@ def render_vtb_debt_registry(rows):
         ";".join((row.account_number, row.payer_name, row.address, row.period, f"{row.amount:.2f}"))
         for row in rows
     ]
-    text = "\\r\\n".join(lines)
+    text = "\r\n".join(lines)
     try:
         return text.encode("cp1251")
     except UnicodeEncodeError as error:
