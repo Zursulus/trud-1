@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -56,6 +56,10 @@ class HistoricalPortalPermissionTests(TestCase):
             category=self.category,
             subject='Обращение после окончания полномочия',
             message='Синтетическое сообщение',
+            opened_at=timezone.make_aware(
+                datetime.combine(self.today, time(0, 30)),
+                timezone.get_current_timezone(),
+            ),
         )
         with self.assertRaises(ValidationError):
             appeal.save()
