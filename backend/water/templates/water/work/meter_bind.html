@@ -1,0 +1,14 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Привязать счётчик{% endblock %}
+{% block content %}
+<nav class="ws-breadcrumbs"><a href="{% url 'staff_workspace:workbench' %}?kind=account&amp;id={{ account.pk }}">Назад к карточке</a></nav>
+<section class="ws-object-head"><div><p class="ws-eyebrow">Индивидуальный счётчик</p><h1>Привязать к {{ account }}</h1><p>Создаётся новый счётчик с явным номером и узлом. Владение, доступы и другие связи не меняются.</p></div></section>
+<section class="ws-section">
+  <form class="ws-finance-form" method="post" novalidate>
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="ws-banner ws-banner-warning"><strong>Проверьте номер счётчика и узел.</strong> Существующий счётчик этой формой не переносится.</div>
+    <div class="ws-actions"><button class="ws-primary" type="submit">Создать и привязать</button><a class="ws-secondary" href="{% url 'staff_workspace:workbench' %}?kind=account&amp;id={{ account.pk }}">Отмена</a></div>
+  </form>
+</section>
+{% endblock %}
