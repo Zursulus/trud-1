@@ -95,6 +95,8 @@ LEGACY_PERMISSION_REQUIREMENTS = {
     "appeals.close": ("water.change_residentappeal",),
     "appeals.attachment.view": ("water.view_residentappeal",),
     "appeals.attachment.manage": ("water.change_residentappeal",),
+    "security.alert.view": ("water.view_securityalert",),
+    "security.alert.review": ("water.change_securityalert",),
     "documents.account.view": ("water.view_accountdocument",),
     "documents.account.create": ("water.add_accountdocument",),
     "documents.account.edit_metadata": ("water.change_accountdocument",),

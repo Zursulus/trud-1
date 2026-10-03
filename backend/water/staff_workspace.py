@@ -132,6 +132,7 @@ def _capabilities(user):
             or can_any(user, "news.view")
         ),
         "can_view_governance": can_any(user, "governance.board.view"),
+        "can_view_security_alerts": can_any(user, "security.alert.view"),
         "can_view_registry": can_any(user, "registry.view"),
         "can_manage_finance_policy": can_any(user, "finance.policy.manage"),
         "can_view_reading_history": can_any(user, "water.reading.view"),
