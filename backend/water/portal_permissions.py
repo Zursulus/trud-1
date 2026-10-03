@@ -301,7 +301,7 @@ def _resident_appeal_clean_with_resolver(self):
         for field in ('author_id', 'account_id', 'opened_at')
     )
     if context_changed and self.author_id and self.account_id:
-        opened_on = self.opened_at.date() if self.opened_at else timezone.localdate()
+        opened_on = timezone.localdate(self.opened_at) if self.opened_at else timezone.localdate()
         access = resolved_access_at(self.author, self.account_id, CAP_APPEALS, opened_on)
         if access is None:
             raise ValidationError('У автора нет доступа к этому лицевому счёту на дату обращения.')

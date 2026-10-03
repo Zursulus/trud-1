@@ -74,7 +74,7 @@ class ResidentConversationTests(TestCase):
                 },
             )
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, 'Разрешены только PDF, JPG и PNG')
+            self.assertContains(response, 'Этот тип файла запрещён из соображений безопасности.')
             self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
 
     def test_oversized_attachment_is_rejected_with_form_error(self):
@@ -133,7 +133,7 @@ class ResidentConversationTests(TestCase):
                 f'/admin/water/residentappeal/{self.appeal.pk}/attachments/',
                 {
                     'body': 'Документ подготовлен.',
-                    'document': SimpleUploadedFile('ответ.png', b'PNG-private', content_type='image/png'),
+                    'document': SimpleUploadedFile('ответ.png', b'\x89PNG\r\n\x1a\nPNG-private', content_type='image/png'),
                 },
             )
             self.assertEqual(response.status_code, 302)
@@ -144,7 +144,7 @@ class ResidentConversationTests(TestCase):
             download = self.client.get(f'/admin/water/residentappeal/attachment/{attachment.pk}/')
             self.assertEqual(download.status_code, 200)
             self.assertIn('private, no-store', download['Cache-Control'])
-            self.assertEqual(b''.join(download.streaming_content), b'PNG-private')
+            self.assertEqual(b''.join(download.streaming_content), b'\x89PNG\r\n\x1a\nPNG-private')
 
             self.client.force_login(self.resident)
             response = self.client.get(f'/admin/cabinet/account/{self.account.pk}/appeal/{self.appeal.pk}/')

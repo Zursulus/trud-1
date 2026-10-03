@@ -10,6 +10,7 @@ from . import (
     staff_line_workspace,
     staff_more,
     staff_registry_edit,
+    staff_security,
     staff_workbench,
     staff_tasks,
     staff_workspace,
@@ -82,6 +83,7 @@ urlpatterns = [
     path("governance/<int:poll_id>/", staff_governance.workspace_governance_detail, name="governance_detail"),
     path("more/roles-guide/", staff_more.workspace_roles_guide, name="roles_guide"),
     path("more/", staff_more.workspace_more, name="more"),
+    path("security/", staff_security.workspace_security, name="security"),
     path("accounts/<int:account_id>/", staff_workspace.workspace_account, name="account"),
 ]
 
