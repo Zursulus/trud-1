@@ -74,7 +74,7 @@ class ResidentConversationTests(TestCase):
                 },
             )
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, 'Разрешены только PDF, JPG, PNG, DOCX или XLSX до 10 МБ.')
+            self.assertContains(response, 'Этот тип файла запрещён из соображений безопасности.')
             self.assertEqual(ResidentAppealAttachment.objects.count(), 0)
 
     def test_oversized_attachment_is_rejected_with_form_error(self):
