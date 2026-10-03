@@ -345,7 +345,7 @@ class VtbDebtExportBrowserTests(StaticLiveServerTestCase):
                     page.get_by_role("link", name="VTB · задолженность", exact=True).click()
                     page.wait_for_load_state("networkidle")
                     expect(page.get_by_text("0030142923", exact=True)).to_be_visible()
-                    expect(page.get_by_text("715.20", exact=True)).to_be_visible()
+                    expect(page.get_by_text("715,20", exact=True)).to_be_visible()
                     self.assertTrue(page.evaluate(
                         "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                     ))
