@@ -1,0 +1,32 @@
+{% extends 'water/work/base.html' %}
+{% block title %}ВТБ · проверка реестра{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div><p class="ws-eyebrow">Финансы · ВТБ</p><h1>Проверка реестра платежей</h1>
+  <p>Только чтение: файл проверяется и сопоставляется по точному лицевому счёту. Оплаты в базу не записываются.</p></div>
+</section>
+<section class="ws-section">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}{{ form.as_p }}
+    <button class="ws-primary" type="submit">Проверить без записи</button>
+  </form>
+</section>
+{% if report %}
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Результат</h2><span>{{ report.registry.rows|length }} строк</span></div>
+  <p><strong>Совпало:</strong> {{ report.matched }} · <strong>Не найдено:</strong> {{ report.unmatched }} · <strong>Дубли в файле:</strong> {{ report.duplicates }}</p>
+  <p>Контроль: {{ report.registry.control.operation_total }} ₽ · к перечислению {{ report.registry.control.transfer_total }} ₽ · комиссия {{ report.registry.control.commission_total }} ₽.</p>
+  <div class="ws-result-list">
+  {% for row in report.rows %}
+    <article class="ws-result">
+      <div><span class="ws-result-type">{{ row.payment.paid_on }} · {{ row.payment.personal_account }}</span>
+      <strong>{{ row.payment.operation_amount }} ₽</strong>
+      <p>{% if row.status == 'matched' %}Точное совпадение: {{ row.account }}{% elif row.status == 'duplicate' %}Дубликат операции внутри файла — не импортировать{% else %}Лицевой счёт не найден — требуется ручная проверка{% endif %}</p>
+      <p>UNI {{ row.payment.uni }} · документ {{ row.payment.bank_document }} · ключ {{ row.idempotency_key }}</p></div>
+    </article>
+  {% endfor %}
+  </div>
+  <div class="ws-banner ws-banner-warning"><strong>Никаких записей не выполнено.</strong> ФИО и адрес из файла не используются для автоматического сопоставления.</div>
+</section>
+{% endif %}
+{% endblock %}
