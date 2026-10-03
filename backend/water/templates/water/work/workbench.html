@@ -21,7 +21,11 @@
         <p class="wb-eyebrow">{% if kind == 'person' %}КАРТОЧКА ЖИТЕЛЯ{% elif kind == 'plot' %}КАРТОЧКА УЧАСТКА{% else %}ЛИЦЕВОЙ СЧЁТ{% endif %}</p>
         <h2>{% if kind == 'person' %}{{ selected.full_name }}{% elif kind == 'plot' %}{{ selected.label }}{% else %}{{ selected.plot|default:'Адрес не указан' }}{% endif %}</h2>
         <p class="wb-muted">ID {{ selected.pk }}{% if selected.archived %} · Архивная запись{% endif %}</p>
-        {% if edit_url %}<p><a class="ws-primary" href="{{ edit_url }}">{{ edit_label }}</a></p>{% endif %}
+        {% if edit_url or access_url or meter_bind_url %}<div class="ws-actions">
+          {% if edit_url %}<a class="ws-primary" href="{{ edit_url }}">{{ edit_label }}</a>{% endif %}
+          {% if access_url %}<a class="ws-secondary" href="{{ access_url }}">Управлять доступами</a>{% endif %}
+          {% if meter_bind_url %}<a class="ws-secondary" href="{{ meter_bind_url }}">Привязать счётчик</a>{% endif %}
+        </div>{% endif %}
         {% if kind == 'account' %}<p>Номер лицевого счёта: {{ selected.number|default:'не указан' }}</p>{% elif kind == 'plot' %}<p>Адрес: {{ selected.address|default:'не указан' }}<br>Кадастровый номер: {{ selected.cadastral_number|default:'не указан' }}</p>{% else %}<p>Логин: {{ selected.resident_identity.user.username|default:'не привязан' }}</p>{% endif %}
         <p class="wb-footnote">Связи и назначения действуют на {{ today|date:'d.m.Y' }}. Дата окончания не включается. Счётчики показаны также снятые с учёта.</p>
       </section>
