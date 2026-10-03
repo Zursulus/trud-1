@@ -1,0 +1,64 @@
+{% extends 'water/work/base.html' %}
+{% block title %}Безопасность{% endblock %}
+{% block content %}
+<section class="ws-page-head">
+  <div>
+    <p class="ws-eyebrow">Контроль безопасности</p>
+    <h1>Сигналы безопасности</h1>
+    <p>Подозрительные вложения, антивирус и ограничения от спама. Содержимое сообщений здесь не показывается.</p>
+  </div>
+</section>
+
+<div class="ws-summary-grid">
+  <section class="ws-summary{% if open_alert_count %} ws-summary-attention{% endif %}">
+    <span>Требуют проверки</span><strong>{{ open_alert_count }}</strong><p>Открытые сигналы.</p>
+  </section>
+</div>
+
+<nav class="ws-tabs" aria-label="Фильтр сигналов">
+  <a href="?state=open"{% if security_state == 'open' %} aria-current="page"{% endif %}>Открытые</a>
+  <a href="?state=resolved"{% if security_state == 'resolved' %} aria-current="page"{% endif %}>Проверенные</a>
+  <a href="?state=all"{% if security_state == 'all' %} aria-current="page"{% endif %}>Все</a>
+</nav>
+
+<section class="ws-section">
+  <div class="ws-section-head"><h2>Журнал</h2><span>{{ page.paginator.count }} шт.</span></div>
+  {% if page.object_list %}
+  <div class="ws-result-list">
+    {% for alert in page.object_list %}
+    <article class="ws-result" style="align-items:flex-start">
+      <div>
+        <span class="ws-result-type">{{ alert.created_at|date:'d.m.Y H:i' }} · {{ alert.get_severity_display }}</span>
+        <strong>{{ alert.get_kind_display }}</strong>
+        <p>
+          {% if alert.actor_id %}Пользователь #{{ alert.actor_id }}{% endif %}
+          {% if alert.account_id %} · л/с {{ alert.account.number|default:alert.account_id }}{% endif %}
+          {% if alert.appeal_id %} · обращение №{{ alert.appeal_id }}{% endif %}
+        </p>
+        {% if alert.original_name %}<p>Файл: {{ alert.original_name }}{% if alert.file_size %} · {{ alert.file_size|filesizeformat }}{% endif %}</p>{% endif %}
+        <p>Код: {{ alert.detail|default:'—' }}{% if alert.source_hash %} · источник {{ alert.source_hash|slice:':10' }}…{% endif %}</p>
+        {% if alert.appeal_id and can_view_appeals %}<div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:appeal' alert.appeal_id %}">Открыть обращение</a></div>{% endif %}
+      </div>
+      <div>
+        {% if alert.resolved_at %}
+          <span class="ws-badge ws-badge-ok">Проверено</span>
+        {% elif can_resolve_security_alerts %}
+          <form method="post">{% csrf_token %}<input type="hidden" name="alert_id" value="{{ alert.pk }}"><button class="ws-secondary" type="submit">Проверено</button></form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ws-empty"><strong>Сигналов нет</strong><p>В выбранном фильтре ничего не требует внимания.</p></div>
+  {% endif %}
+</section>
+
+{% if page.has_previous or page.has_next %}
+<nav class="ws-pagination" aria-label="Страницы">
+  {% if page.has_previous %}<a href="?state={{ security_state }}&page={{ page.previous_page_number }}">Назад</a>{% endif %}
+  <span>{{ page.number }} из {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?state={{ security_state }}&page={{ page.next_page_number }}">Далее</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}
