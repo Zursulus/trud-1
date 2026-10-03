@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 
 from .access_resolver import can_any
+from .access_scope import scoped_records
 from .models import Account
 from .staff_workspace import _base_context
 from .vtb_registry import VtbRegistryError, parse_payment_registry
@@ -43,9 +44,12 @@ def payment_registry_dryrun(request):
             numbers = {row.personal_account for row in registry.rows}
             accounts = {
                 item.number: item
-                for item in Account.objects.filter(number__in=numbers).only(
-                    "id", "number", "plot", "archived"
-                )
+                for item in scoped_records(
+                    Account.objects.filter(number__in=numbers),
+                    request.user,
+                    "finance.view",
+                    account_field="pk",
+                ).only("id", "number", "plot", "archived")
             }
             seen_keys = set()
             rows = []

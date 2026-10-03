@@ -179,12 +179,19 @@ def parse_payment_registry(payload: bytes, *, encoding: str = "auto") -> VtbPaym
     return VtbPaymentRegistry(tuple(rows), control, encoding)
 
 
+def _safe_debt_field(value: str, field: str) -> str:
+    value = str(value or "").strip()
+    if any(marker in value for marker in (";", "\r", "\n")):
+        raise VtbRegistryError(f"{field}: contains registry delimiter/newline")
+    return value
+
+
 def render_debt_registry(rows, *, encoding="cp1251") -> bytes:
     output = []
     for number, row in enumerate(rows, start=1):
-        account = str(row["personal_account"]).strip()
-        name = str(row.get("payer_name") or "").strip()
-        address = str(row.get("payer_address") or "").strip()
+        account = _safe_debt_field(row["personal_account"], f"row {number} personal account")
+        name = _safe_debt_field(row.get("payer_name") or "", f"row {number} payer name")
+        address = _safe_debt_field(row.get("payer_address") or "", f"row {number} payer address")
         period = str(row["payment_period"]).strip()
         amount = _money(str(row["accrued_amount"]), f"row {number} accrued amount")
         if not (1 <= len(account) <= 30):
