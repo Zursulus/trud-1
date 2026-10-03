@@ -360,3 +360,47 @@ class WorkbenchMeterBindingBrowserTests(StaticLiveServerTestCase):
                     context.close()
                     browser.close()
         self.assertEqual(Meter.objects.filter(account=self.account, kind="individual").count(), 2)
+
+
+class VtbDebtExportBrowserTests(StaticLiveServerTestCase):
+    def setUp(self):
+        call_command("setup_roles", stdout=StringIO())
+        self.staff = User.objects.create_user(username="vtb-export-e2e", is_staff=True, is_superuser=True)
+        self.account = Account.objects.create(
+            number="0030142923", contact_name="Иванов Иван Иванович", plot="Тестовый адрес VTB E2E",
+        )
+        period = BillingPeriod.objects.create(starts=date(2026, 9, 1), ends=date(2026, 10, 1))
+        Charge.objects.create(
+            account=self.account, period=period, kind="service", amount=Decimal("715.20"), status="approved",
+        )
+
+    def _cookie(self):
+        device = TOTPDevice.objects.create(user=self.staff, name="vtb export e2e")
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
+        return self.client.cookies[settings.SESSION_COOKIE_NAME].value
+
+    def test_vtb_debt_preview_mobile_chromium_webkit(self):
+        cookie = self._cookie()
+        with sync_playwright() as playwright:
+            for engine in ("chromium", "webkit"):
+                browser = getattr(playwright, engine).launch(headless=True)
+                context = browser.new_context(viewport={"width": 390, "height": 844})
+                context.add_cookies([{
+                    "name": settings.SESSION_COOKIE_NAME, "value": cookie, "url": self.live_server_url,
+                }])
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/work/finance/", wait_until="networkidle")
+                    page.get_by_role("link", name="VTB · задолженность", exact=True).click()
+                    page.wait_for_load_state("networkidle")
+                    expect(page.get_by_text("0030142923", exact=True)).to_be_visible()
+                    expect(page.get_by_text("715,20", exact=True)).to_be_visible()
+                    self.assertTrue(page.evaluate(
+                        "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+                    ))
+                finally:
+                    context.close()
+                    browser.close()
