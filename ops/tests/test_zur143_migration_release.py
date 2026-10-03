@@ -51,6 +51,7 @@ class Zur143MigrationReleaseTests(unittest.TestCase):
         for path in (
             "backend/config/settings.py",
             "backend/water/management/commands/setup_roles.py",
+            "backend/water/management/commands/vtb_registry_dryrun.py",
             "backend/water/migrations/0034_security_alert.py",
         ):
             self.assertIn(path, self.release)

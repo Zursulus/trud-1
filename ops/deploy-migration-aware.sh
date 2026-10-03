@@ -74,6 +74,7 @@ done
 EXPECTED_SENSITIVE=$(cat <<'EOF'
 backend/config/settings.py
 backend/water/management/commands/setup_roles.py
+backend/water/management/commands/vtb_registry_dryrun.py
 backend/water/migrations/0034_security_alert.py
 EOF
 )
