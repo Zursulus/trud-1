@@ -77,10 +77,29 @@ class NewResidentPasswordForm(InviteRegistrationForm):
         return data
 
 
+def meter_active_on(meter, day):
+    return (
+        (meter.commissioned_on is None or meter.commissioned_on <= day)
+        and (meter.retired_on is None or meter.retired_on >= day)
+    )
+
+
 class ResidentReadingForm(forms.Form):
     date = forms.DateField(label='Дата показания', widget=forms.DateInput(attrs={'type': 'date'}))
     value = forms.DecimalField(label='Показание, м³', min_value=0, max_digits=14, decimal_places=3)
     notes = forms.CharField(label='Примечание', required=False, max_length=500)
+
+    def __init__(self, *args, meter=None, **kwargs):
+        self.meter = meter
+        super().__init__(*args, **kwargs)
+
+    def clean_date(self):
+        observed_on = self.cleaned_data['date']
+        if observed_on > timezone.localdate():
+            raise forms.ValidationError('Дата показания не может быть в будущем.')
+        if self.meter is not None and not meter_active_on(self.meter, observed_on):
+            raise forms.ValidationError('На эту дату счётчик не был действующим.')
+        return observed_on
 
 
 class ResidentAppealForm(forms.Form):
@@ -503,9 +522,11 @@ def submit_reading(request, account_id, meter_id):
         return denied
     access = _resolved_or_404(request.user, account_id, CAP_SUBMIT_WATER)
     meter = get_object_or_404(Meter, pk=meter_id, account=access.account, kind='individual')
+    if not meter_active_on(meter, timezone.localdate()):
+        raise Http404
     if request.method != 'POST':
         raise Http404
-    form = ResidentReadingForm(request.POST)
+    form = ResidentReadingForm(request.POST, meter=meter)
     if form.is_valid():
         observed_on = form.cleaned_data['date']
         line_member = Membership.objects.filter(
