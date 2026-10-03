@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
@@ -19,7 +19,7 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
         ResidentAccess.objects.create(user=self.user, account=self.account, role='owner', starts=date(2026, 1, 1))
         self.node = SupplyNode.objects.create(name='Мобильный узел')
         self.meter = Meter.objects.create(serial='MOBILE-METER', kind='individual', node=self.node, account=self.account)
-        self.category = AppealCategory.objects.create(name='Другое', active=True)
+        self.category, _ = AppealCategory.objects.get_or_create(name='Другое', defaults={'active': True})
 
     @contextmanager
     def browser_page(self, viewport):
@@ -87,6 +87,30 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             page.wait_for_url('**/appeal/*/')
             self.assertTrue(page.get_by_text('Вопрос по участку', exact=True).is_visible())
             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
+            self.assertEqual(page_errors, [])
+            self.assertEqual(console_errors, [])
+
+    def test_multiple_meters_are_distinguishable_and_retired_meter_has_no_submit_target(self):
+        today = timezone.localdate()
+        Meter.objects.create(
+            serial='MOBILE-METER-2', kind='individual', node=self.node, account=self.account,
+            commissioned_on=today - timedelta(days=10),
+        )
+        Meter.objects.create(
+            serial='MOBILE-METER-RETIRED', kind='individual', node=self.node, account=self.account,
+            commissioned_on=today - timedelta(days=20), retired_on=today - timedelta(days=1),
+        )
+        with self.browser_page({'width': 390, 'height': 844}) as (page, page_errors, console_errors):
+            self._login(page)
+            page.goto(
+                f'{self.live_server_url}/admin/cabinet/account/{self.account.pk}/water/',
+                wait_until='networkidle',
+            )
+            for serial in ('MOBILE-METER', 'MOBILE-METER-2', 'MOBILE-METER-RETIRED'):
+                self.assertTrue(page.get_by_text(f'Счётчик {serial}', exact=True).is_visible())
+            retired = page.locator('.water-summary').filter(has_text='MOBILE-METER-RETIRED')
+            self.assertEqual(retired.locator('.reading-form').count(), 0)
+            self.assertEqual(page.locator('.reading-form').count(), 2)
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
 
