@@ -346,7 +346,7 @@ class WorkbenchMeterBindingBrowserTests(StaticLiveServerTestCase):
                     page.locator("#id_serial").fill(serial)
                     page.get_by_role("button", name="Создать и привязать", exact=True).click()
                     page.wait_for_load_state("networkidle")
-                    expect(page.get_by_text(serial, exact=False)).to_be_visible()
+                    expect(page.get_by_text(serial, exact=True)).to_be_visible()
                     self.assertTrue(page.evaluate(
                         "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                     ))
