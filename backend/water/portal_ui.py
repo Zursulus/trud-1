@@ -10,7 +10,7 @@ from public_site.models import PublicDocument, PublicNews
 
 from .billing import account_totals
 from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
-from .portal import meter_active_on, resident_guard
+from .portal import resident_guard
 from .portal_permissions import (
     CAP_APPEALS,
     CAP_DOCUMENTS,
@@ -21,6 +21,13 @@ from .portal_permissions import (
 )
 from .resident_models import ResidentAppealAttachment, ResidentAppealViewState
 from .resident_numbers import ResidentNumberSlot
+
+
+def meter_active_on(meter, day):
+    return (
+        (meter.commissioned_on is None or meter.commissioned_on <= day)
+        and (meter.retired_on is None or meter.retired_on >= day)
+    )
 
 
 def _accesses(user):
