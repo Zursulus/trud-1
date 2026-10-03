@@ -36,6 +36,7 @@ urlpatterns = [
         name="appeal_attachment",
     ),
     path("finance/", staff_finance.workspace_finance, name="finance"),
+    path("finance/vtb/debt/", staff_finance.vtb_debt_registry, name="finance_vtb_debt"),
     path("finance/periods/<int:period_id>/", staff_finance.workspace_finance_period, name="finance_period"),
     path("finance/payments/", staff_finance.workspace_finance_payments, name="finance_payments"),
     path("finance/payments/new/", staff_finance.workspace_finance_payment_create, name="finance_payment_create"),
