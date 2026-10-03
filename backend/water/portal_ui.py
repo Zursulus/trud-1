@@ -10,7 +10,7 @@ from public_site.models import PublicDocument, PublicNews
 
 from .billing import account_totals
 from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
-from .portal import resident_guard
+from .portal import meter_active_on, resident_guard
 from .portal_permissions import (
     CAP_APPEALS,
     CAP_DOCUMENTS,
@@ -215,14 +215,15 @@ def water(request, account_id):
     if denied:
         return denied
     access = _access_or_404(request.user, account_id)
+    today = timezone.localdate()
     meters = Meter.objects.filter(account=access.account, kind='individual').order_by('serial')
     rows = []
     for meter in meters:
         readings = list(Reading.objects.filter(meter=meter).order_by('-date', '-id')[:12])
-        rows.append({'meter': meter, 'latest': readings[0] if readings else None, 'readings': readings})
+        rows.append({'meter': meter, 'latest': readings[0] if readings else None, 'readings': readings, 'is_active': meter_active_on(meter, today)})
     context = _common(request, access, 'water')
     context['meter_rows'] = rows
-    context['today'] = timezone.localdate()
+    context['today'] = today
     return TemplateResponse(request, 'water/portal/water.html', context)
 
 
