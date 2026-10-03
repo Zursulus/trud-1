@@ -1,0 +1,13 @@
+{% extends 'water/work/base.html' %}
+{% block title %}VTB · реестр задолженности{% endblock %}
+{% block content %}
+<section class="ws-page-head"><div><p class="ws-eyebrow">VTB · Шаблон 6</p><h1>Предпросмотр реестра задолженности</h1><p>Только чтение. Формат построен по реальному шаблону ВТБ; строки не исправляются и не дополняются предположениями.</p></div></section>
+<section class="ws-section">
+  <div class="ws-actions"><a class="ws-primary" href="?download=1">Скачать TEST-реестр WIN-1251</a><a class="ws-secondary" href="{% url 'staff_workspace:finance' %}">Назад в финансы</a></div>
+  <p>Готово строк: <strong>{{ rows|length }}</strong>. Пропущено: <strong>{{ skipped|length }}</strong>.</p>
+  <div class="ws-table-wrap"><table class="ws-table"><thead><tr><th>Лицевой счёт</th><th>ФИО</th><th>Адрес</th><th>Период</th><th>Долг</th></tr></thead><tbody>
+  {% for row in rows %}<tr><td>{{ row.account_number }}</td><td>{{ row.payer_name }}</td><td>{{ row.address }}</td><td>{{ row.period }}</td><td>{{ row.amount }}</td></tr>{% empty %}<tr><td colspan="5">Нет готовых строк.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% if skipped %}<section class="ws-section"><h2>Пропущено без выдумывания данных</h2><ul>{% for item in skipped %}<li>Account #{{ item.account_id }}, период {{ item.period }} — {{ item.reason }}</li>{% endfor %}</ul></section>{% endif %}
+{% endblock %}
