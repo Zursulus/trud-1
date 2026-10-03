@@ -240,6 +240,40 @@ class PortalPermissionRouteTests(TestCase):
         self.assertEqual(observation.source, ControllerReadingSubmission.SOURCE_RESIDENT)
         self.assertEqual(observation.line_review_status, ControllerReadingSubmission.LINE_REVIEW_NOT_REQUIRED)
 
+    def test_water_identifies_each_meter_and_hides_submission_for_retired_meter(self):
+        self._grant(can_view_account=True, can_submit_water=True)
+        active = Meter.objects.create(
+            serial='ROUTE-METER-2', kind='individual', node=self.node, account=self.account,
+            commissioned_on=self.today - timedelta(days=30),
+        )
+        retired = Meter.objects.create(
+            serial='ROUTE-METER-RETIRED', kind='individual', node=self.node, account=self.account,
+            commissioned_on=self.today - timedelta(days=60), retired_on=self.today - timedelta(days=1),
+        )
+
+        response = self.client.get(reverse('resident_water', args=[self.account.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        for meter in (self.meter, active, retired):
+            self.assertContains(response, f'Счётчик {meter.serial}')
+        active_urls = [
+            reverse('resident_reading', args=[self.account.pk, self.meter.pk]),
+            reverse('resident_reading', args=[self.account.pk, active.pk]),
+        ]
+        for url in active_urls:
+            self.assertContains(response, f'action="{url}"')
+        retired_url = reverse('resident_reading', args=[self.account.pk, retired.pk])
+        self.assertNotContains(response, f'action="{retired_url}"')
+        self.assertContains(response, 'Для этого счётчика передача новых показаний недоступна.')
+        self.assertContains(response, 'class="reading-form"', count=2)
+
+        direct = self.client.post(
+            retired_url,
+            {'date': self.today.isoformat(), 'value': '12.000', 'notes': 'Must be rejected'},
+        )
+        self.assertEqual(direct.status_code, 400)
+        self.assertFalse(ControllerReadingSubmission.objects.filter(meter=retired).exists())
+
     def test_explicit_appeal_grant_works_without_legacy_access(self):
         self._grant(can_view_account=True, can_use_appeals=True)
         category = AppealCategory.objects.create(name='Тестовая тема ZUR-70')

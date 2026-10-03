@@ -215,14 +215,24 @@ def water(request, account_id):
     if denied:
         return denied
     access = _access_or_404(request.user, account_id)
+    today = timezone.localdate()
     meters = Meter.objects.filter(account=access.account, kind='individual').order_by('serial')
     rows = []
     for meter in meters:
         readings = list(Reading.objects.filter(meter=meter).order_by('-date', '-id')[:12])
-        rows.append({'meter': meter, 'latest': readings[0] if readings else None, 'readings': readings})
+        can_submit = (
+            (meter.commissioned_on is None or meter.commissioned_on <= today)
+            and (meter.retired_on is None or today <= meter.retired_on)
+        )
+        rows.append({
+            'meter': meter,
+            'latest': readings[0] if readings else None,
+            'readings': readings,
+            'can_submit': can_submit,
+        })
     context = _common(request, access, 'water')
     context['meter_rows'] = rows
-    context['today'] = timezone.localdate()
+    context['today'] = today
     return TemplateResponse(request, 'water/portal/water.html', context)
 
 
