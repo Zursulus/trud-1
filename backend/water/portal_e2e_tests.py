@@ -5,7 +5,10 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
 from playwright.sync_api import sync_playwright
 
-from .models import Account, AppealCategory, Meter, ResidentAccess, ResidentAppeal, SupplyNode, User
+from .models import (
+    Account, AppealCategory, ControllerReadingSubmission, Meter, ResidentAccess,
+    ResidentAppeal, SupplyNode, User,
+)
 
 
 class ResidentPortalBrowserTests(StaticLiveServerTestCase):
@@ -74,6 +77,11 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             page.locator('input[name="value"]').fill('12.345')
             page.locator('input[name="date"]').fill(timezone.localdate().isoformat())
             page.get_by_role('button', name='Передать показание', exact=True).click()
+            page.wait_for_url('**/water/')
+            self.assertTrue(page.get_by_text('На проверке', exact=True).is_visible())
+            self.assertTrue(page.get_by_text('12,345 м³', exact=True).is_visible())
+            self.assertTrue(page.get_by_role('status').is_visible())
+            page.locator('.subpage-back').click()
             page.wait_for_url(f'**/account/{self.account.pk}/')
 
             page.locator('.shortcut-appeals').click()
@@ -113,6 +121,54 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(page.locator('.reading-form').count(), 2)
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])
+
+    def test_invalid_water_form_can_be_corrected_repeated_and_cancelled_on_mobile(self):
+        today = timezone.localdate()
+        future = today + timedelta(days=1)
+        water_url = f'{self.live_server_url}/admin/cabinet/account/{self.account.pk}/water/'
+        with self.browser_page({'width': 390, 'height': 844}) as (page, page_errors, console_errors):
+            self._login(page)
+            page.goto(water_url)
+            page.locator('.reading-details summary').click()
+            page.locator('.reading-form input[name="value"]').fill('12.345')
+            page.locator('.reading-form input[name="date"]').fill(future.isoformat())
+            page.locator('.reading-form input[name="notes"]').fill('Сохранить примечание после ошибки')
+            page.locator('.reading-form').evaluate('(form) => { form.noValidate = true; }')
+            page.get_by_role('button', name='Передать показание', exact=True).click()
+            page.wait_for_url('**/reading/')
+            self.assertTrue(page.get_by_role('alert').is_visible())
+            self.assertEqual(page.locator('#id_date').input_value(), future.isoformat())
+            self.assertEqual(page.locator('#id_notes').input_value(), 'Сохранить примечание после ошибки')
+            self.assertTrue(page.locator('.bottom-nav a.active[href$="/water/"]').is_visible())
+
+            page.locator('#id_date').fill(today.isoformat())
+            page.get_by_role('button', name='Передать показание', exact=True).click()
+            page.wait_for_url('**/water/')
+            self.assertTrue(page.get_by_role('status').is_visible())
+            self.assertTrue(page.get_by_text('12,345 м³', exact=True).is_visible())
+
+            page.locator('.reading-details summary').click()
+            page.locator('.reading-form input[name="value"]').fill('13.456')
+            page.get_by_role('button', name='Передать показание', exact=True).click()
+            page.wait_for_url('**/water/')
+            self.assertTrue(page.get_by_text('13,456 м³', exact=True).is_visible())
+            self.assertEqual(page.locator('.water-summary .reading-list .reading-row').count(), 1)
+
+            page.locator('.reading-details summary').click()
+            page.locator('.reading-form input[name="value"]').fill('14.567')
+            page.locator('.reading-form input[name="date"]').fill(future.isoformat())
+            page.locator('.reading-form').evaluate('(form) => { form.noValidate = true; }')
+            page.get_by_role('button', name='Передать показание', exact=True).click()
+            page.wait_for_url('**/reading/')
+            page.get_by_role('link', name='Отменить и вернуться к воде').click()
+            page.wait_for_url('**/water/')
+            self.assertTrue(page.get_by_text('13,456 м³', exact=True).is_visible())
+            self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
+            self.assertEqual(page.locator('.water-summary .reading-list .reading-row').count(), 1)
+            self.assertEqual(page_errors, [])
+            self.assertEqual(console_errors, [])
+        self.assertEqual(ControllerReadingSubmission.objects.filter(meter=self.meter).count(), 1)
+        self.assertEqual(str(ControllerReadingSubmission.objects.get(meter=self.meter).value), '13.456')
 
     def test_desktop_reference_layout(self):
         with self.browser_page({'width': 1280, 'height': 900}) as (page, page_errors, console_errors):

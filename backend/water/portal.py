@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 from django import forms
+from django.contrib import messages
 from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
@@ -542,8 +543,16 @@ def submit_reading(request, account_id, meter_id):
         except ValidationError as error:
             form.add_error(None, error)
         else:
-            return HttpResponseRedirect(reverse('resident_account', args=[account_id]))
-    context = {'account': access.account, 'access': access, 'meter': meter, 'form': form}
+            messages.success(
+                request,
+                f'Показание счётчика «{meter.serial}» передано на проверку. '
+                'До принятия оно не учитывается в истории показаний.',
+            )
+            return HttpResponseRedirect(reverse('resident_water', args=[account_id]))
+    context = {
+        'account': access.account, 'access': access, 'meter': meter, 'form': form,
+        'active_section': 'water',
+    }
     return TemplateResponse(request, 'water/portal/reading.html', context, status=400)
 
 

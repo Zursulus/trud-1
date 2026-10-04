@@ -19,7 +19,7 @@ class ResidentPortalTests(legacy.ResidentPortalTests):
             f'/admin/cabinet/account/{self.account.pk}/meter/{self.meter.pk}/reading/',
             {'date': '2026-09-18', 'value': '123.456', 'notes': 'Synthetic resident value'},
         )
-        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/')
+        self.assertRedirects(response, f'/admin/cabinet/account/{self.account.pk}/water/')
         self.assertFalse(Reading.objects.exists())
         submission = ControllerReadingSubmission.objects.get()
         self.assertEqual(submission.source, ControllerReadingSubmission.SOURCE_RESIDENT)

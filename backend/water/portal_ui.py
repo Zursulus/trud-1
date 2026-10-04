@@ -9,7 +9,10 @@ from django.views.decorators.cache import never_cache
 from public_site.models import PublicDocument, PublicNews
 
 from .billing import account_totals
-from .models import AccountDocument, Charge, Meter, Payment, Reading, ResidentAppeal
+from .models import (
+    AccountDocument, Charge, ControllerReadingSubmission, Meter, Payment, Reading,
+    ResidentAppeal,
+)
 from .portal import resident_guard
 from .portal_permissions import (
     CAP_APPEALS,
@@ -227,7 +230,12 @@ def water(request, account_id):
         rows.append({
             'meter': meter,
             'latest': readings[0] if readings else None,
+            'previous': readings[1] if len(readings) > 1 else None,
             'readings': readings,
+            'submissions': list(ControllerReadingSubmission.objects.filter(
+                meter=meter, submitted_by=request.user,
+                source=ControllerReadingSubmission.SOURCE_RESIDENT,
+            ).order_by('-submitted_at', '-id')[:5]),
             'can_submit': can_submit,
         })
     context = _common(request, access, 'water')
