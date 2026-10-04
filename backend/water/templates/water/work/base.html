@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="{% static 'water/staff-line-workspace.css' %}">
 </head>
 <body>
+  <a class="ws-skip-link" href="#main-content">К содержимому</a>
   <div class="ws-shell">
     <aside class="ws-sidebar" aria-label="Рабочая навигация">
       <a class="ws-brand" href="{% url 'staff_workspace:home' %}">
@@ -21,7 +22,7 @@
       <nav class="ws-nav">
         <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
         {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}>Найти</a>{% endif %}
-        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}>Ещё</a>
+        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section != 'home' and workspace_section != 'search' and workspace_section != 'accounts' %} aria-current="page"{% endif %}>Ещё</a>
       </nav>
       <div class="ws-sidebar-foot">
         <span>{{ request.user.get_full_name|default:request.user.username }}</span>
@@ -42,7 +43,7 @@
           </form>
         </div>
       </header>
-      <main class="ws-content" id="main-content">
+      <main class="ws-content" id="main-content" tabindex="-1">
         {% if messages %}
         <div class="ws-flash-stack" aria-live="polite">
           {% for message in messages %}<div class="ws-flash{% if message.tags %} ws-flash-{{ message.tags }}{% endif %}">{{ message }}</div>{% endfor %}
@@ -54,9 +55,9 @@
   </div>
 
   <nav class="ws-bottom-nav" aria-label="Мобильная навигация" style="grid-template-columns:repeat({% if can_view_accounts %}3{% else %}2{% endif %},minmax(0,1fr))">
-    <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><span aria-hidden="true">⌂</span>Главная</a>
-    {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}><span aria-hidden="true">⌕</span>Найти</a>{% endif %}
-    <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}><span aria-hidden="true">•••</span>Ещё</a>
+    <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная</a>
+    {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#search"></use></svg>Найти</a>{% endif %}
+    <a href="{% url 'staff_workspace:more' %}"{% if workspace_section != 'home' and workspace_section != 'search' and workspace_section != 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg>Ещё</a>
   </nav>
 </body>
 </html>

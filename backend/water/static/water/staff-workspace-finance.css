@@ -10,6 +10,8 @@
 .ws-finance-form textarea { min-height: 92px; resize: vertical; }
 .ws-finance-form input:focus, .ws-finance-form select:focus, .ws-finance-form textarea:focus { outline: none; border-color: var(--ws-brand); box-shadow: 0 0 0 3px rgba(36,91,71,.12); }
 .ws-finance-form .errorlist { margin: 0 0 8px; padding-left: 20px; color: var(--ws-danger); }
+.ws-finance-form [aria-invalid="true"] { border-color: var(--ws-danger); background: #fffafa; }
+.ws-finance-form .helptext { display: block; margin-top: 6px; color: var(--ws-muted); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .ws-finance-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ws-finance-actions form { margin: 0; }
 .ws-danger-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid #e4b8b8; border-radius: 12px; background: #fff5f5; color: var(--ws-danger); font: inherit; font-weight: 750; cursor: pointer; }
