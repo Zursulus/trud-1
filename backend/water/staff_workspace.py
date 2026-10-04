@@ -26,6 +26,7 @@ from .models import (
     Reading,
     ResidentAccess,
     ResidentAppeal,
+    WaterGroup,
 )
 
 
@@ -161,7 +162,10 @@ def dashboard(request):
 
     attention = []
     if can_any(request.user, "water.observation.finalize"):
-        count = ControllerReadingSubmission.objects.filter(status="pending").exclude(
+        meter_ids = scoped_water_meters(request.user).values("pk")
+        count = ControllerReadingSubmission.objects.filter(
+            status="pending", meter_id__in=Subquery(meter_ids),
+        ).exclude(
             line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
         ).count()
         if count:
