@@ -48,7 +48,9 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
         page.locator("#id_password").fill(self.password)
         if user.is_staff:
             page.locator('#login-form input[type="submit"]').click()
-            page.wait_for_url("**/work/appeals/")
+            # A suffix glob also matches the login page's ?next= value.
+            # Wait for the destination itself before issuing another request.
+            page.wait_for_url(self.live_server_url + "/work/appeals/")
         else:
             page.get_by_role("button", name="Войти", exact=True).click()
             page.wait_for_url("**/admin/cabinet/")
@@ -216,7 +218,7 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
             page.locator("#id_username").fill(staff_only.username)
             page.locator("#id_password").fill(self.password)
             page.locator('#login-form input[type="submit"]').click()
-            page.wait_for_url("**/work/")
+            page.wait_for_url(self.live_server_url + "/work/")
             page.get_by_role("button", name="Выйти", exact=True).click()
             page.wait_for_url("**/admin/cabinet/login/")
 

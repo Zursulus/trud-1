@@ -99,6 +99,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload public and cabinet readiness screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: night-readiness-review
+          path: |
+            backend/test-artifacts/night-*.png
+            backend/test-artifacts/public-*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload cross-role acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
