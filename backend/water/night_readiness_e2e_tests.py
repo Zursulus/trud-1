@@ -58,15 +58,15 @@ class InvitationReadinessBrowserTests(StaticLiveServerTestCase):
                 self._check_page(page, 'invite-confirm-mobile')
                 page.get_by_role('button', name='Подключить лицевой счёт участка').click()
                 page.wait_for_url('**/admin/cabinet/account/*/')
-                self.assertTrue(ResidentAccess.objects.filter(
-                    user=self.recipient, account=self.account,
-                ).exists())
-                self.assertFalse(ResidentAccess.objects.filter(
-                    user=self.other, account=self.account,
-                ).exists())
             finally:
                 context.close()
                 browser.close()
+        self.assertTrue(ResidentAccess.objects.filter(
+            user=self.recipient, account=self.account,
+        ).exists())
+        self.assertFalse(ResidentAccess.objects.filter(
+            user=self.other, account=self.account,
+        ).exists())
 
     def test_activation_error_and_controls_desktop_mobile_and_webkit(self):
         _, token = issue_invite(self.account, 'new-night-resident@example.test', 'owner')
@@ -90,7 +90,7 @@ class InvitationReadinessBrowserTests(StaticLiveServerTestCase):
                     self.assertGreaterEqual(page.locator('#id_password2').bounding_box()['height'], 44)
                     self.assertGreaterEqual(page.get_by_role('button').bounding_box()['height'], 44)
                     self._check_page(page, label)
-                    self.assertFalse(ResidentAccess.objects.filter(account=self.account).exists())
                 finally:
                     context.close()
                     browser.close()
+        self.assertFalse(ResidentAccess.objects.filter(account=self.account).exists())

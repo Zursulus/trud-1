@@ -76,7 +76,7 @@ svg{display:block}.chevron{width:18px;height:18px;color:#7f8995;flex:0 0 auto}
 .login-shell .badge{display:inline-flex;padding:4px 9px;border-radius:8px;background:var(--green-soft);color:var(--green-dark);font-size:14px}
 .login-shell input:focus-visible,.login-shell button:focus-visible,.login-shell .button:focus-visible{outline:3px solid var(--green-dark);outline-offset:3px}
 .login-shell .errorlist,.login-form .errorlist,.reference-form .errorlist,.reading-form .errorlist{margin:8px 0;padding:10px 12px;list-style:none;border-left:3px solid var(--red-dark);border-radius:6px;background:var(--red-soft);color:var(--red-dark);font-size:14px;line-height:1.5}
-.login-shell [aria-invalid="true"],.login-form [aria-invalid="true"],.reference-form [aria-invalid="true"],.reading-form [aria-invalid="true"]{border-color:var(--red-dark)}
+.login-shell form input[aria-invalid="true"],.login-form [aria-invalid="true"],.reference-form [aria-invalid="true"],.reading-form [aria-invalid="true"]{border-color:var(--red-dark)}
 .login-form label,.reading-form label,.reference-form label{font-size:14px}
 .login-slogan,.login-role-note,.access-link,.login-help-link{font-size:14px;line-height:1.5}
 .access-link,.login-help-link{min-height:44px;padding:12px 0}
