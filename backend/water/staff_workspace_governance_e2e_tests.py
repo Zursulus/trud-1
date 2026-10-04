@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from io import StringIO
 
@@ -9,7 +10,7 @@ from django.core.management import call_command
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django.utils import timezone
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from .board_polls import BoardPoll
 from .models import User
@@ -56,7 +57,7 @@ class StaffWorkspaceGovernanceBrowserTests(StaticLiveServerTestCase):
             self.assertEqual(response.status, 200)
             page.get_by_role("link", name="Опросы правления", exact=False).click()
             page.wait_for_load_state("networkidle")
-            self.assertTrue(page.get_by_role("heading", name="Опросы правления", exact=True).is_visible())
+            expect(page.get_by_role("heading", name="Опросы правления", exact=True)).to_be_visible(timeout=10000)
             self.assertTrue(page.get_by_text("неофициальные опросы", exact=False).first.is_visible())
 
             page.get_by_role("link", name="Новый опрос", exact=True).click()
@@ -68,9 +69,10 @@ class StaffWorkspaceGovernanceBrowserTests(StaticLiveServerTestCase):
             page.locator("#id_closes_at").fill(future)
             page.locator("#id_questions").fill("Поддержать рабочий вариант?\nПродолжить подготовку?")
             page.get_by_role("button", name="Создать опрос", exact=True).click()
+            page.wait_for_url(re.compile(r".*/work/governance/\d+/$"), timeout=10000)
             page.wait_for_load_state("networkidle")
 
-            self.assertTrue(page.get_by_role("heading", name=title, exact=True).is_visible())
+            expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible(timeout=10000)
             self.assertTrue(page.get_by_text("не является общим собранием", exact=False).last.is_visible())
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
@@ -79,8 +81,8 @@ class StaffWorkspaceGovernanceBrowserTests(StaticLiveServerTestCase):
 
             page.get_by_role("button", name="Закрыть опрос", exact=True).click()
             page.wait_for_load_state("networkidle")
-            self.assertTrue(page.get_by_text("Завершён", exact=True).first.is_visible())
-            self.assertFalse(page.get_by_role("button", name="Закрыть опрос", exact=True).is_visible())
+            expect(page.get_by_text("Завершён", exact=True).first).to_be_visible(timeout=10000)
+            expect(page.get_by_role("button", name="Закрыть опрос", exact=True)).not_to_be_visible(timeout=10000)
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
