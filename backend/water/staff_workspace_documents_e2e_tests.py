@@ -1,3 +1,4 @@
+import re
 from io import StringIO
 
 from axe_playwright_python.sync_playwright import Axe
@@ -8,7 +9,7 @@ from django.core.management import call_command
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django.utils import timezone
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from public_site.models import PublicNews
 
@@ -70,10 +71,11 @@ class StaffWorkspaceDocumentsBrowserTests(StaticLiveServerTestCase):
             page.locator("#id_body").fill("Проверка мобильного рабочего процесса документов.")
             page.locator("#id_published_on").fill(timezone.localdate().isoformat())
             page.get_by_role("button", name="Сохранить новость", exact=True).click()
+            page.wait_for_url(re.compile(r".*/work/documents/news/\d+/$"), timeout=10000)
             page.wait_for_load_state("networkidle")
 
-            self.assertTrue(page.get_by_role("heading", name=title, exact=True).is_visible())
-            self.assertTrue(page.get_by_text("Черновик", exact=True).first.is_visible())
+            expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible(timeout=10000)
+            expect(page.get_by_text("Черновик", exact=True).first).to_be_visible(timeout=10000)
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
