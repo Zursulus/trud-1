@@ -1,0 +1,74 @@
+name: Release PostgreSQL 17 rehearsal
+on:
+  push:
+    branches: ['fix/release-public-atomic-20261005']
+  pull_request:
+    paths:
+      - 'ops/deploy-migration-aware.sh'
+      - 'ops/tests/test_migration_public_release.py'
+      - '.github/workflows/release-postgres17.yml'
+permissions:
+  contents: read
+jobs:
+  migration-and-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: trud_site
+          POSTGRES_USER: trud_site
+          POSTGRES_PASSWORD: ci-synthetic-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_DEBUG: '1'
+      PGDATABASE: trud_site
+      PGUSER: trud_site
+      PGPASSWORD: ci-synthetic-only
+      PGHOST: 127.0.0.1
+      PG_CONTAINER: ${{ job.services.postgres.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 27f62efcb8381e34f3de895c9fc41d1613c9cfd0
+          path: baseline
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: Build the production-baseline schema on synthetic PostgreSQL 17
+        run: |
+          python baseline/backend/manage.py migrate --noinput
+          python baseline/backend/manage.py setup_roles
+          python baseline/backend/manage.py showmigrations water | grep -F '[X] 0033_residentaccessrequest_requester_user'
+          docker exec "$PG_CONTAINER" pg_dump -U trud_site -Fc trud_site > before.dump
+          docker exec -i "$PG_CONTAINER" pg_restore --list < before.dump > before.inventory
+      - name: Apply the candidate and rehearse a real dump restore
+        run: |
+          python backend/manage.py check
+          python backend/manage.py makemigrations --check --dry-run
+          python backend/manage.py migrate --noinput
+          python backend/manage.py setup_roles
+          python backend/manage.py setup_roles
+          python backend/manage.py collectstatic --noinput
+          python backend/manage.py showmigrations water | grep -F '[X] 0034_security_alert'
+          docker exec "$PG_CONTAINER" pg_dump -U trud_site -Fc trud_site > after.dump
+          docker exec "$PG_CONTAINER" createdb -U trud_site trud_restore
+          docker exec -i "$PG_CONTAINER" pg_restore -U trud_site --exit-on-error --dbname=trud_restore < after.dump
+          PGDATABASE=trud_restore python backend/manage.py check
+          PGDATABASE=trud_restore python backend/manage.py migrate --check
+          PGDATABASE=trud_restore python backend/manage.py showmigrations water | grep -F '[X] 0034_security_alert'
+      - name: Verify old code with additive schema retained
+        run: |
+          python baseline/backend/manage.py check
+          python baseline/backend/manage.py migrate --check
+          python baseline/backend/manage.py setup_roles
+          python baseline/backend/manage.py collectstatic --noinput
+          python backend/manage.py showmigrations water | grep -F '[X] 0034_security_alert'
+      - name: Verify atomic public install and failure recovery
+        run: python -m unittest discover -s ops/tests -v

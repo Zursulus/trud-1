@@ -9,6 +9,8 @@ cd /
 test "$(id -u)" -eq 0
 APP=/opt/trud-1-site
 STATUS=/var/lib/trud-1/deployment-status.json
+NGINX_SITE=/etc/nginx/sites-enabled/trud-1
+PUBLIC_RELEASES=/var/www/trud-1/releases
 TARGET=${1:?Target full SHA required}
 EXPECTED=${2:?Expected installed full SHA required}
 [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$EXPECTED" =~ ^[0-9a-f]{40}$ ]]
@@ -41,6 +43,39 @@ scanner_ready() {
     test -x /usr/bin/clamdscan
     printf 'TRUD scanner readiness probe\n' |
         runuser -u trudsite -- /usr/bin/clamdscan --stream --no-summary - >/dev/null
+}
+
+# Keep Nginx's fixed root and exchange whole directories on the same filesystem.
+# Inspect inode identities on recovery: a signal after rename must not cause a
+# second exchange that would accidentally publish a failed release.
+exchange_public() {
+    /usr/bin/python3 - "$PUBLIC_ROOT" "$PUBLIC_STAGE" "$PUBLIC_OLD_ID" "$PUBLIC_NEW_ID" "$1" <<'PY'
+import ctypes, os, sys
+root, stage, old, new, action = sys.argv[1:]
+def identity(path):
+    value = os.stat(path, follow_symlinks=False)
+    return f'{value.st_dev}:{value.st_ino}'
+pair = (identity(root), identity(stage))
+if action == 'restore' and pair == (old, new):
+    raise SystemExit(0)
+expected = (old, new) if action == 'publish' else (new, old)
+if pair != expected:
+    raise SystemExit('Public directory identity changed; refusing exchange.')
+libc = ctypes.CDLL(None, use_errno=True)
+rename = libc.renameat2
+rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+rename.restype = ctypes.c_int
+if rename(-100, os.fsencode(root), -100, os.fsencode(stage), 2):
+    number = ctypes.get_errno()
+    raise OSError(number, os.strerror(number))
+PY
+}
+
+verify_public() {
+    local file
+    for file in "${PUBLIC_FILES[@]}"; do
+        cmp "$PUBLIC_ROOT/$file" "$APP/$file" || return 1
+    done
 }
 
 test -z "$(gitapp status --porcelain)"
@@ -88,10 +123,50 @@ test "$ACTUAL_SENSITIVE" = "$(printf '%s\n' "$EXPECTED_SENSITIVE" | sort)" || {
     exit 1
 }
 
+nginx -t -q
+PUBLIC_ROOT=$(/usr/bin/python3 - "$NGINX_SITE" "$PUBLIC_RELEASES" <<'PY'
+import pathlib, re, sys
+site, releases = map(pathlib.Path, sys.argv[1:])
+roots = re.findall(r'^\s*root\s+([^;\s]+)\s*;\s*(?:#.*)?$', site.read_text(), re.M)
+if len(roots) != 1:
+    raise SystemExit('Expected one explicit Nginx public root.')
+root = pathlib.Path(roots[0])
+if root.is_symlink() or not root.is_dir() or root.resolve().parent != releases.resolve():
+    raise SystemExit('Unexpected public release directory.')
+print(root.resolve())
+PY
+)
+PUBLIC_FILES=(index.html app.js style.css public-content.css
+    feodosia-letter-2026-08-27.html feodosia-letter-2026-08-27.webp
+    landscape.webp ordzhonikidze-sunset.webp)
+PUBLIC_STAGE=$(mktemp -d "$PUBLIC_RELEASES/.trud-public.XXXXXXXX")
+for file in "${PUBLIC_FILES[@]}"; do
+    # Read exact Git blobs; never copy private-data or an untracked host file.
+    gitapp show "$TARGET:$file" > "$PUBLIC_STAGE/$file"
+    test -s "$PUBLIC_STAGE/$file"
+    chmod 644 "$PUBLIC_STAGE/$file"
+done
+chmod 755 "$PUBLIC_STAGE"
+PUBLIC_OLD_ID=$(stat -c '%d:%i' "$PUBLIC_ROOT")
+PUBLIC_NEW_ID=$(stat -c '%d:%i' "$PUBLIC_STAGE")
+# Rehearse exchange support before stopping the application or changing code.
+probe_a=$(mktemp -d "$PUBLIC_RELEASES/.trud-exchange-a.XXXXXXXX")
+probe_b=$(mktemp -d "$PUBLIC_RELEASES/.trud-exchange-b.XXXXXXXX")
+(PUBLIC_ROOT=$probe_a PUBLIC_STAGE=$probe_b
+ PUBLIC_OLD_ID=$(stat -c '%d:%i' "$probe_a")
+ PUBLIC_NEW_ID=$(stat -c '%d:%i' "$probe_b")
+ exchange_public publish
+ exchange_public restore)
+rmdir "$probe_a" "$probe_b"
+
 BACKUP=$(mktemp -d /var/backups/trud-migration-0034.XXXXXXXX)
 printf '%s\n' "$EXPECTED" > "$BACKUP/previous-commit"
 printf '%s\n' "$TARGET" > "$BACKUP/target-commit"
 cp -p "$STATUS" "$BACKUP/deployment-status.json"
+tar -C "$PUBLIC_ROOT" -czf "$BACKUP/public-root.tar.gz" .
+tar -tzf "$BACKUP/public-root.tar.gz" >/dev/null
+printf '%s\n' "$PUBLIC_ROOT" > "$BACKUP/public-root-path"
+printf '%s\n' "$PUBLIC_STAGE" > "$BACKUP/public-previous-path"
 
 STOPPED=0
 CHANGED_CODE=0
@@ -107,6 +182,7 @@ rollback() {
         # Old code ignores the additive schema; reversing it could destroy alerts.
         manage setup_roles || failed=1
         manage collectstatic --noinput || failed=1
+        exchange_public restore || failed=1
         restore_tmp=$(mktemp /var/lib/trud-1/deployment-status.XXXXXXXX) || failed=1
         if [ -n "$restore_tmp" ]; then
             cp -p "$BACKUP/deployment-status.json" "$restore_tmp" &&
@@ -150,10 +226,16 @@ manage showmigrations water | grep -F '[X] 0034_security_alert' >/dev/null
 
 # Scanner must be operational before accepting traffic from the new code.
 scanner_ready
+exchange_public publish
+verify_public
 
 systemctl start trud-1-site.service
 systemctl is-active --quiet trud-1-site.service
 smoke
+for file in "${PUBLIC_FILES[@]}"; do
+    curl --connect-timeout 3 --max-time 10 -fsS "https://trud-1.ru/$file?release=$TARGET" |
+        cmp - "$APP/$file"
+done
 
 status_tmp=$(mktemp /var/lib/trud-1/deployment-status.XXXXXXXX)
 printf '{"project":"trud-1","commit":"%s","deployed_at":"%s"}\n' \
@@ -179,4 +261,6 @@ fi
 echo "DEPLOY_MIGRATION_AWARE=PASS"
 echo "target=$TARGET"
 echo "migration=water:0034_security_alert"
+echo "public_root=$PUBLIC_ROOT"
+echo "previous_public=$PUBLIC_STAGE"
 echo "backup=$BACKUP"

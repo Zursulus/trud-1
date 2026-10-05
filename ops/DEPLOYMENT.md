@@ -106,3 +106,48 @@ bash -n ops/deploy-compatible.sh ops/deploy-public-content.sh
 грязном дереве и несовместимом выпуске, ошибки копирования, проверки приложения,
 миграций, запуска, HTTP/маркера, прерывание и неудачный откат. Это проверка
 управления установкой, не реальное восстановление PostgreSQL/systemd.
+
+## Совместный выпуск SecurityAlert 0034 и публичной главной
+
+Cumulative-кандидат #149 → #155 → #156 устанавливается только через
+checksum-pinned `deploy-trud-compatible` и `deploy-migration-aware.sh`.
+Последний дополнительно публикует весь разрешённый набор корневых файлов:
+`index.html`, `app.js`, `style.css`, `public-content.css`, HTML/WEBP письма
+Феодосии, `landscape.webp`, `ordzhonikidze-sunset.webp`. Источник — точные Git
+blobs целевого SHA; закрытые и неотслеживаемые файлы в набор не входят.
+
+До остановки приложения проверяются `nginx -t`, единственный явный root в
+`/etc/nginx/sites-enabled/trud-1`, его существование непосредственно внутри
+`/var/www/trud-1/releases/`, отсутствие symlink и поддержка Linux
+`renameat2(RENAME_EXCHANGE)` на этом filesystem. Новый каталог целиком готовится
+рядом с действующим, с файлами 0644 и каталогом 0755. Старый public root также
+сохраняется в release backup; конфигурация Nginx не меняется.
+
+После migrate → setup_roles → collectstatic → scanner readiness, до запуска
+нового backend, каталоги атомарно меняются местами. Путь Nginx остаётся прежним:
+имя старого каталога, например `bef1cb7`, больше не является идентификатором
+установленной версии. Версию доказывают маркер и точные bytes публичных файлов.
+После запуска проверяются и локальные файлы, и HTTP-ответ для каждого файла.
+Предыдущий каталог сохраняется; его путь записан в backup и выводе установщика.
+
+При ошибке до фиксации маркера возвращаются старые backend, public и marker;
+0034 не удаляется и база автоматически не восстанавливается. При SIGTERM между
+exchange и следующей командой откат сверяет inode обоих каталогов, поэтому не
+публикует ошибочную версию повторным обменом. Если identities неизвестны, откат
+останавливается с явной ошибкой; приложение не запускается при неполном recovery.
+SIGKILL/потеря питания требуют администратора и проверки этих же identities.
+HTTP-проверка маркера после его фиксации может дать exit 3:
+`COMMITTED_POSTCHECK_FAILED`; в этом случае target установлен, откат не заявляется.
+
+До боевого запуска нужен reviewable root-owned manifest с полными expected/target
+SHA, branch, SHA256 helper и intent полями broker. Полный diff target к production
+должен быть проверен; source PR не заменяется текущим integration HEAD. Новый
+release helper образует новый exact candidate, поэтому старое одобрение #155
+не является автоматическим разрешением установки этого target.
+
+Обязательные runtime gates: законный fixed admin route; clean Git и совпадающий
+live marker; вместимость и восстановление backup; реальный clean/blocked scan
+под `trudsite`; проверка effective Nginx root и отсутствие конкурирующих writers.
+Проверка workflow `Release PostgreSQL 17 rehearsal` покрывает synthetic
+0033→0034, setup_roles, dump/restore и старый код с аддитивной схемой. Она не
+проверяет production systemd/Nginx/scanner и не разрешает боевой запуск сама.
