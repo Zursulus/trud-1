@@ -1,4 +1,5 @@
 from io import StringIO
+from pathlib import Path
 import tempfile
 
 from django.core.management import call_command
@@ -15,11 +16,11 @@ class VtbDryRunCommandTests(TestCase):
             "г.Тест;0120;715.20;715.20;0.00\r\n"
             "=1;715.20;715.20;0.00;8;28-01-2020"
         ).encode("cp1251")
-        with tempfile.NamedTemporaryFile() as handle:
-            handle.write(payload)
-            handle.flush()
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Path(directory) / "synthetic-registry.txt"
+            registry.write_bytes(payload)
             stdout = StringIO()
-            call_command("vtb_registry_dryrun", handle.name, encoding="cp1251", stdout=stdout)
+            call_command("vtb_registry_dryrun", str(registry), encoding="cp1251", stdout=stdout)
         output = stdout.getvalue()
         self.assertIn("matched=1", output)
         self.assertIn("NO DATABASE WRITES PERFORMED", output)
@@ -31,10 +32,10 @@ class VtbDryRunCommandTests(TestCase):
             "г.Тест;0120;10.00;10.00;0.00\r\n"
             "=1;10.00;10.00;0.00;8;28-01-2020"
         ).encode("utf-8")
-        with tempfile.NamedTemporaryFile() as handle:
-            handle.write(payload)
-            handle.flush()
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Path(directory) / "synthetic-registry.txt"
+            registry.write_bytes(payload)
             stdout = StringIO()
-            call_command("vtb_registry_dryrun", handle.name, stdout=stdout)
+            call_command("vtb_registry_dryrun", str(registry), stdout=stdout)
         self.assertIn("unmatched=1", stdout.getvalue())
         self.assertEqual(Payment.objects.count(), 0)

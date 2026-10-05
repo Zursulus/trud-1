@@ -73,7 +73,7 @@
     <div class="ws-empty"><strong>Нет индивидуальных счётчиков</strong><p>Для этого лицевого счёта приборы не найдены или недоступны вашей роли.</p></div>
   {% endif %}
   <div class="ws-actions">
-    {% if can_use_controller_workspace %}<a class="ws-secondary" href="{% url 'water_controller_workspace' %}">Открыть мои линии</a>{% endif %}
+    {% if can_use_controller_workspace %}<a class="ws-secondary" href="{% url 'staff_workspace:water_line' %}">Открыть мои линии</a>{% endif %}
     {% if can_view_reading_history %}<a class="ws-secondary" href="{% url 'admin:water_reading_changelist' %}?meter__account__id__exact={{ account.pk }}">Журнал показаний</a>{% endif %}
   </div>
 </section>

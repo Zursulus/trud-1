@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import StringIO
+from pathlib import Path
 
 from axe_playwright_python.sync_playwright import Axe
 from django.conf import settings
@@ -106,6 +107,20 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
                     "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                 ))
                 self._assert_no_blocking_accessibility(page, f"{label} more")
+
+            page.goto(f"{self.live_server_url}/work/water/", wait_until="networkidle")
+            navigation = page.locator(".ws-bottom-nav" if viewport["width"] <= 640 else ".ws-nav")
+            self.assertEqual(
+                navigation.locator('a[aria-current="page"]').get_attribute("href"),
+                "/work/more/",
+            )
+            self.assertTrue(page.evaluate(
+                "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+            ))
+            self._assert_no_blocking_accessibility(page, f"{label} water navigation")
+            artifacts = Path(settings.BASE_DIR) / "test-artifacts"
+            artifacts.mkdir(exist_ok=True)
+            page.screenshot(path=str(artifacts / f"night-staff-water-{label.replace(' ', '-')}.png"), full_page=True)
 
             self.assertEqual(page_errors, [])
             self.assertEqual(console_errors, [])

@@ -26,6 +26,7 @@ from .models import (
     Reading,
     ResidentAccess,
     ResidentAppeal,
+    WaterGroup,
 )
 
 
@@ -72,15 +73,15 @@ def scoped_accounts(user):
     return Account.objects.filter(pk__in=ids)
 
 
-def scoped_water_meters(user, on_date=None):
-    """Return active meters covered by water.meters.view scopes."""
+def scoped_water_meters(user, on_date=None, *, capability="water.meters.view"):
+    """Return active meters covered by one capability's scopes."""
     on_date = on_date or timezone.localdate()
     meters = Meter.objects.filter(
         Q(commissioned_on__isnull=True) | Q(commissioned_on__lte=on_date),
     ).filter(
         Q(retired_on__isnull=True) | Q(retired_on__gte=on_date),
     )
-    scopes = scopes_for(user, "water.meters.view", on_date=on_date)
+    scopes = scopes_for(user, capability, on_date=on_date)
     if any(scope.type == ScopeType.ALL for scope in scopes):
         return meters
     query = Q(pk__in=[])
@@ -95,6 +96,16 @@ def scoped_water_meters(user, on_date=None):
     if not scopes:
         raise PermissionDenied
     return meters.filter(query).distinct()
+
+
+def _pending_moderation_submissions(user, on_date=None):
+    # Viewing another node as a controller does not authorize final review.
+    meter_ids = scoped_water_meters(
+        user, on_date, capability="water.observation.finalize",
+    ).values("pk")
+    return ControllerReadingSubmission.objects.filter(
+        status="pending", meter_id__in=Subquery(meter_ids),
+    )
 
 
 def _capabilities(user):
@@ -161,7 +172,7 @@ def dashboard(request):
 
     attention = []
     if can_any(request.user, "water.observation.finalize"):
-        count = ControllerReadingSubmission.objects.filter(status="pending").exclude(
+        count = _pending_moderation_submissions(request.user).exclude(
             line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
         ).count()
         if count:
@@ -309,9 +320,7 @@ def water_dashboard(request):
             "line_review_items": list(line_review_qs[:12]),
         })
     elif context["can_moderate_submissions"]:
-        pending = ControllerReadingSubmission.objects.filter(
-            status="pending", meter_id__in=Subquery(meter_ids),
-        )
+        pending = _pending_moderation_submissions(request.user, today)
         final_review_qs = pending.exclude(
             line_review_status=ControllerReadingSubmission.LINE_REVIEW_PENDING,
         ).select_related("meter", "meter__account").order_by("-submitted_at", "-id")

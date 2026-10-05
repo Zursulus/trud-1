@@ -9,7 +9,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 from django.utils import timezone
 
 from .models import Account, BillingPeriod, BillingPolicy, Charge, Payment, PaymentAllocation, User
@@ -87,7 +87,7 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/finance/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            self.assertTrue(page.get_by_role("heading", name="Финансы", exact=True).is_visible())
+            expect(page.get_by_role("heading", name="Финансы", exact=True)).to_be_visible(timeout=10000)
             self.assertEqual(page.get_by_text("Секретный E2E Финконтакт").count(), 0)
             self.assertEqual(page.get_by_text("+79996660000").count(), 0)
             self.assertEqual(page.locator(".ws-bottom-nav a").count(), 3)
@@ -95,10 +95,12 @@ class StaffWorkspaceFinanceBrowserTests(StaticLiveServerTestCase):
             page.goto(f"{self.live_server_url}/work/finance/payments/{payment_id}/", wait_until="networkidle")
             page.get_by_role("button", name="Подтвердить оплату", exact=True).click()
             page.wait_for_load_state("networkidle")
-            self.assertTrue(page.get_by_text("Оплата подтверждена.", exact=True).is_visible())
+            expect(page.get_by_text("Оплата подтверждена.", exact=True)).to_be_visible(timeout=10000)
             page.get_by_role("button", name="Распределить по правилам", exact=True).click()
             page.wait_for_load_state("networkidle")
-            self.assertTrue(page.get_by_text("Распределено", exact=True).first.is_visible())
+            expect(page.locator(".ws-flash-success")).to_contain_text(
+                "Распределено 25.00 ₽; осталось нераспределено 0.00 ₽.", timeout=10000,
+            )
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
             ))
