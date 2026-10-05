@@ -93,6 +93,9 @@ GitHub Issue #76 хранит незавершённый поиск первич
 3. До merge проходят применимые tests/CI.
 4. Перед production сверяются deployed SHA, target diff, migrations/requirements/settings/ops changes и backup/rollback readiness.
 5. Deploy выполняется controlled-процедурой; несовместимые изменения получают отдельный reviewed deploy plan.
+   Порядок фиксированной команды, отдельной установки broker, точного manifest,
+   backup/rollback и результата закреплён в [ops/DEPLOYMENT.md](../ops/DEPLOYMENT.md).
+   Подготовленный инструмент и принятая заявка не являются Production Done.
 6. После deploy проверяются service/marker, HTTP smoke и затронутый пользовательский сценарий.
 7. Production-задача закрывается только после production evidence.
 

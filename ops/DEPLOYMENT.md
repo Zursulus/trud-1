@@ -1,5 +1,103 @@
 # Совместимые обновления и откат
 
+## Одна фиксированная команда выпуска
+
+Для cumulative-выпуска с SecurityAlert 0034, новым кабинетом и публичной главной
+подготовлен путь через уже существующую очередь обслуживания сервера:
+
+```sh
+system-maintenance-submit deploy-trud-compatible
+```
+
+Это команда выпуска после отдельной установки broker и закрытия release gates
+ниже. Она не принимает произвольную shell-команду, ветку или SHA. Root worker
+читает закреплённый manifest и вызывает только `/usr/local/sbin/deploy-trud-compatible`.
+Заявка содержит только schema, request_id и action; параметры выпуска пользователь
+очереди менять не может. Общий sudo и новый доступ к root не выдаются.
+
+Клиент возвращает `REQUEST_ID`, `ACTION` и `RESULT` — путь JSON в
+`/var/lib/system-maintenance/results/`. Это подтверждает постановку заявки,
+а не успешную установку. Результат читается по возвращённому пути через
+разрешённый доступ; журнал запуска сохраняется существующим maintenance worker.
+После завершения требуются public marker с точными `commit` и `deployed_at`,
+service/HTTP smoke, совпадение восьми public assets и согласованные ролевые
+сценарии. Зелёный CI, заявка или имя каталога Nginx не заменяют эти доказательства.
+
+### Закреплённый выпуск и границы
+
+| Поле | Значение |
+| --- | --- |
+| Исходный production | `27f62efcb8381e34f3de895c9fc41d1613c9cfd0` |
+| Целевой сайт, PR #157 | `7e685dfa6a331a433e916a62b1d555fe04847c4c` |
+| Source branch | `fix/release-public-atomic-20261005` |
+| SHA256 release helper | `7737fd784fa5c181c7e98a8a3465d665d9b4da324f67a11625c3848f56155a54` |
+| Manifest в репозитории | `ops/trud-release-157.conf` |
+| Manifest на сервере | `/etc/system-maintenance/trud-release.conf`, root, 0600 |
+
+Пакет установки broker отделён от сайта: его commit не становится target
+приложения. Broker разбирает manifest как данные, без `source`/`eval`, требует
+ровно восемь полей, полные SHA и checksum, root-owned regular file без записи
+для других. Он сверяет live marker, Git HEAD, чистоту дерева, ancestry, exact
+fetched head и checksum извлечённого helper до его выполнения. Сдвиг source
+branch блокирует выпуск. Старый формат вызова `TARGET EXPECTED` допускается
+только при точном совпадении обоих значений с manifest; новая sudoers-запись
+для этого не устанавливается.
+
+### Однократная установка broker администратором
+
+После проверки diff и CI взять именно согласованный commit пакета установки,
+проверить его файлы/checksums и подготовить root-owned staging directory.
+Не запускать bootstrap из изменяемого приложением checkout. Из staging `ops/`
+выполняются две команды от root через законный admin route:
+
+```sh
+sha256sum -c ./trud-broker-bootstrap.sha256
+bash ./install-deploy-trud-broker.sh
+bash ./smoke-deploy-trud-broker.sh
+```
+
+Bootstrap не выпускает сайт и не ставит заявку. Он проверяет известный контракт
+worker/client, `launch_exact`, активный watcher, отсутствие работающего worker
+и заявок, доверенные пути и source-файлы. Неизвестный контракт останавливает
+установку до изменения файлов: требуется прочитать реальный worker через
+разрешённый root route и сверить его реализацию, а не ослаблять проверку.
+Чтение worker на production в аудите 05.10 отказало EACCES; совпадение его
+контракта пока не подтверждено. Client и watcher прочитаны отдельно.
+
+Старые worker, submit, helper и manifest либо отметки их отсутствия сохраняются
+в `/var/backups/trud-broker-bootstrap.XXXXXXXX/before/`. Останавливается только
+watcher очереди, четыре файла заменяются атомарно каждый, затем сверяются и
+watcher возвращается. Helper/worker — root 0700, submit — root 0755. При ошибке
+копирования, запуска watcher или SIGINT/SIGTERM восстанавливаются прежние четыре
+пути и watcher. Повторная установка того же пакета не дублирует action/dispatch.
+
+`TRUD_DEPLOY_BROKER_INSTALL=PASS` означает установленный инструмент.
+`ROLLED_BACK` означает подтверждённый возврат прежних файлов/watcher.
+`RECOVERY_UNCONFIRMED` требует администратора и проверки сохранённого backup;
+успешный откат при этом не заявляется. SIGKILL/отказ питания требуют ручной
+проверки четырёх путей и queue state перед включением watcher. При активном
+worker/backup/deploy bootstrap не восстанавливает файлы поверх другой операции.
+Smoke только читает/проверяет worker, client, helper, exact manifest и watcher;
+не вызывает broker и не пишет заявку.
+
+Подготовка/установка инструмента и разрешение боевого выпуска — отдельные
+действия. Перед заявкой должны быть закрыты runtime gates в конце документа и
+согласован точный target. Уже полученное одобрение сохраняется для своего scope;
+новый target не получает его автоматически. Повторный запуск после успеха
+останавливается по исходному SHA, а не переустанавливает сайт. После
+`COMMITTED_POSTCHECK_FAILED` сначала выяснить фактическое состояние; слепой retry
+не является восстановлением.
+
+### Как работать впредь
+
+Для следующего выпуска сохранять этот порядок: exact target и diff → применимые
+CI/приёмка → reviewable manifest/helper → проверка инструмента без выпуска →
+runtime preflight/backup/rollback → разрешённая фиксированная команда → результат
+и live acceptance. Этот bootstrap намеренно закреплён на #157: другой manifest
+требует отдельного проверенного изменения пакета, а не правки mutable HEAD.
+Параметры следующего релиза и status хранятся в его GitHub Issue/PR; процедура —
+здесь, короткий checkpoint и указатель — в PROJECT STATE/INDEX.
+
 `deploy-compatible.sh` — стандартный путь для выпусков без изменений схемы,
 зависимостей и настроек сервера. Требуются два полных SHA: целевой и ожидаемый
 установленный. Исходный SHA сверяется с Git и локальным маркером; рабочее дерево
@@ -99,6 +197,7 @@ root и автоматически не удаляются; срок хране�
 ```sh
 python3 -m unittest discover -s ops/tests -v
 bash -n ops/deploy-compatible.sh ops/deploy-public-content.sh
+bash -n ops/deploy-trud-compatible.sh ops/install-deploy-trud-broker.sh ops/smoke-deploy-trud-broker.sh
 ```
 
 Тесты запускают настоящий Bash без root, в изолированном временном каталоге.
@@ -106,6 +205,10 @@ bash -n ops/deploy-compatible.sh ops/deploy-public-content.sh
 грязном дереве и несовместимом выпуске, ошибки копирования, проверки приложения,
 миграций, запуска, HTTP/маркера, прерывание и неудачный откат. Это проверка
 управления установкой, не реальное восстановление PostgreSQL/systemd.
+Дополнительные executable broker/bootstrap tests проверяют обе стороны очереди,
+получение REQUEST_ID/RESULT, безопасный parser, отклонение чужих аргументов и
+версий, checksum, повторную установку и откат всех четырёх файлов. Они не
+доказывают соответствие закрытого production worker синтетическому fixture.
 
 ## Совместный выпуск SecurityAlert 0034 и публичной главной
 
