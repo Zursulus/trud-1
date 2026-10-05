@@ -95,8 +95,11 @@ class BrowserChecks:
         page.screenshot(path=str(Path(settings.BASE_DIR) / "test-artifacts" / "ui-flow-polish" / f"{tag}.png"), full_page=True)
 
     def assert_url(self, page, path, **query):
+        expected_query = {key: [str(value)] for key, value in query.items()}
+        page.wait_for_url(lambda url: urlsplit(url).path == path
+                          and parse_qs(urlsplit(url).query) == expected_query)
         self.assertEqual(urlsplit(page.url).path, path)
-        self.assertEqual(parse_qs(urlsplit(page.url).query), {key: [str(value)] for key, value in query.items()})
+        self.assertEqual(parse_qs(urlsplit(page.url).query), expected_query)
 
 
 class ResidentFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
