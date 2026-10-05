@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
+from urllib.parse import urlencode
 
 from django.contrib.auth.models import Group
 from django.core.management import call_command
@@ -85,6 +86,28 @@ class StaffWorkspaceTests(TestCase):
         response = self.client.get("/work/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
+
+    def test_search_account_and_return_preserve_the_query(self):
+        self.login(self.manager)
+        query = "Садовая 101"
+        response = self.client.get("/work/search/", {"q": query})
+        self.assertContains(response, f'/work/accounts/{self.account_a.pk}/?q=')
+        card = self.client.get(f"/work/accounts/{self.account_a.pk}/", {"q": query})
+        self.assertEqual(card.context["account_back_url"], "/work/search/?" + urlencode({"q": query}))
+        self.assertContains(card, "К результатам поиска")
+        results = self.client.get(card.context["account_back_url"])
+        self.assertEqual(results.context["q"], query)
+        self.assertEqual([account.pk for account in results.context["results"]], [self.account_a.pk])
+
+    def test_account_return_cannot_be_redirected_by_untrusted_next_or_query(self):
+        self.login(self.manager)
+        raw_query = "  101  &next=https://example.test/ " + "1" * 200
+        query = " ".join(raw_query.split())[:160]
+        card = self.client.get(f"/work/accounts/{self.account_a.pk}/", {
+            "q": raw_query, "next": "https://example.test/",
+        })
+        self.assertEqual(card.context["account_back_url"], "/work/search/?" + urlencode({"q": query}))
+        self.assertEqual(card.context["account_edit_url"], f"/work/accounts/{self.account_a.pk}/edit/?" + urlencode({"q": query}))
 
     def test_manager_searches_and_opens_account_without_pii(self):
         self.login(self.manager)

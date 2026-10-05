@@ -5,7 +5,7 @@
   <div>
     <p class="ws-eyebrow">Сегодня</p>
     <h1>Что нужно сделать</h1>
-    <p>Здесь только ваши текущие действия. Остальные разделы — в «Ещё».</p>
+    <p>Текущие задачи и быстрый переход к работе.</p>
   </div>
 </section>
 
@@ -35,6 +35,14 @@
     <span class="ws-card-kicker">Вода</span>
     <strong>Показания моей линии</strong>
     <p>Линия и доступные счётчики уже выбраны за вас.</p>
+  </a>
+</section>
+{% elif can_view_water %}
+<section class="ws-section ws-home-routine" aria-labelledby="routine-title">
+  <div class="ws-section-head"><h2 id="routine-title">Обычная работа</h2></div>
+  <a class="ws-menu-row" href="{% url 'staff_workspace:water' %}">
+    <span class="ws-menu-copy"><strong>Показания воды</strong><small>Открыть доступные действия и проверки.</small></span>
+    <span class="ws-chevron" aria-hidden="true">›</span>
   </a>
 </section>
 {% endif %}

@@ -95,3 +95,35 @@ svg{display:block}.chevron{width:18px;height:18px;color:#7f8995;flex:0 0 auto}
 .water-feedback{font-size:13px;line-height:1.5}.water-submission-help{font-size:12px;line-height:1.55;margin:10px 0 0}
 .water-submissions .reading-row .submission-status{font-size:11px;font-weight:700}.water-submissions .submission-status-pending{color:#854d0e}.water-submissions .submission-status-rejected{color:#b42318}.water-submissions .submission-status-approved{color:var(--green-dark)}
 .water-reading-form .errorlist{padding:10px 14px;margin:0 0 12px;list-style:none;border-radius:8px;background:var(--red-soft);color:var(--red-dark);font-size:13px}
+
+/* Readable summaries and real financial section navigation. */
+.shortcut small,.attention-row small,.news-row small,.plot-main small{font-size:12px;line-height:1.45}
+.finance-section-nav{display:flex;gap:8px;margin:16px 12px;padding:6px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+.finance-section-nav a{flex:1;display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border-radius:9px;background:var(--green-pale);color:var(--green-dark);font-size:14px;font-weight:700;text-decoration:none}
+.finance-section-nav a:hover{background:var(--green-soft)}
+.finance-section-nav a:focus-visible{outline:3px solid var(--green-dark);outline-offset:2px}
+.finance-ledger-section{margin:20px 12px;scroll-margin-top:20px}
+.finance-ledger-section h2{margin:0 0 10px;color:var(--navy);font-size:17px;line-height:1.4}
+.finance-ledger-section .ledger-list{margin:0;max-width:none;border:1px solid var(--line)}
+.finance-ledger-section .empty-state{border:0;border-radius:0;font-size:14px;line-height:1.5}
+.finance-ledger-section .ledger-row>span:first-child{min-width:0;overflow-wrap:anywhere}
+.finance-ledger-section .ledger-row strong{font-size:14px}
+.finance-ledger-section .ledger-row small{font-size:12px;line-height:1.45}
+.finance-ledger-section .ledger-amount{flex:0 0 auto;max-width:45%;overflow-wrap:anywhere}
+.finance-ledger-section .ledger-amount strong{font-size:16px}
+.finance-ledger-section .ledger-amount em{font-size:11px;line-height:1.4}
+.portal-payments .payment-due>span,.portal-payments .payment-due p,.portal-payments .help-callout p{font-size:12px;line-height:1.45}
+.portal-payments .help-callout p{color:#59666c}
+.portal-payments .download-row span,.portal-payments .help-callout strong{font-size:14px;line-height:1.4}
+.portal-payments .secondary-action{min-height:44px;font-size:13px}
+.portal-feedback{font-size:14px;line-height:1.5;color:var(--text);overflow-wrap:anywhere}
+.portal-feedback-success{background:var(--green-soft);color:var(--green-dark)}
+.portal-feedback-success svg{color:var(--green-dark)}
+.portal-feedback-error{background:var(--red-soft);color:var(--red-dark)}
+@media(min-width:900px){
+  .attention-block,.home-shortcuts,.news-block{max-width:760px}
+  .desktop-nav a,.desktop-logout button{min-height:44px;font-size:14px}
+  .desktop-brand small{font-size:12px;line-height:1.4}
+  .finance-section-nav,.finance-ledger-section{margin-left:26px;margin-right:26px;max-width:720px}
+  .portal-payments .payment-due,.portal-payments .download-row,.portal-payments .help-callout{max-width:720px}
+}

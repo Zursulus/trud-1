@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -13,6 +15,15 @@ from .models import Account, Meter, SupplyNode
 from .staff_workspace import _base_context
 
 
+def binding_nodes(actor):
+    return SupplyNode.objects.filter(
+        pk__in=[
+            node.pk for node in SupplyNode.objects.all()
+            if can(actor, "water.topology.manage", scope=ScopeRef(ScopeType.SUPPLY_NODE, node.pk))
+        ]
+    ).order_by("name", "pk")
+
+
 class IndividualMeterBindForm(forms.Form):
     node = forms.ModelChoiceField(label="Общий узел", queryset=SupplyNode.objects.none())
     serial = forms.CharField(label="Номер / обозначение счётчика", max_length=100)
@@ -25,12 +36,7 @@ class IndividualMeterBindForm(forms.Form):
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["node"].queryset = SupplyNode.objects.filter(
-            pk__in=[
-                node.pk for node in SupplyNode.objects.all()
-                if can(actor, "water.topology.manage", scope=ScopeRef(ScopeType.SUPPLY_NODE, node.pk))
-            ]
-        ).order_by("name", "pk")
+        self.fields["node"].queryset = binding_nodes(actor)
 
 
 def meter_bind(request, account_id):
@@ -39,6 +45,17 @@ def meter_bind(request, account_id):
         request.user, "accounts.view", scope=ScopeRef(ScopeType.ACCOUNT, account.pk)
     ):
         raise PermissionDenied
+
+    from .staff_workbench import can_use_workbench
+
+    from_account = request.GET.get("from") == "account" or not can_use_workbench(request.user)
+    q = " ".join((request.GET.get("q") or "").split())[:160]
+    if from_account:
+        cancel_url = reverse("staff_workspace:account", args=[account.pk])
+        if q:
+            cancel_url += "?" + urlencode({"q": q})
+    else:
+        cancel_url = reverse("staff_workspace:workbench") + "?" + urlencode({"kind": "account", "id": account.pk})
 
     form = IndividualMeterBindForm(request.POST or None, actor=request.user)
     if request.method == "POST" and form.is_valid():
@@ -50,8 +67,8 @@ def meter_bind(request, account_id):
             raise PermissionDenied
         if Meter.objects.filter(node=node, serial=form.cleaned_data["serial"].strip()).exists():
             form.add_error("serial", "Счётчик с таким номером уже существует на выбранном узле.")
-            context = _base_context(request, section="more")
-            context.update(account=account, form=form)
+            context = _base_context(request, section="accounts" if from_account else "more")
+            context.update(account=account, form=form, cancel_url=cancel_url)
             response = TemplateResponse(request, "water/work/meter_bind.html", context)
             response["Cache-Control"] = "private, no-store"
             response["X-Robots-Tag"] = "noindex, nofollow"
@@ -80,12 +97,10 @@ def meter_bind(request, account_id):
                     form.add_error(None, message)
         else:
             messages.success(request, f"Счётчик {meter.serial} привязан к {account}. История зафиксирована.")
-            return HttpResponseRedirect(
-                reverse("staff_workspace:workbench") + f"?kind=account&id={account.pk}"
-            )
+            return HttpResponseRedirect(cancel_url)
 
-    context = _base_context(request, section="more")
-    context.update(account=account, form=form)
+    context = _base_context(request, section="accounts" if from_account else "more")
+    context.update(account=account, form=form, cancel_url=cancel_url)
     response = TemplateResponse(request, "water/work/meter_bind.html", context)
     response["Cache-Control"] = "private, no-store"
     response["X-Robots-Tag"] = "noindex, nofollow"

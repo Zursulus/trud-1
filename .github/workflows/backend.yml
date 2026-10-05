@@ -89,7 +89,7 @@ jobs:
       - name: Install Chromium and WebKit for Playwright
         run: python -m playwright install --with-deps chromium webkit
       - name: Run critical browser and accessibility regressions
-        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.night_readiness_e2e_tests public_site.e2e_tests water.accessibility_e2e_tests water.staff_workspace_e2e_tests water.staff_workspace_water_e2e_tests water.staff_workspace_appeals_e2e_tests water.staff_workspace_finance_e2e_tests water.staff_workspace_access_e2e_tests water.staff_workspace_documents_e2e_tests water.staff_work_tab_e2e_tests water.staff_workspace_governance_e2e_tests water.admin_resident_e2e_tests -v 2
+        run: python backend/manage.py test water.e2e_tests water.portal_e2e_tests water.night_readiness_e2e_tests public_site.e2e_tests water.accessibility_e2e_tests water.staff_workspace_e2e_tests water.staff_workspace_water_e2e_tests water.staff_workspace_appeals_e2e_tests water.staff_workspace_finance_e2e_tests water.staff_workspace_access_e2e_tests water.staff_workspace_documents_e2e_tests water.staff_work_tab_e2e_tests water.staff_workspace_governance_e2e_tests water.admin_resident_e2e_tests water.ui_flow_polish_e2e_tests -v 2
       - name: Upload browser trace on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -107,6 +107,7 @@ jobs:
           path: |
             backend/test-artifacts/night-*.png
             backend/test-artifacts/public-*.png
+            backend/test-artifacts/ui-flow-polish/*.png
           if-no-files-found: ignore
           retention-days: 7
 

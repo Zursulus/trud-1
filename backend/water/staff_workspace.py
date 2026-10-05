@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -355,6 +357,27 @@ def account_detail(request, account_id):
     account = get_object_or_404(scoped_accounts(request.user), pk=account_id)
     context = _base_context(request, section="accounts")
     today = timezone.localdate()
+    q = " ".join((request.GET.get("q") or "").split())[:160]
+    search_query = "?" + urlencode({"q": q}) if q else ""
+    context["account_back_url"] = (
+        reverse("staff_workspace:search") + search_query if q else reverse("staff_workspace:accounts")
+    )
+    context["account_back_label"] = "К результатам поиска" if q else "Участки и счета"
+    context["account_edit_url"] = reverse("staff_workspace:account_edit", args=[account.pk]) + search_query
+    context["can_edit_account"] = can(
+        request.user, "accounts.edit", scope=ScopeRef(ScopeType.ACCOUNT, account.pk),
+    )
+    context["can_open_admin_account"] = request.user.has_perm("water.change_account")
+    from .staff_meter_binding import binding_nodes
+
+    context["can_bind_meter"] = (
+        not account.archived
+        and can_any(request.user, "water.topology.manage")
+        and binding_nodes(request.user).exists()
+    )
+    context["meter_bind_url"] = reverse("staff_workspace:meter_bind", args=[account.pk]) + "?" + urlencode(
+        {"from": "account", **({"q": q} if q else {})},
+    )
 
     memberships = []
     if context["can_view_water"]:
