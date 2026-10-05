@@ -456,6 +456,7 @@ def change_password(request):
     if request.method == 'POST' and form.is_valid():
         user = form.save()
         update_session_auth_hash(request, user)
+        messages.success(request, 'Пароль изменён.', extra_tags='resident-feedback')
         return HttpResponseRedirect(reverse('resident_dashboard'))
     return TemplateResponse(request, 'water/portal/change_password.html', {'form': form})
 
@@ -504,6 +505,8 @@ def submit_reading(request, account_id, meter_id):
         return denied
     access = _resolved_or_404(request.user, account_id, CAP_SUBMIT_WATER)
     meter = get_object_or_404(Meter, pk=meter_id, account=access.account, kind='individual')
+    if request.method in {'GET', 'HEAD'}:
+        return HttpResponseRedirect(reverse('resident_water', args=[account_id]))
     if request.method != 'POST':
         raise Http404
     form = ResidentReadingForm(request.POST)

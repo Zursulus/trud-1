@@ -1,6 +1,7 @@
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from axe_playwright_python.sync_playwright import Axe
 from django.conf import settings
@@ -82,7 +83,8 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             page.locator("#workspace-search").fill("Садовая 101")
             page.get_by_role("button", name="Найти", exact=True).click()
             page.get_by_text("Садовая 101", exact=True).first.click()
-            page.wait_for_url("**/work/accounts/*/")
+            page.wait_for_url(lambda url: urlsplit(url).path == f"/work/accounts/{self.account.pk}/")
+            self.assertEqual(parse_qs(urlsplit(page.url).query).get("q"), ["Садовая 101"])
             page.wait_for_load_state("networkidle")
 
             self.assertTrue(page.get_by_role("heading", name="Садовая 101", exact=True).is_visible())

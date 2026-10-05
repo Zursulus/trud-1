@@ -78,6 +78,14 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ws-brand); outl
 .ws-result strong { display: block; margin: 4px 0; font-size: 16px; overflow-wrap: anywhere; }
 .ws-result p { margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
 .ws-chevron { flex: 0 0 auto; color: var(--ws-muted); font-size: 26px; }
+.ws-menu-list { display: grid; gap: 10px; }
+.ws-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 76px; padding: 14px 16px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); text-decoration: none; }
+.ws-menu-copy { display: grid; min-width: 0; gap: 4px; }
+.ws-menu-copy strong { font-size: 16px; overflow-wrap: anywhere; }
+.ws-menu-copy small { color: var(--ws-muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.ws-menu-row:hover { border-color: #c5d6cb; background: #fbfdfc; }
+.ws-menu-row:focus-visible { outline: 3px solid var(--ws-brand); outline-offset: 3px; }
+.ws-home-routine, .ws-home-search { max-width: 620px; }
 
 .ws-empty, .ws-muted-panel { padding: 18px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
 .ws-empty strong { display: block; margin-bottom: 5px; }
@@ -85,6 +93,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ws-brand); outl
 .ws-muted-panel .ws-secondary { margin-top: 14px; }
 
 .ws-search-form { margin-bottom: 24px; }
+.ws-field-hint { margin: 8px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.4; }
 .ws-search-form > label, .ws-inline-filter > label { display: block; margin: 0 0 7px; color: var(--ws-muted); font-size: 13px; font-weight: 700; }
 .ws-search-line { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .ws-search-line input, .ws-inline-filter input {
@@ -100,6 +109,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ws-brand); outl
 .ws-pagination span { color: var(--ws-muted); font-size: 13px; }
 
 .ws-breadcrumbs { display: flex; gap: 7px; align-items: center; margin-bottom: 14px; color: var(--ws-muted); font-size: 13px; overflow-wrap: anywhere; }
+.ws-breadcrumbs { flex-wrap: wrap; }
+.ws-breadcrumbs a { display: inline-flex; align-items: center; min-height: 44px; }
 .ws-breadcrumbs a { color: var(--ws-brand); }
 .ws-object-head { display: flex; flex-direction: column; gap: 14px; margin: 0 0 16px; }
 .ws-object-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--ws-muted); }
@@ -121,6 +132,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ws-brand); outl
 .ws-table tr:last-child td { border-bottom: 0; }
 .ws-table th { color: var(--ws-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .035em; background: #fafbfc; }
 .ws-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ws-account-service { margin-top: 14px; }
 .ws-finance-line { display: flex; justify-content: space-between; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--ws-line); }
 .ws-finance-line span { color: var(--ws-muted); }
 .ws-finance-total { font-size: 17px; border-bottom: 0; }
@@ -141,6 +153,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ws-brand); outl
   .ws-page-head, .ws-object-head { flex-direction: row; align-items: flex-end; justify-content: space-between; }
   .ws-search-line { grid-template-columns: minmax(0, 1fr) auto; }
   .ws-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ws-menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ws-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 

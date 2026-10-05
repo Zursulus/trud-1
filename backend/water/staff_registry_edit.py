@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -53,6 +55,14 @@ class AccountContactEditForm(VersionedModelForm):
         fields = ("plot", "contact_name", "phone", "notes", "version")
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
+    def __init__(self, *args, include_contacts=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not include_contacts:
+            # Excluded ModelForm fields retain their stored values, including on
+            # forged POSTs. Legacy contacts have no verified Person association.
+            self.fields.pop("contact_name")
+            self.fields.pop("phone")
+
 
 def _save_versioned(form, *, actor, reason):
     obj = form.save(commit=False)
@@ -101,8 +111,8 @@ def person_edit(request, person_id):
             return HttpResponseRedirect(cancel_url)
     return _render(
         request, form=form, title=f"Редактировать: {person.full_name}",
-        eyebrow=f"Person #{person.pk}", cancel_url=cancel_url, section="access",
-        explanation="Меняются только ФИО и контакты Person. Права, владение, членство и логин не изменяются.",
+        eyebrow="Данные жителя", cancel_url=cancel_url, section="access",
+        explanation="Исправьте ФИО, телефон или электронную почту. Связи с участками и доступы сохраняются.",
     )
 
 
@@ -112,16 +122,23 @@ def account_edit(request, account_id):
     if not request.user.is_staff or not can(request.user, "accounts.edit", scope=scope):
         raise PermissionDenied
 
-    form = AccountContactEditForm(request.POST or None, instance=account)
+    include_contacts = can(
+        request.user, "registry.contacts.view", scope=ScopeRef(ScopeType.ALL),
+    )
+    form = AccountContactEditForm(request.POST or None, instance=account, include_contacts=include_contacts)
     cancel_url = reverse("staff_workspace:account", args=[account.pk])
+    q = " ".join((request.GET.get("q") or "").split())[:160]
+    if q:
+        cancel_url += "?" + urlencode({"q": q})
     if request.method == "POST" and form.is_valid():
         if _save_versioned(form, actor=request.user, reason="Контактная карточка лицевого счёта изменена в Staff Workspace"):
-            messages.success(request, "Контактная карточка лицевого счёта сохранена.")
+            messages.success(request, "Карточка лицевого счёта сохранена.")
             return HttpResponseRedirect(cancel_url)
     return _render(
         request, form=form, title=f"Карточка лицевого счёта {account.number or account.pk}",
-        eyebrow="Контактный слой Account", cancel_url=cancel_url, section="accounts",
-        explanation="Это поля карточки лицевого счёта. Они не заменяют Person и LandPlot и не меняют права доступа.",
+        eyebrow="Лицевой счёт", cancel_url=cancel_url, section="accounts",
+        explanation=("Исправьте обозначение участка, контакт или заметку. Доступы и связи сохраняются."
+                     if include_contacts else "Исправьте обозначение участка или рабочую заметку. Доступы и связи сохраняются."),
     )
 
 
@@ -143,8 +160,8 @@ def land_plot_edit(request, plot_id):
             return HttpResponseRedirect(cancel_url)
     return _render(
         request, form=form, title=f"Редактировать участок: {plot.label}",
-        eyebrow=f"LandPlot #{plot.pk}", cancel_url=cancel_url, section="accounts",
-        explanation="Меняются только реквизиты существующего участка. Связи с людьми, лицевым счётом и права не изменяются.",
+        eyebrow="Участок", cancel_url=cancel_url, section="accounts",
+        explanation="Исправьте адрес и реквизиты участка. Владение, лицевой счёт и доступы сохраняются.",
     )
 
 

@@ -5,25 +5,25 @@
   <div>
     <p class="ws-eyebrow">Дополнительно</p>
     <h1>Ещё</h1>
-    <p>Сюда вынесено то, что нужно не каждый день.</p>
+    <p>Рабочие разделы и служебные функции.</p>
   </div>
 </section>
 
 <section class="ws-section">
   <div class="ws-section-head"><h2>Разделы</h2></div>
-  <div class="ws-card-grid">
-    {% if can_use_workbench %}<a class="ws-card" href="{% url 'staff_workspace:workbench' %}"><span class="ws-card-kicker">Новая панель · только просмотр</span><strong>Жители и участки</strong><p>Связи, личные доступы, служебные роли и счётчики.</p></a>{% endif %}
-    {% if has_resident_access %}<a class="ws-card" href="{% url 'resident_dashboard' %}"><span class="ws-card-kicker">Личный режим</span><strong>Кабинет жителя</strong><p>Мои участки, показания, платежи, документы и обращения. Служебная роль не отменяет личный доступ.</p></a>{% endif %}
-    {% if can_view_accounts %}<a class="ws-card" href="{% url 'staff_workspace:accounts' %}"><span class="ws-card-kicker">Реестр</span><strong>Участки и счета</strong><p>Список доступных вам объектов.</p></a>{% endif %}
-    {% if can_view_water %}<a class="ws-card" href="{% url 'staff_workspace:water' %}"><span class="ws-card-kicker">Вода</span><strong>Учёт воды</strong><p>Показания, проверки и баланс.</p></a>{% endif %}
-    {% if can_view_appeals %}<a class="ws-card" href="{% url 'staff_workspace:appeals' %}"><span class="ws-card-kicker">Обращения</span><strong>Обращения жителей</strong><p>Диалоги, статусы и решения.</p></a>{% endif %}
-    {% if can_use_finance_workspace %}<a class="ws-card" href="{% url 'staff_workspace:finance' %}"><span class="ws-card-kicker">Финансы</span><strong>Начисления и оплаты</strong><p>Периоды, платежи и распределение.</p></a>{% endif %}
-    {% if can_use_access_workspace %}<a class="ws-card" href="{% url 'staff_workspace:access' %}"><span class="ws-card-kicker">Доступ</span><strong>Доступ жителей</strong><p>Заявки, приглашения и восстановление.</p></a>{% endif %}
-    {% if can_view_documents %}<a class="ws-card" href="{% url 'staff_workspace:documents' %}"><span class="ws-card-kicker">Документы</span><strong>Документы и новости</strong><p>Материалы жителей и публикации сайта.</p></a>{% endif %}
-    {% if can_view_governance %}<a class="ws-card" href="{% url 'staff_workspace:governance' %}"><span class="ws-card-kicker">Правление</span><strong>Опросы правления</strong><p>Внутренние опросы, результаты и протоколы.</p></a>{% endif %}
-    {% if can_view_security_alerts %}<a class="ws-card" href="{% url 'staff_workspace:security' %}"><span class="ws-card-kicker">Контроль</span><strong>Безопасность{% if security_alert_count %} · {{ security_alert_count }}{% endif %}</strong><p>Подозрительные вложения и сигналы.</p></a>{% endif %}
-    <a class="ws-card" href="{% url 'staff_workspace:roles_guide' %}"><span class="ws-card-kicker">Инструкция · версия {{ roles_guide_version }}</span><strong>Роли и полномочия</strong><p>Выдача ролей и совмещённые полномочия.</p></a>
-  </div>
+  <nav class="ws-menu-list" aria-label="Рабочие разделы">
+    {% if can_use_workbench %}<a class="ws-menu-row" href="{% url 'staff_workspace:workbench' %}"><span class="ws-menu-copy"><strong>Жители и участки</strong><small>Поиск людей, связи, доступы и счётчики.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if has_resident_access %}<a class="ws-menu-row" href="{% url 'resident_dashboard' %}"><span class="ws-menu-copy"><strong>Кабинет жителя</strong><small>Мои участки и личные данные.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_accounts %}<a class="ws-menu-row" href="{% url 'staff_workspace:accounts' %}"><span class="ws-menu-copy"><strong>Участки и счета</strong><small>Реестр доступных объектов.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_water %}<a class="ws-menu-row" href="{% url 'staff_workspace:water' %}"><span class="ws-menu-copy"><strong>Учёт воды</strong><small>Показания, проверки и баланс.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_appeals %}<a class="ws-menu-row" href="{% url 'staff_workspace:appeals' %}"><span class="ws-menu-copy"><strong>Обращения жителей</strong><small>Диалоги, статусы и решения.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_use_finance_workspace %}<a class="ws-menu-row" href="{% url 'staff_workspace:finance' %}"><span class="ws-menu-copy"><strong>Начисления и оплаты</strong><small>Периоды, платежи и распределение.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_use_access_workspace %}<a class="ws-menu-row" href="{% url 'staff_workspace:access' %}"><span class="ws-menu-copy"><strong>Доступ жителей</strong><small>Заявки, приглашения и восстановление.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_documents %}<a class="ws-menu-row" href="{% url 'staff_workspace:documents' %}"><span class="ws-menu-copy"><strong>Документы и новости</strong><small>Материалы жителей и публикации сайта.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_governance %}<a class="ws-menu-row" href="{% url 'staff_workspace:governance' %}"><span class="ws-menu-copy"><strong>Опросы правления</strong><small>Опросы, результаты и протоколы.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    {% if can_view_security_alerts %}<a class="ws-menu-row" href="{% url 'staff_workspace:security' %}"><span class="ws-menu-copy"><strong>Безопасность{% if security_alert_count %} · {{ security_alert_count }}{% endif %}</strong><small>Подозрительные вложения и сигналы.</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>{% endif %}
+    <a class="ws-menu-row" href="{% url 'staff_workspace:roles_guide' %}"><span class="ws-menu-copy"><strong>Роли и полномочия</strong><small>Инструкция · версия {{ roles_guide_version }}</small></span><span class="ws-chevron" aria-hidden="true">›</span></a>
+  </nav>
 </section>
 
 {% if request.user.is_superuser or can_edit_accounts or can_manage_finance_policy %}
