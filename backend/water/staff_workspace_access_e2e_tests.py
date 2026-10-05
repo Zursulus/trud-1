@@ -181,7 +181,9 @@ class WorkbenchBrowserTests(StaticLiveServerTestCase):
                         page.on('pageerror', lambda error: errors.append(str(error)))
                         try:
                             page.goto(self.live_server_url + '/work/more/')
-                            page.get_by_role('link', name='Новая панель · только просмотр Жители и участки', exact=False).click()
+                            panel_link = page.get_by_role('link', name='Жители и участки', exact=False)
+                            self.assertEqual(panel_link.get_attribute('href'), '/work/panel/')
+                            panel_link.click()
                             page.wait_for_load_state('networkidle')
                             self.assertTrue(page.get_by_role('heading', name='Жители и участки', exact=True).is_visible())
                             page.get_by_label('Адрес, имя, логин или ID').fill('Тестовый адрес 2')
@@ -261,8 +263,8 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                     page.locator("#id_phone").fill("+79990000011")
                     page.locator("#id_email").fill(f"editor-{engine}@example.test")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
-                    page.wait_for_load_state("networkidle")
-                    self.assertTrue(page.get_by_text("+79990000011", exact=False).is_visible())
+                    page.wait_for_url(f"{self.live_server_url}/work/access/people/{self.person.pk}/")
+                    expect(page.get_by_text("+79990000011", exact=False)).to_be_visible()
 
                     page.goto(
                         f"{self.live_server_url}/work/panel/?kind=account&id={self.account.pk}",
@@ -272,8 +274,8 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                     page.locator("#id_plot").fill(f"Горная 2 · {engine}")
                     page.locator("#id_phone").fill("+79990000022")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
-                    page.wait_for_load_state("networkidle")
-                    self.assertTrue(page.get_by_role("heading", name=f"Горная 2 · {engine}", exact=True).is_visible())
+                    page.wait_for_url(f"{self.live_server_url}/work/accounts/{self.account.pk}/")
+                    expect(page.get_by_role("heading", name=f"Горная 2 · {engine}", exact=True)).to_be_visible()
 
                     page.goto(
                         f"{self.live_server_url}/work/panel/?kind=plot&id={self.plot.pk}",
@@ -282,8 +284,8 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                     page.get_by_role("link", name="Изменить адрес", exact=True).click()
                     page.locator("#id_address").fill(f"Горная 2, ориентир {engine}")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
-                    page.wait_for_load_state("networkidle")
-                    self.assertTrue(page.get_by_text(f"Горная 2, ориентир {engine}", exact=False).is_visible())
+                    page.wait_for_url(f"{self.live_server_url}/work/accounts/{self.account.pk}/")
+                    expect(page.get_by_text(f"Горная 2, ориентир {engine}", exact=False)).to_be_visible()
                     self.assertTrue(page.evaluate(
                         "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                     ))
