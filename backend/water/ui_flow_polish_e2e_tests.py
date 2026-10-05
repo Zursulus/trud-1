@@ -137,12 +137,12 @@ class ResidentFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
                 # A new deliberate submit, then same-day correction, creates one pending request.
                 page.locator(".reading-details summary").click()
                 page.locator('.reading-form input[name="value"]').fill(str(30 + index))
-                page.get_by_role("button", name="Передать показание", exact=True).click()
-                page.wait_for_url("**/water/")
+                with page.expect_navigation(url=self.live_server_url + water, wait_until="networkidle"):
+                    page.get_by_role("button", name="Передать показание", exact=True).click()
                 page.locator(".reading-details summary").click()
                 page.locator('.reading-form input[name="value"]').fill(str(40 + index))
-                page.get_by_role("button", name="Передать показание", exact=True).click()
-                page.wait_for_url("**/water/")
+                with page.expect_navigation(url=self.live_server_url + water, wait_until="networkidle"):
+                    page.get_by_role("button", name="Передать показание", exact=True).click()
                 self.assertEqual(self.database(lambda: ControllerReadingSubmission.objects.filter(meter=self.meter).count()), 1)
                 self.assertEqual(self.database(lambda: ControllerReadingSubmission.objects.get(meter=self.meter).value), Decimal(40 + index))
                 self.assertTrue(page.get_by_role("status").is_visible())
