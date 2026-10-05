@@ -94,8 +94,9 @@ class StaffWorkspaceAccessBrowserTests(StaticLiveServerTestCase):
             page.locator("#id_approve-account").select_option(str(self.account.pk))
             page.locator("#id_approve-role").select_option("owner")
             page.locator("#id_approve-decision_note").fill(f"E2E проверка {label}")
-            page.get_by_role("button", name="Одобрить и создать приглашение", exact=True).click()
-            page.wait_for_load_state("networkidle")
+            with page.expect_navigation(
+                    url=f"{self.live_server_url}/work/access/requests/{request_id}/", wait_until="networkidle"):
+                page.get_by_role("button", name="Одобрить и создать приглашение", exact=True).click()
 
             self.assertTrue(page.get_by_text("Одноразовая ссылка создана.", exact=True).is_visible())
             self.assertTrue(page.locator("#invite-url").is_visible())
