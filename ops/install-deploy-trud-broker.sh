@@ -32,6 +32,9 @@ for path in (worker, submit, helper, manifest,
              src / 'deploy-trud-compatible.sh', src / 'trud-release-157.conf'):
     # Parent directories must exist and be trusted; no path/symlink surprises.
     for parent in (path.parent, *path.parent.parents):
+        if parent == manifest.parent and not parent.exists() and not parent.is_symlink():
+            (stage / 'before' / 'manifest-parent.absent').touch()
+            continue
         info = parent.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
             raise SystemExit(f'Untrusted parent: {parent}')
@@ -97,11 +100,14 @@ bash -n "$STAGE/after/deploy-trud-compatible"
 
 CHANGED=0
 WATCHER_STOPPED=0
+MANIFEST_PARENT_CREATED=0
+INSTALL_TMP=''
 atomic_install() {
-    local src=$1 dest=$2 mode=$3 tmp
-    tmp=$(mktemp "$(dirname "$dest")/.trud-bootstrap.XXXXXXXX")
-    install -o root -g root -m "$mode" "$src" "$tmp"
-    mv -f "$tmp" "$dest"
+    local src=$1 dest=$2 mode=$3
+    INSTALL_TMP=$(mktemp "$(dirname "$dest")/.trud-bootstrap.XXXXXXXX")
+    install -o root -g root -m "$mode" "$src" "$INSTALL_TMP"
+    mv -f "$INSTALL_TMP" "$dest"
+    INSTALL_TMP=''
 }
 rollback() {
     local rc=$? failed=0 path
@@ -109,6 +115,7 @@ rollback() {
     [[ "$rc" != 0 ]] || return 0
     set +e
     if [[ "$CHANGED" == 1 ]]; then
+      [[ -z "$INSTALL_TMP" ]] || rm -f -- "$INSTALL_TMP" || failed=1
       systemctl stop system-maintenance.path || failed=1
       if systemctl is-active --quiet system-maintenance.service; then
         echo 'TRUD_DEPLOY_BROKER_INSTALL=RECOVERY_UNCONFIRMED (worker active)' >&2
@@ -131,6 +138,14 @@ rollback() {
             rm -f "$path" || failed=1
         fi
       done
+      if [[ -f "$STAGE/before/manifest-parent.absent" && -d "$(dirname "$MANIFEST")" ]]; then
+        # Remove only our newly created empty directory, never existing content.
+        if [[ "$MANIFEST_PARENT_CREATED" == 1 ]]; then
+            rmdir "$(dirname "$MANIFEST")" || failed=1
+        else
+            failed=1
+        fi
+      fi
     fi
     if [[ "$WATCHER_STOPPED" == 1 && "$failed" == 0 ]]; then
       systemctl start system-maintenance.path || failed=1
@@ -156,7 +171,16 @@ fi
 if compgen -G "$INBOX/*.json" >/dev/null; then
     echo 'maintenance request queued during preparation; bootstrap aborted' >&2; exit 2
 fi
+if [[ -f "$STAGE/before/manifest-parent.absent" ]]; then
+    [[ ! -e "$(dirname "$MANIFEST")" && ! -L "$(dirname "$MANIFEST")" ]] || {
+        echo 'manifest parent changed during preparation' >&2; exit 2;
+    }
+fi
 CHANGED=1
+if [[ -f "$STAGE/before/manifest-parent.absent" ]]; then
+    mkdir -m 0700 "$(dirname "$MANIFEST")"
+    MANIFEST_PARENT_CREATED=1
+fi
 atomic_install "$STAGE/after/deploy-trud-compatible" "$HELPER" 0700
 atomic_install "$STAGE/after/trud-release.conf" "$MANIFEST" 0600
 atomic_install "$STAGE/after/system-maintenance-worker" "$WORKER" 0700

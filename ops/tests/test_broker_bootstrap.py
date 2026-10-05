@@ -36,8 +36,11 @@ elif name=='systemctl':
         (r/'watcher').write_text('start')
         if mode=='signal' and n==1: os.kill(os.getppid(),signal.SIGTERM)
 elif name=='install':
+    if mode=='foreign_parent' and pathlib.Path(args[-2]).name=='system-maintenance-submit':
+        (r/'etc/keep').write_text('external content'); sys.exit(1)
     if mode=='install:'+pathlib.Path(args[-2]).name: sys.exit(1)
-    sys.exit(subprocess.run(['/usr/bin/install',*args[args.index('-m'):]]).returncode)
+    prefix=['-d'] if args[0]=='-d' else []
+    sys.exit(subprocess.run(['/usr/bin/install',*prefix,*args[args.index('-m'):]]).returncode)
 '''
 
 class BrokerBootstrapTests(unittest.TestCase):
@@ -46,11 +49,12 @@ class BrokerBootstrapTests(unittest.TestCase):
                               cwd=OPS,capture_output=True,text=True,timeout=5)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
-    def fixture(self, mode='', preinstalled=False):
+    def fixture(self, mode='', preinstalled=False, missing_parent=False):
         tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         r=Path(tmp.name)
         for d in ('bin','sbin','etc','inbox','backups','run','src'):
             (r/d).mkdir()
+        if missing_parent: (r/'etc').rmdir()
         self.original_worker=WORKER
         # Use exactly the publicly read submit client contract from the host.
         submit='''#!/usr/bin/env python3
@@ -89,6 +93,8 @@ if __name__=="__main__": main()
         if mode=='symlink':
             (r/'sbin/system-maintenance-worker').unlink()
             (r/'sbin/system-maintenance-worker').symlink_to(r/'bin/system-maintenance-submit')
+        if mode=='symlink_parent':
+            (r/'etc').rmdir(); (r/'etc').symlink_to(r/'bin',target_is_directory=True)
         for name in ('deploy-trud-compatible.sh','trud-release-157.conf'):
             (r/'src'/name).write_bytes((OPS/name).read_bytes())
         if mode=='manifest': (r/'src/trud-release-157.conf').write_text("TARGET_SHA='c'\n")
@@ -154,6 +160,13 @@ if __name__=="__main__": main()
         self.assertEqual(second.returncode,0,second.stderr)
         for p,data in content.items():self.assertEqual(p.read_bytes(),data)
 
+    def test_missing_manifest_parent_is_created_privately(self):
+        r=self.fixture(missing_parent=True); result=self.execute(r)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual((r/'etc').stat().st_mode&0o777,0o700)
+        self.assertEqual((r/'etc/trud-release.conf').read_bytes(),(OPS/'trud-release-157.conf').read_bytes())
+        self.assertTrue(list((r/'backups').glob('*/before/manifest-parent.absent')))
+
     def test_readonly_smoke_requires_client_worker_and_exact_manifest(self):
         r=self.fixture(); result=self.execute(r)
         self.assertEqual(result.returncode,0,result.stderr)
@@ -179,7 +192,7 @@ if __name__=="__main__": main()
         self.assertFalse((r/'requests').exists())
 
     def test_preflight_failures_never_change_installed_files(self):
-        for mode in ('unknown_worker','unknown_submit','no_launcher','pending','unsafe_file','unsafe_source','symlink','manifest','worker_active'):
+        for mode in ('unknown_worker','unknown_submit','no_launcher','pending','unsafe_file','unsafe_source','symlink','symlink_parent','manifest','worker_active'):
             with self.subTest(mode=mode):
                 r=self.fixture(mode)
                 before=(r/'bin/system-maintenance-submit').read_bytes()
@@ -192,9 +205,9 @@ if __name__=="__main__": main()
     def test_install_start_and_signal_failures_restore_all_four_paths(self):
         for mode in ('install:deploy-trud-compatible','install:trud-release.conf',
                      'install:system-maintenance-worker','install:system-maintenance-submit','start','signal'):
-            for installed in (False,True):
-                with self.subTest(mode=mode,installed=installed):
-                    r=self.fixture(preinstalled=installed)
+            for installed,missing_parent in ((False,False),(False,True),(True,False)):
+                with self.subTest(mode=mode,installed=installed,missing_parent=missing_parent):
+                    r=self.fixture(preinstalled=installed,missing_parent=missing_parent)
                     paths=[r/'sbin/system-maintenance-worker',r/'bin/system-maintenance-submit',r/'sbin/deploy-trud-compatible',r/'etc/trud-release.conf']
                     before={p:p.read_bytes() if p.exists() else None for p in paths}
                     result=self.execute(r,mode)
@@ -203,6 +216,7 @@ if __name__=="__main__": main()
                     for p,data in before.items():
                         if data is None:self.assertFalse(p.exists())
                         else:self.assertEqual(p.read_bytes(),data)
+                    self.assertEqual((r/'etc').exists(),not missing_parent)
                     self.assertEqual((r/'watcher').read_text(),'start')
 
     def test_failed_recovery_reports_uncertain_state(self):
@@ -210,5 +224,13 @@ if __name__=="__main__": main()
         self.assertNotEqual(result.returncode,0)
         self.assertIn('RECOVERY_UNCONFIRMED',result.stderr)
         self.assertNotIn('INSTALL=PASS',result.stdout)
+
+    def test_recovery_preserves_foreign_content_in_new_manifest_directory(self):
+        r=self.fixture(missing_parent=True); result=self.execute(r,'foreign_parent')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('RECOVERY_UNCONFIRMED',result.stderr)
+        self.assertEqual((r/'etc/keep').read_text(),'external content')
+        self.assertFalse((r/'etc/trud-release.conf').exists())
+        self.assertEqual((r/'watcher').read_text(),'stop')
 
 if __name__=='__main__':unittest.main()
