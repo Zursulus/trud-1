@@ -28,7 +28,6 @@ jobs:
       PGUSER: trud_site
       PGPASSWORD: ci-synthetic-only
       PGHOST: 127.0.0.1
-      PG_CONTAINER: ${{ job.services.postgres.id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -42,6 +41,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r backend/requirements.txt
       - name: Build the production-baseline schema on synthetic PostgreSQL 17
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           python baseline/backend/manage.py migrate --noinput
           python baseline/backend/manage.py setup_roles
@@ -49,6 +50,8 @@ jobs:
           docker exec "$PG_CONTAINER" pg_dump -U trud_site -Fc trud_site > before.dump
           docker exec -i "$PG_CONTAINER" pg_restore --list < before.dump > before.inventory
       - name: Apply the candidate and rehearse a real dump restore
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           python backend/manage.py check
           python backend/manage.py makemigrations --check --dry-run
