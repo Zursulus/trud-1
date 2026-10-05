@@ -29,7 +29,9 @@ if name=='id': print(0)
 elif name=='systemctl':
     if 'system-maintenance.service' in args:
         sys.exit(0 if mode=='worker_active' else 3)
-    if args[0]=='stop': (r/'watcher').write_text('stop')
+    if args[0]=='stop':
+        (r/'watcher').write_text('stop')
+        if mode=='signal_stop': os.kill(os.getppid(),signal.SIGTERM)
     if args[0]=='start':
         n=int((r/'starts').read_text())+1; (r/'starts').write_text(str(n))
         if (mode=='start' and n==1) or mode=='recovery': sys.exit(1)
@@ -204,7 +206,7 @@ if __name__=="__main__": main()
 
     def test_install_start_and_signal_failures_restore_all_four_paths(self):
         for mode in ('install:deploy-trud-compatible','install:trud-release.conf',
-                     'install:system-maintenance-worker','install:system-maintenance-submit','start','signal'):
+                     'install:system-maintenance-worker','install:system-maintenance-submit','start','signal','signal_stop'):
             for installed,missing_parent in ((False,False),(False,True),(True,False)):
                 with self.subTest(mode=mode,installed=installed,missing_parent=missing_parent):
                     r=self.fixture(preinstalled=installed,missing_parent=missing_parent)

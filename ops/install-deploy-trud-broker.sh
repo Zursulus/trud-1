@@ -148,8 +148,12 @@ rollback() {
       fi
     fi
     if [[ "$WATCHER_STOPPED" == 1 && "$failed" == 0 ]]; then
-      systemctl start system-maintenance.path || failed=1
-      systemctl is-active --quiet system-maintenance.path || failed=1
+      if flock -u 9; then
+        systemctl start system-maintenance.path || failed=1
+        systemctl is-active --quiet system-maintenance.path || failed=1
+      else
+        failed=1
+      fi
     fi
     if [[ "$failed" == 0 ]]; then
         echo 'TRUD_DEPLOY_BROKER_INSTALL=ROLLED_BACK' >&2
@@ -163,8 +167,8 @@ trap rollback EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 # Stop only the watcher; recheck no worker started during preparation.
-systemctl stop system-maintenance.path
 WATCHER_STOPPED=1
+systemctl stop system-maintenance.path
 if systemctl is-active --quiet system-maintenance.service; then
     echo 'maintenance request started; bootstrap aborted' >&2; exit 2
 fi
