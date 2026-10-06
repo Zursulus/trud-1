@@ -4,10 +4,23 @@ on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
+    inputs:
+      expected_production_commit:
+        description: 'Optional exact approved release SHA; never integration HEAD'
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
       - '.github/workflows/production-status.yml'
+      - '.github/tests/test_production_status.py'
+      - '.github/PRODUCTION_MONITORING.md'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-status.yml'
+      - '.github/tests/test_production_status.py'
+      - '.github/PRODUCTION_MONITORING.md'
 
 permissions:
   contents: read
@@ -17,39 +30,96 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Probe production and compare with water-admin HEAD
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
+      - uses: actions/checkout@v4
+      - name: Test production status logic offline
+        run: python3 .github/tests/test_production_status.py
+
+      - name: Probe and validate production marker
+        id: production
+        if: github.event_name != 'pull_request'
         run: |
           set -Eeuo pipefail
-
           endpoint='https://trud-1.ru/admin/deployment-status/'
-          body=$(curl -4 --fail --silent --show-error             --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 20             "$endpoint")
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if body=$(curl -4 --fail --silent --show-error \
+            --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 20 \
+            "$endpoint"); then
+            :
+          else
+            rc=$?
+            echo "MARKER_STATUS=UNKNOWN"
+            echo "::error::Production marker could not be read; site availability is unknown."
+            echo "- Marker: **UNKNOWN**, checked_at=$checked_at (curl exit $rc; not proof of a site outage)" >> "$GITHUB_STEP_SUMMARY"
+            exit "$rc"
+          fi
 
-          prod_commit=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"])' <<<"$body")
-          deployed_at=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at",""))' <<<"$body")
-
-          branch_json=$(curl --fail --silent --show-error             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/$REPO/branches/feature%2Fwater-admin")
-          head_commit=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])' <<<"$branch_json")
-
+          if marker=$(python3 -c '
+          import json, re, sys
+          from datetime import datetime
+          data = json.load(sys.stdin)
+          if not isinstance(data, dict) or data.get("project") != "trud-1":
+              sys.exit("Invalid production project")
+          commit, deployed_at = data.get("commit"), data.get("deployed_at")
+          if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+              sys.exit("Invalid production commit")
+          if not isinstance(deployed_at, str) or "\n" in deployed_at or "\r" in deployed_at or "T" not in deployed_at:
+              sys.exit("Invalid production deployed_at")
+          parsed = datetime.fromisoformat(deployed_at.replace("Z", "+00:00"))
+          if parsed.tzinfo is None or parsed.utcoffset() is None:
+              sys.exit("Production deployed_at must include timezone")
+          print(commit)
+          print(deployed_at)
+          ' <<<"$body"); then
+            :
+          else
+            echo "MARKER_STATUS=INVALID"
+            echo "::error::Production endpoint returned an invalid deployment marker."
+            echo "- Marker: **INVALID**, checked_at=$checked_at" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          prod_commit=${marker%%$'\n'*}
+          deployed_at=${marker#*$'\n'}
+          echo "MARKER_STATUS=OK"
           echo "PRODUCTION_COMMIT=$prod_commit"
-          echo "WATER_ADMIN_HEAD=$head_commit"
           echo "DEPLOYED_AT=$deployed_at"
-
+          echo "CHECKED_AT=$checked_at"
+          echo "commit=$prod_commit" >> "$GITHUB_OUTPUT"
           {
-            echo "## Trud-1 production status"
+            echo "## Trud-1 deployment observation"
             echo
+            echo "- Marker: **OK** (HTTP response and marker valid; application acceptance is separate)"
             echo "- Production: \`$prod_commit\`"
-            echo "- feature/water-admin: \`$head_commit\`"
             echo "- deployed_at: \`$deployed_at\`"
+            echo "- checked_at: \`$checked_at\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$prod_commit" = "$head_commit" ]; then
-            echo "STATUS=MATCH"
-            echo "- Status: **MATCH**" >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare with approved production release
+        if: github.event_name != 'pull_request'
+        env:
+          PRODUCTION_COMMIT: ${{ steps.production.outputs.commit }}
+          EXPECTED_PRODUCTION_COMMIT: ${{ inputs.expected_production_commit || vars.TRUD_EXPECTED_PRODUCTION_COMMIT }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "$EXPECTED_PRODUCTION_COMMIT" ]; then
+            echo "RELEASE_STATUS=UNKNOWN"
+            echo "::warning::No approved release baseline configured; marker observation passed, release acceptance is unknown."
+            echo "- Approved release: **UNKNOWN** (no baseline configured)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ ! "$EXPECTED_PRODUCTION_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "RELEASE_STATUS=INVALID_BASELINE"
+            echo "::error::Approved release baseline must be an exact lowercase 40-character SHA."
+            echo "- Approved release: **INVALID_BASELINE**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "EXPECTED_PRODUCTION_COMMIT=$EXPECTED_PRODUCTION_COMMIT"
+          echo "- Approved production release: \`$EXPECTED_PRODUCTION_COMMIT\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PRODUCTION_COMMIT" = "$EXPECTED_PRODUCTION_COMMIT" ]; then
+            echo "RELEASE_STATUS=MATCH"
+            echo "- Approved release: **MATCH**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "STATUS=MISMATCH"
-            echo "- Status: **MISMATCH**" >> "$GITHUB_STEP_SUMMARY"
+            echo "RELEASE_STATUS=MISMATCH"
+            echo "::error::Observed production differs from the configured approved production release."
+            echo "- Approved release: **MISMATCH** (reconcile canonical release/receipt; no deploy implied)" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
