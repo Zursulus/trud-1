@@ -23,11 +23,11 @@ PROCESSING = BASE / "processing"
 RESULTS = BASE / "results"
 ARCHIVE = BASE / "archive"
 LOCK = Path("/run/trud-release-request.lock")
+PROMOTION_REF = "refs/heads/release/production-compatible"
 DEPLOY_SCRIPT_SHA256 = "ffe9d8f5cc7eff10881b94ee3e09658222bbf1ac0fa2d91aee1b859b2ab81a23"
 BACKUP_SCRIPT_SHA256 = "790be71b5d37332e542a424e8a2ca58bb24a732fec2f7991b2010a6dce70649b"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-RELEASE_ID_RE = re.compile(r"^release-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}-[0-9a-f]{6}$")
-BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
+REQUEST_RE = re.compile(r"^request-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
 FORBIDDEN_PATHS = (
     "backend/requirements.txt",
     ":(glob)backend/**/migrations/**",
@@ -43,18 +43,13 @@ class ReleaseError(RuntimeError):
     pass
 
 
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def run(argv, *, check=True, capture=False, env=None, stdin=None):
+def run(argv, *, check=True, capture=False, env=None):
     result = subprocess.run(
         list(argv),
         check=False,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
         env=env,
-        input=stdin,
     )
     if check and result.returncode:
         detail = ""
@@ -75,83 +70,82 @@ def gitapp(*args, capture=True):
     return result.stdout.decode("utf-8", "replace").strip() if capture else ""
 
 
-def read_marker() -> str:
-    data = json.loads(STATUS.read_text(encoding="utf-8"))
-    if data.get("project") != "trud-1":
-        raise ReleaseError("unexpected deployment marker project")
-    value = str(data.get("commit") or "")
-    if not SHA_RE.fullmatch(value):
-        raise ReleaseError("invalid deployment marker commit")
-    return value
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def _trusted_dir(path: Path, *, uid: int, gid: int | None = None, allow_group_read=False):
+def marker_or_none():
+    try:
+        data = json.loads(STATUS.read_text(encoding="utf-8"))
+        value = str(data.get("commit") or "")
+        if data.get("project") != "trud-1" or not SHA_RE.fullmatch(value):
+            return None
+        return value
+    except Exception:
+        return None
+
+
+def head_or_none():
+    try:
+        return gitapp("rev-parse", "HEAD")
+    except Exception:
+        return None
+
+
+def validate_request(data, expected_request_id=None):
+    if not isinstance(data, dict) or set(data) != {"schema", "request_id"}:
+        raise ReleaseError("invalid request schema")
+    if data.get("schema") != 1:
+        raise ReleaseError("unsupported request schema")
+    request_id = str(data.get("request_id") or "")
+    if not REQUEST_RE.fullmatch(request_id):
+        raise ReleaseError("invalid request id")
+    if expected_request_id is not None and request_id != expected_request_id:
+        raise ReleaseError("request id does not match filename")
+    return request_id
+
+
+def trusted_dir(path: Path, *, uid: int, gid: int | None = None, group_read=False):
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid:
         raise ReleaseError(f"untrusted directory: {path}")
     if gid is not None and info.st_gid != gid:
         raise ReleaseError(f"unexpected group: {path}")
-    forbidden = 0o022 if allow_group_read else 0o077
+    forbidden = 0o027 if group_read else 0o077
     if info.st_mode & forbidden:
         raise ReleaseError(f"unsafe directory mode: {path}")
 
 
-def validate_descriptor(data, *, expected_release_id=None):
-    if not isinstance(data, dict):
-        raise ReleaseError("descriptor must be a JSON object")
-    required = {"schema", "release_id", "expected_sha", "target_sha", "branch"}
-    if set(data) != required or data.get("schema") != 1:
-        raise ReleaseError("invalid descriptor schema")
-    release_id = str(data["release_id"])
-    expected_sha = str(data["expected_sha"])
-    target_sha = str(data["target_sha"])
-    branch = str(data["branch"])
-    if expected_release_id is not None and release_id != expected_release_id:
-        raise ReleaseError("release id does not match filename")
-    if not RELEASE_ID_RE.fullmatch(release_id):
-        raise ReleaseError("invalid release id")
-    if not SHA_RE.fullmatch(expected_sha) or not SHA_RE.fullmatch(target_sha):
-        raise ReleaseError("invalid commit SHA")
-    if expected_sha == target_sha:
-        raise ReleaseError("target already equals expected")
-    if not BRANCH_RE.fullmatch(branch) or ".." in branch or "@{" in branch or "//" in branch:
-        raise ReleaseError("invalid branch")
-    return {
-        "release_id": release_id,
-        "expected_sha": expected_sha,
-        "target_sha": target_sha,
-        "branch": branch,
-    }
-
-
-def claim_descriptor(chat_uid: int):
+def claim_request(chat_uid: int):
     pending = sorted(
         path for path in INBOX.iterdir()
-        if path.name.startswith("release-") and path.suffix == ".json"
+        if path.name.startswith("request-") and path.suffix == ".json"
     )
     if len(pending) != 1:
-        raise ReleaseError(f"expected exactly one pending release descriptor, found {len(pending)}")
+        raise ReleaseError(f"expected exactly one pending request, found {len(pending)}")
     source = pending[0]
-    release_id = source.stem
-    if not RELEASE_ID_RE.fullmatch(release_id):
-        raise ReleaseError("invalid descriptor filename")
+    request_id = source.stem
+    if not REQUEST_RE.fullmatch(request_id):
+        raise ReleaseError("invalid request filename")
     info = source.lstat()
     if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
-        raise ReleaseError("descriptor is not a regular file")
+        raise ReleaseError("request is not a regular file")
     if info.st_uid != chat_uid or info.st_mode & 0o077:
-        raise ReleaseError("descriptor owner/mode is unsafe")
+        raise ReleaseError("request owner/mode is unsafe")
     claimed = PROCESSING / source.name
     if claimed.exists():
-        raise ReleaseError("processing descriptor already exists")
+        raise ReleaseError("processing request already exists")
     os.replace(source, claimed)
     os.chown(claimed, 0, 0)
     os.chmod(claimed, 0o600)
-    return claimed, release_id
+    data = json.loads(claimed.read_text(encoding="utf-8"))
+    validate_request(data, expected_request_id=request_id)
+    return claimed, request_id
 
 
-def write_result(chat_gid: int, release_id: str, payload: dict):
-    final = RESULTS / f"{release_id}.json"
-    tmp = RESULTS / f".{release_id}.{os.getpid()}.tmp"
+def write_result(chat_gid: int, request_id: str, payload: dict):
+    final = RESULTS / f"{request_id}.json"
+    tmp = RESULTS / f".{request_id}.{os.getpid()}.tmp"
     body = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
@@ -168,12 +162,12 @@ def write_result(chat_gid: int, release_id: str, payload: dict):
     return final
 
 
-def archive_descriptor(path: Path):
+def archive_request(path: Path):
     if not path.exists():
         return
     final = ARCHIVE / path.name
     if final.exists():
-        raise ReleaseError("archive descriptor already exists")
+        raise ReleaseError("archive request already exists")
     os.replace(path, final)
     os.chown(final, 0, 0)
     os.chmod(final, 0o600)
@@ -194,31 +188,17 @@ def extract_git_file(target: str, repo_path: str, destination: Path, expected_sh
     os.chmod(destination, 0o700)
 
 
-def live_head_or_none():
-    try:
-        return gitapp("rev-parse", "HEAD")
-    except Exception:
-        return None
-
-
-def marker_or_none():
-    try:
-        return read_marker()
-    except Exception:
-        return None
-
-
 def main():
     if os.geteuid() != 0 or len(sys.argv) != 1:
         print("root, no arguments required", file=sys.stderr)
         return 2
 
     chat = pwd.getpwnam("chatgpt-remote")
-    _trusted_dir(BASE, uid=0, gid=chat.pw_gid, allow_group_read=True)
-    _trusted_dir(INBOX, uid=chat.pw_uid, gid=chat.pw_gid)
-    _trusted_dir(PROCESSING, uid=0)
-    _trusted_dir(RESULTS, uid=0, gid=chat.pw_gid, allow_group_read=True)
-    _trusted_dir(ARCHIVE, uid=0)
+    trusted_dir(BASE, uid=0, gid=chat.pw_gid, group_read=True)
+    trusted_dir(INBOX, uid=chat.pw_uid, gid=chat.pw_gid)
+    trusted_dir(PROCESSING, uid=0)
+    trusted_dir(RESULTS, uid=0, gid=chat.pw_gid, group_read=True)
+    trusted_dir(ARCHIVE, uid=0)
 
     lock_fd = os.open(LOCK, os.O_WRONLY | os.O_CREAT, 0o600)
     with os.fdopen(lock_fd, "w") as lock:
@@ -229,34 +209,47 @@ def main():
             return 2
 
         claimed = None
-        release_id = None
-        descriptor = {}
+        request_id = None
+        expected = None
+        target = None
         stage = "claim"
         stage_dir = None
         backup_root = None
         try:
-            claimed, release_id = claim_descriptor(chat.pw_uid)
-            raw = json.loads(claimed.read_text(encoding="utf-8"))
-            descriptor = validate_descriptor(raw, expected_release_id=release_id)
-            if (RESULTS / f"{release_id}.json").exists():
-                raise ReleaseError("release result already exists")
-
-            expected = descriptor["expected_sha"]
-            target = descriptor["target_sha"]
-            branch = descriptor["branch"]
+            claimed, request_id = claim_request(chat.pw_uid)
 
             stage = "preflight"
-            run(["/usr/bin/git", "check-ref-format", "--branch", branch])
-            if read_marker() != expected:
-                raise ReleaseError("production marker drift")
-            if gitapp("rev-parse", "HEAD") != expected:
-                raise ReleaseError("production Git head drift")
+            expected = marker_or_none()
+            if expected is None:
+                raise ReleaseError("invalid production marker")
+            if head_or_none() != expected:
+                raise ReleaseError("production Git head/marker drift")
             if gitapp("status", "--porcelain"):
                 raise ReleaseError("production tree is dirty")
 
-            gitapp("fetch", "--no-tags", "origin", f"refs/heads/{branch}", capture=False)
-            if gitapp("rev-parse", "FETCH_HEAD") != target:
-                raise ReleaseError("fetched branch head does not equal target")
+            gitapp("fetch", "--no-tags", "origin", PROMOTION_REF, capture=False)
+            target = gitapp("rev-parse", "FETCH_HEAD")
+            if not SHA_RE.fullmatch(target):
+                raise ReleaseError("invalid promoted target SHA")
+
+            if target == expected:
+                payload = {
+                    "schema": 1,
+                    "request_id": request_id,
+                    "status": "NOOP_ALREADY_CURRENT",
+                    "stage": "complete",
+                    "promotion_ref": PROMOTION_REF,
+                    "expected_sha": expected,
+                    "target_sha": target,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                }
+                result = write_result(chat.pw_gid, request_id, payload)
+                archive_request(claimed)
+                print("TRUD_RELEASE=NOOP_ALREADY_CURRENT")
+                print(f"REQUEST_ID={request_id}")
+                print(f"RESULT={result}")
+                return 0
+
             gitapp("cat-file", "-e", f"{target}^{{commit}}")
             run(
                 [
@@ -268,7 +261,7 @@ def main():
 
             forbidden = gitapp("diff", "--name-only", expected, target, "--", *FORBIDDEN_PATHS)
             if forbidden:
-                raise ReleaseError("release contains migration/config/dependency-sensitive paths")
+                raise ReleaseError("promoted release contains migration/config/dependency-sensitive paths")
 
             stage_dir = Path(tempfile.mkdtemp(prefix="trud-selfservice.", dir="/var/backups"))
             deploy_script = stage_dir / "deploy-compatible.sh"
@@ -284,18 +277,13 @@ def main():
             run(["/bin/bash", str(backup_script)], env=env)
 
             stage = "deploy"
-            deploy = run(
-                ["/bin/bash", str(deploy_script), target, expected],
-                check=False,
-            )
+            deploy = run(["/bin/bash", str(deploy_script), target, expected], check=False)
             if deploy.returncode:
                 raise ReleaseError(f"compatible deploy failed rc={deploy.returncode}")
 
             stage = "postcheck"
-            if read_marker() != target:
-                raise ReleaseError("post-deploy marker mismatch")
-            if gitapp("rev-parse", "HEAD") != target:
-                raise ReleaseError("post-deploy Git head mismatch")
+            if marker_or_none() != target or head_or_none() != target:
+                raise ReleaseError("post-deploy marker/Git mismatch")
             for unit in ("trud-1-site.service", "nginx.service", "postgresql@17-main.service"):
                 run(["/usr/bin/systemctl", "is-active", "--quiet", unit])
             for url in (
@@ -303,56 +291,57 @@ def main():
                 "https://trud-1.ru/admin/cabinet/login/",
                 "https://trud-1.ru/admin/deployment-status/",
             ):
-                run(["/usr/bin/curl", "--fail", "--connect-timeout", "3", "--max-time", "10", "-sS", "-o", "/dev/null", url])
+                run([
+                    "/usr/bin/curl", "--fail", "--connect-timeout", "3",
+                    "--max-time", "10", "-sS", "-o", "/dev/null", url,
+                ])
 
             payload = {
                 "schema": 1,
-                "release_id": release_id,
+                "request_id": request_id,
                 "status": "PASS",
                 "stage": "complete",
+                "promotion_ref": PROMOTION_REF,
                 "expected_sha": expected,
                 "target_sha": target,
-                "branch": branch,
                 "backup_root": str(backup_root),
                 "finished_at": datetime.now(timezone.utc).isoformat(),
             }
-            result = write_result(chat.pw_gid, release_id, payload)
-            archive_descriptor(claimed)
+            result = write_result(chat.pw_gid, request_id, payload)
+            archive_request(claimed)
             if stage_dir:
                 shutil.rmtree(stage_dir, ignore_errors=True)
-            print(f"TRUD_RELEASE=PASS")
-            print(f"RELEASE_ID={release_id}")
+            print("TRUD_RELEASE=PASS")
+            print(f"REQUEST_ID={request_id}")
             print(f"RESULT={result}")
             print(f"target={target}")
             return 0
 
         except Exception as exc:
-            target = descriptor.get("target_sha")
-            expected = descriptor.get("expected_sha")
-            committed = bool(target and marker_or_none() == target and live_head_or_none() == target)
+            committed = bool(target and marker_or_none() == target and head_or_none() == target)
             status = "COMMITTED_POSTCHECK_FAILED" if committed else "FAILED"
             rc = 3 if committed else 1
-            if release_id:
+            if request_id:
                 payload = {
                     "schema": 1,
-                    "release_id": release_id,
+                    "request_id": request_id,
                     "status": status,
                     "stage": stage,
+                    "promotion_ref": PROMOTION_REF,
                     "expected_sha": expected,
                     "target_sha": target,
-                    "branch": descriptor.get("branch"),
                     "backup_root": str(backup_root) if backup_root else None,
                     "error": f"{type(exc).__name__}: {str(exc)[:400]}",
                     "finished_at": datetime.now(timezone.utc).isoformat(),
                 }
                 try:
-                    result = write_result(chat.pw_gid, release_id, payload)
+                    result = write_result(chat.pw_gid, request_id, payload)
                     print(f"RESULT={result}", file=sys.stderr)
                 except Exception as result_exc:
                     print(f"result write failed: {result_exc}", file=sys.stderr)
                 try:
                     if claimed:
-                        archive_descriptor(claimed)
+                        archive_request(claimed)
                 except Exception as archive_exc:
                     print(f"archive failed: {archive_exc}", file=sys.stderr)
             print(f"TRUD_RELEASE={status} stage={stage}: {exc}", file=sys.stderr)
