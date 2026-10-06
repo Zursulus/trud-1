@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import fcntl, hashlib, json, os, pwd, re, subprocess, time, traceback
+from datetime import datetime
+from pathlib import Path
+
+HOST="980121.vds.as210546.net"
+BASE=Path("/var/lib/system-maintenance")
+INBOX=BASE/"inbox"
+RESULTS=BASE/"results"
+ARCHIVE=BASE/"archive"
+LOCK=Path("/run/system-maintenance.lock")
+REQUEST_RE=re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+ACTIONS={"debian13-upgrade","apt-current-upgrade","reboot-host","post-upgrade-finalize"}
+UPGRADE13=Path("/usr/local/sbin/system-maintenance-debian13")
+UPGRADE13_SHA="d4e0e1b53d13f557b613065b9fa8ebd7070ac9c111f045f755340e89985e1e6b"
+FINALIZE=Path("/usr/local/sbin/system-maintenance-finalize")
+FINALIZE_SHA="0387ee7c5182e63acdf35f0dea8cac9953ec6d8ef24053410ec4af65905e2afe"
+
+def now():
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+def sha256(path: Path) -> str:
+    h=hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda:f.read(1024*1024),b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def run(argv, *, check=True, timeout=120):
+    result=subprocess.run(argv,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout,check=False)
+    if check and result.returncode:
+        tail=(result.stdout+"\n"+result.stderr)[-6000:]
+        raise RuntimeError(f"command failed rc={result.returncode}: {argv!r}\n{tail}")
+    return result
+
+def publish(result):
+    remote=pwd.getpwnam("chatgpt-remote")
+    payload=json.dumps(result,ensure_ascii=False,indent=2,sort_keys=True)+"\n"
+    RESULTS.mkdir(parents=True,exist_ok=True)
+    tmp=RESULTS/f".{result['request_id']}.tmp"
+    final=RESULTS/f"{result['request_id']}.json"
+    tmp.write_text(payload,encoding="utf-8")
+    os.chmod(tmp,0o600)
+    os.chown(tmp,remote.pw_uid,remote.pw_gid)
+    os.replace(tmp,final)
+    latest_tmp=RESULTS/".latest.tmp"
+    latest=RESULTS/"latest.json"
+    latest_tmp.write_text(payload,encoding="utf-8")
+    os.chmod(latest_tmp,0o600)
+    os.chown(latest_tmp,remote.pw_uid,remote.pw_gid)
+    os.replace(latest_tmp,latest)
+
+def parse(path):
+    raw=json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw,dict) or set(raw)!={"schema","request_id","action"}:
+        raise RuntimeError("request keys mismatch")
+    if raw["schema"]!=1:
+        raise RuntimeError("unsupported schema")
+    if not isinstance(raw["request_id"],str) or not REQUEST_RE.fullmatch(raw["request_id"]):
+        raise RuntimeError("invalid request_id")
+    if raw["action"] not in ACTIONS:
+        raise RuntimeError("unsupported action")
+    return raw
+
+def launch_debian13():
+    if not UPGRADE13.is_file() or UPGRADE13.is_symlink():
+        raise RuntimeError("Debian13 script missing or unsafe")
+    if sha256(UPGRADE13)!=UPGRADE13_SHA:
+        raise RuntimeError("Debian13 script checksum mismatch")
+    osr={}
+    for line in Path("/etc/os-release").read_text().splitlines():
+        if "=" in line:
+            k,v=line.split("=",1)
+            osr[k]=v.strip('"')
+    if osr.get("ID")!="debian" or osr.get("VERSION_ID")!="12":
+        raise RuntimeError(f"expected Debian 12, found {osr.get('PRETTY_NAME')}")
+    unit="os-upgrade-980121-trixie-"+datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run([
+        "systemd-run","--no-block","--unit",unit,"--collect",
+        "--property=Type=oneshot","--property=TimeoutStartSec=infinity",
+        "/bin/bash",str(UPGRADE13),"--worker"
+    ])
+    return unit
+
+def launch_apt_current():
+    unit="os-maint-apt-"+datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    command=(
+        "set -Eeuo pipefail; "
+        "export DEBIAN_FRONTEND=noninteractive APT_LISTCHANGES_FRONTEND=none NEEDRESTART_MODE=a UCF_FORCE_CONFFOLD=1; "
+        "apt-get update; "
+        "apt-get -y -o Dpkg::Options::=--force-confold full-upgrade; "
+        "dpkg --configure -a; "
+        "apt-get -f install -y"
+    )
+    run([
+        "systemd-run","--no-block","--unit",unit,"--collect",
+        "--property=Type=oneshot","--property=TimeoutStartSec=infinity",
+        "/bin/bash","-c",command
+    ])
+    return unit
+
+def launch_reboot():
+    busy = run(
+        ["bash","-lc","pgrep -x apt-get || pgrep -x dpkg || pgrep -x pg_upgradecluster || true"],
+        check=False,
+    ).stdout.strip()
+    if busy:
+        raise RuntimeError(f"package/database upgrade process still active: {busy}")
+    critical = [
+        "ssh.service",
+        "postgresql.service",
+        "nginx.service",
+        "trud-1-site.service",
+        "tg-bot-mobile-ui-test.service",
+        "chatgpt-remote.service",
+    ]
+    for service in critical:
+        state = run(["systemctl","is-active",service],check=False).stdout.strip()
+        if state != "active":
+            raise RuntimeError(f"critical service not active before reboot: {service}={state}")
+    unit="system-maintenance-reboot-"+datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run([
+        "systemd-run","--unit",unit,"--on-active=15s","--collect",
+        "/usr/bin/systemctl","reboot"
+    ])
+    return unit
+
+def launch_finalize():
+    if not FINALIZE.is_file() or FINALIZE.is_symlink():
+        raise RuntimeError("finalize script missing or unsafe")
+    if sha256(FINALIZE)!=FINALIZE_SHA:
+        raise RuntimeError("finalize script checksum mismatch")
+    unit="system-maintenance-finalize-"+datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run([
+        "systemd-run","--no-block","--unit",unit,"--collect",
+        "--property=Type=oneshot","--property=TimeoutStartSec=infinity",
+        "/bin/bash",str(FINALIZE)
+    ])
+    return unit
+
+def process(path):
+    rid=path.stem if REQUEST_RE.fullmatch(path.stem) else f"invalid-{int(time.time())}"
+    result={
+        "schema":1,"request_id":rid,"status":"FAIL","action":None,
+        "unit":None,"started_at":now(),"finished_at":None,"error":None
+    }
+    try:
+        if os.geteuid()!=0:
+            raise RuntimeError("worker must run as root")
+        if os.uname().nodename!=HOST:
+            raise RuntimeError(f"wrong host: {os.uname().nodename}")
+        req=parse(path)
+        rid=req["request_id"]
+        result["request_id"]=rid
+        result["action"]=req["action"]
+        if req["action"]=="debian13-upgrade":
+            unit=launch_debian13()
+        elif req["action"]=="apt-current-upgrade":
+            unit=launch_apt_current()
+        elif req["action"]=="reboot-host":
+            unit=launch_reboot()
+        else:
+            unit=launch_finalize()
+        result["unit"]=unit
+        result["status"]="LAUNCHED"
+    except Exception as exc:
+        result["error"]=str(exc)
+    finally:
+        result["finished_at"]=now()
+        try:
+            publish(result)
+        except Exception:
+            traceback.print_exc()
+        try:
+            os.replace(path,ARCHIVE/path.name)
+        except FileNotFoundError:
+            pass
+
+def main():
+    os.umask(0o077)
+    for directory in (INBOX,RESULTS,ARCHIVE):
+        directory.mkdir(parents=True,exist_ok=True)
+    with LOCK.open("a+") as lock_handle:
+        fcntl.flock(lock_handle,fcntl.LOCK_EX)
+        for request in sorted(INBOX.glob("*.json")):
+            process(request)
+
+if __name__=="__main__":
+    main()

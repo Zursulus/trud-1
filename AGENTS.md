@@ -47,6 +47,10 @@ If sources disagree, stop mutations, establish the current fact, update the stal
 4. Run targeted validation during iteration and full applicable gate before merge.
 5. Review diff and preserve traceability from Issue → PR → merge SHA.
 6. For production work: precheck → backup/rollback readiness → controlled deploy → marker/service/HTTP/user-flow smoke.
+   Use the reviewed fixed-action procedure in `ops/DEPLOYMENT.md`; tool bootstrap,
+   release approval and actual deployment are separate evidence. Pin the exact
+   candidate and helper checksum, preserve request/result and recovery paths,
+   and update the procedure/checkpoint when this contract changes.
 7. Close only when the Issue acceptance criteria and applicable Definition of Done are evidenced.
 8. Update `docs/PLAN.md` only when roadmap/invariants change; update Notion checkpoint only when recovery state changes.
 

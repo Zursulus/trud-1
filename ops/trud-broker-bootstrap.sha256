@@ -1,0 +1,4 @@
+904ccd220cecb97f487dbcb8ca4011df7e5feb8c7cf8de2ec24e882ac1acd836  deploy-trud-compatible.sh
+a5091ac14abf438e7fc558b2c241c1b9c22de5875b6322a9dbafc4c2cc1976c9  install-deploy-trud-broker.sh
+8c235e91e8aec8a80bb068d4cf98617d02ea67c56f97fb9ffb40ccc71a777385  smoke-deploy-trud-broker.sh
+89fe78a9b4afe6b55b48558207d34dd2bb8ac8bd931f427c56e7e1c1fc02d0ed  trud-release-157.conf
