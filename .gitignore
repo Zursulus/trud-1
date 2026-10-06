@@ -9,3 +9,8 @@ backend/test-artifacts/
 private-data/
 *.dump
 *.pickle
+
+# Keep privileged maintenance snapshots out of Git history.
+ops/tests/*maintenance-worker*reviewed*.fixture
+ops/tests/*maintenance-worker*observed*.fixture
+ops/tests/*maintenance-worker*production*.fixture
