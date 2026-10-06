@@ -31,6 +31,8 @@ If sources disagree, stop mutations, establish the current fact, update the stal
 ## Safety invariants
 
 - Never commit real resident data, backups, secrets, tokens or production credentials.
+- Never commit byte-identical copies of privileged production maintenance executables, service/config snapshots or private control material. Tests must use synthetic contract fixtures only.
+- Production-derived forensic material stays in restricted evidence/recovery storage outside tracked Git history; GitHub keeps only the minimum non-sensitive metadata needed for traceability.
 - Do not invent or silently discard ambiguous owner, account, plot, meter, reading or import data. Preserve it for review.
 - Do not bypass application validation/history with direct SQL or `QuerySet.update()` / `bulk_update()` for audited application changes.
 - Do not weaken authentication, MFA, permissions, CSRF or history just to make a test pass.
