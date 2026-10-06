@@ -8,7 +8,7 @@
   <header class="wb-head"><div><p class="wb-eyebrow">РЕЕСТР И СВЯЗИ</p><h1>Жители и участки</h1><p>Человек, его участки, доступы и счётчики — в одной карточке.</p></div><a href="{% url 'staff_workspace:more' %}">Вернуться в рабочую базу</a></header>
   <div class="wb-layout">
     <aside class="wb-card wb-search" aria-label="Поиск объектов и жителей">
-      <form method="get"><label for="wb-query">Адрес, имя, логин или ID</label><input id="wb-query" name="q" value="{{ q }}" maxlength="160" placeholder="Найти жителя или участок"><button type="submit">Найти</button></form>
+      <form method="get"><label for="wb-query">Адрес, имя, логин, телефон, e-mail или ID</label><input id="wb-query" name="q" value="{{ q }}" maxlength="160" placeholder="Найти жителя или участок"><button type="submit">Найти</button></form>
       {% if q %}<p class="wb-muted">Найдено: {{ results|length }}{% if search_truncated %}+ · уточните поиск{% endif %}</p>{% endif %}
       <nav class="wb-results" aria-label="Результаты поиска">
         {% for result in results %}<a href="{{ result.url }}&amp;q={{ q|urlencode }}"><small>{{ result.type }}</small><strong>{{ result.label }}</strong><span aria-hidden="true">→</span></a>{% empty %}<p class="wb-muted">{% if q %}Ничего не найдено. Попробуйте часть адреса или имени.{% else %}Введите адрес, имя или логин. Данные появятся после поиска.{% endif %}</p>{% endfor %}
