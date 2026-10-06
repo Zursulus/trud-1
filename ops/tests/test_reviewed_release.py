@@ -41,7 +41,9 @@ elif name == 'curl':
         dest = pathlib.Path(a[a.index('--output') + 1])
         shutil.copyfile(pathlib.Path(os.environ['SOURCE_OPS']) / dest.name, dest)
         if failure == 'checksum': dest.write_text('corrupt')
-    else: print('{}')
+    else:
+        if failure == 'observer': sys.exit(22)
+        print('{}')
 elif name == 'bash':
     if a[0] == '-n': os.execv('/bin/bash', ['/bin/bash', *a])
     if failure in ('backup', 'bootstrap', 'smoke'):
@@ -56,6 +58,9 @@ elif name == 'deploy': sys.exit(3 if failure == 'postcheck' else 0)
             source = (OPS / "release-reviewed-157.sh").read_text()
             source = source.replace('export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', f'export PATH={bins}:/usr/bin:/bin')
             source = source.replace('/var/lib/trud-1/deployment-status.json', str(marker))
+            worker = root / 'worker'; worker.write_bytes((OPS / 'tests' / 'maintenance-worker-reviewed.fixture').read_bytes())
+            if failure == 'worker': worker.write_text('unreviewed worker')
+            source = source.replace('/usr/local/sbin/system-maintenance-worker', str(worker))
             source = source.replace('/root/trud-release-157.', str(stage / 'release.'))
             source = source.replace('/var/backups/trud-1-release-157.', str(stage / 'backup.'))
             source = source.replace('/usr/local/sbin/deploy-trud-compatible\n', str(bins / 'deploy') + '\n')
@@ -73,7 +78,7 @@ elif name == 'deploy': sys.exit(3 if failure == 'postcheck' else 0)
         self.assertIn('RELEASE_157=PASS', result.stdout)
 
     def test_failure_gates_never_start_deploy(self):
-        for failure in ('drift', 'space', 'scanner', 'checksum', 'backup', 'bootstrap', 'smoke'):
+        for failure in ('worker', 'drift', 'space', 'scanner', 'checksum', 'backup', 'bootstrap', 'smoke'):
             with self.subTest(failure=failure):
                 result, calls = self.execute(failure)
                 self.assertNotEqual(result.returncode, 0)
@@ -81,9 +86,11 @@ elif name == 'deploy': sys.exit(3 if failure == 'postcheck' else 0)
                 self.assertNotIn('RELEASE_157=PASS', result.stdout)
 
     def test_late_failure_is_not_reported_as_success(self):
-        result, calls = self.execute('postcheck')
-        self.assertEqual(result.returncode, 3)
-        self.assertNotIn('RELEASE_157=PASS', result.stdout)
+        for failure in ('postcheck', 'observer'):
+            with self.subTest(failure=failure):
+                result, calls = self.execute(failure)
+                self.assertEqual(result.returncode, 3)
+                self.assertNotIn('RELEASE_157=PASS', result.stdout)
 
 
 if __name__ == '__main__':
