@@ -52,13 +52,19 @@ class WorkbenchContrastReleaseTests(unittest.TestCase):
 
     def test_postcheck_requires_marker_services_and_exact_collected_css(self):
         deploy = self.text.index('bash "$STAGE/deploy-compatible.sh" "$TARGET" "$EXPECTED"')
-        marker = self.text.index('assert marker.get(\'commit\') == sys.argv[2]', deploy)
+        marker = self.text.index("assert marker.get('commit') == sys.argv[2]", deploy)
         css = self.text.index('cmp "$CSS_EXPECTED" "$APP/backend/staticfiles/water/workbench.css"', deploy)
-        http = self.text.index('static/water/workbench.css?release=$TARGET', deploy)
+        http = self.text.index('admin-static/water/workbench.css?release=$TARGET', deploy)
         self.assertLess(deploy, marker)
         self.assertLess(marker, css)
         self.assertLess(css, http)
         self.assertIn("03ef8259e570c80b91dd97034169e64e34ba8b8a0ead9224cfb3425e8dfbacfa", self.text)
+
+    def test_late_postcheck_failure_is_committed_not_fake_rollback(self):
+        deploy = self.text.index('bash "$STAGE/deploy-compatible.sh" "$TARGET" "$EXPECTED"')
+        late = self.text.index("RELEASE_160=COMMITTED_POSTCHECK_FAILED", deploy)
+        self.assertLess(deploy, late)
+        self.assertIn("exit 3", self.text)
         self.assertIn("RELEASE_160=PASS", self.text)
 
     def test_no_generic_privilege_or_destructive_shortcuts(self):
