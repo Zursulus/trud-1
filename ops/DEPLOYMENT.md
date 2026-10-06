@@ -6,10 +6,10 @@
 резервную копию с восстановлением во временную БД, bootstrap/smoke инструмента
 и синхронный вызов фиксированного broker. Запускать проверенный файл от root
 после сверки его SHA256 с exact опубликованным пакетом. Скрипт закрепляет source
-инструмента `677a05184fa7b4ddaeb1a491d9ce4332e68ee911` и target сайта #157;
+инструмента в поле `SOURCE` и target сайта #157;
 не использует latest HEAD. Пакет переносится в новый root-owned staging.
 
-До установки проверяются исходный SHA/clean tree, службы/Nginx, консервативный
+До установки проверяются SHA256 реального reviewed worker, исходный SHA/clean tree, службы/Nginx, консервативный
 бюджет свободного места и реальные clean/standard-test-signature scan под
 trudsite. Backup создаётся в новом `/var/backups/trud-1-release-157.*`:
 старые копии не удаляются. Отказ любого gate останавливает дальнейший запуск.
@@ -75,12 +75,22 @@ bash ./smoke-deploy-trud-broker.sh
 ```
 
 Bootstrap не выпускает сайт и не ставит заявку. Он проверяет известный контракт
-worker/client, `launch_exact`, активный watcher, отсутствие работающего worker
+worker/client, активный watcher, отсутствие работающего worker
 и заявок, доверенные пути и source-файлы. Неизвестный контракт останавливает
 установку до изменения файлов: требуется прочитать реальный worker через
 разрешённый root route и сверить его реализацию, а не ослаблять проверку.
-Чтение worker на production в аудите 05.10 отказало EACCES; совпадение его
-контракта пока не подтверждено. Client и watcher прочитаны отдельно.
+При запуске 06.10 выяснилось, что реальный worker вообще не содержит
+`launch_exact`: прежний synthetic fixture не совпадал с ним. Прочитана private
+root-owned копия; исходный worker SHA256
+`be2e36aa8a6b37fb7a8f8967dccf7a7f324f41eed7f928c7e1e0693f38694071`.
+Bootstrap принимает только этот worker или своё точное расширение. Добавляется
+только no-argument `launch_trud_deploy`: root-owned helper с закреплённым SHA256,
+фиксированный systemd-run, без request arguments. Старые action functions,
+parse/publish/archive остаются побайтно прежними; result `LAUNCHED` означает
+запущенный unit, его успех и deployment проверяются отдельно. Read-only smoke
+сверяет полный SHA256 расширенного worker. Fixture из reviewed source содержит
+только maintenance code без resident data/credentials; tests исполняют dispatch
+с host-operation stubs, проверяют helper drift и сохранение прежних handlers.
 На production также отсутствовал `/etc/system-maintenance`. Bootstrap проверяет
 доверенный `/etc`, сохраняет отметку отсутствия и создаёт только этот каталог
 root 0700 после всех prechecks. Откат удаляет его только если он был создан

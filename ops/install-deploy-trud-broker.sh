@@ -26,7 +26,7 @@ fi
 STAGE=$(mktemp -d /var/backups/trud-broker-bootstrap.XXXXXXXX)
 mkdir "$STAGE/before" "$STAGE/after"
 python3 - "$WORKER" "$SUBMIT" "$HELPER" "$MANIFEST" "$SRC" "$STAGE" <<'PY'
-import ast, pathlib, shutil, stat, sys
+import ast, hashlib, pathlib, shutil, stat, sys
 worker, submit, helper, manifest, src, stage = map(pathlib.Path, sys.argv[1:])
 for path in (worker, submit, helper, manifest,
              src / 'deploy-trud-compatible.sh', src / 'trud-release-157.conf'):
@@ -52,14 +52,41 @@ if not worker.is_file() or not submit.is_file():
 expected = 'ACTIONS={"debian13-upgrade","apt-current-upgrade","reboot-host","post-upgrade-finalize"}'
 expanded = expected[:-1] + ',"deploy-trud-compatible"}'
 marker = '        elif req["action"]=="reboot-host":\n            unit=launch_reboot()'
-dispatch = '        elif req["action"]=="deploy-trud-compatible":\n            unit=launch_exact(["/usr/local/sbin/deploy-trud-compatible"], "trud-deploy")'
+dispatch = '        elif req["action"]=="deploy-trud-compatible":\n            unit=launch_trud_deploy()'
+reviewed_worker_sha = 'be2e36aa8a6b37fb7a8f8967dccf7a7f324f41eed7f928c7e1e0693f38694071'
+launcher = '''def launch_trud_deploy():
+    import stat
+    helper=Path("/usr/local/sbin/deploy-trud-compatible")
+    info=helper.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise RuntimeError("Deploy helper missing or unsafe")
+    if sha256(helper)!="904ccd220cecb97f487dbcb8ca4011df7e5feb8c7cf8de2ec24e882ac1acd836":
+        raise RuntimeError("Deploy helper checksum mismatch")
+    unit="trud-deploy-"+datetime.utcnow().strftime("%Y%m%dT%H%M%S%fZ")
+    run([
+        "systemd-run","--no-block","--unit",unit,"--collect",
+        "--property=Type=oneshot","--property=TimeoutStartSec=infinity",
+        str(helper)
+    ])
+    return unit
+
+'''
 for path in (worker, submit):
     text = path.read_text()
+    if path == worker:
+        # Accept only the observed worker, or our exact installed extension.
+        original = text.replace(expanded, expected, 1)
+        if launcher in original and dispatch in original:
+            original = original.replace(launcher, '', 1).replace('\n' + dispatch, '', 1)
+        if hashlib.sha256(original.encode()).hexdigest() != reviewed_worker_sha:
+            raise SystemExit('Unknown reviewed maintenance worker; read/review required.')
     if text.count(expected) == 1 and expanded not in text:
         text = text.replace(expected, expanded, 1)
     elif text.count(expanded) != 1:
         raise SystemExit(f'Unknown action allowlist contract: {path}')
     if path == worker:
+        if launcher not in text:
+            text = text.replace('def process(path):', launcher + 'def process(path):', 1)
         if dispatch not in text:
             if text.count(marker) != 1:
                 raise SystemExit('Unknown worker dispatch contract.')
@@ -67,9 +94,9 @@ for path in (worker, submit):
         if text.count(dispatch) != 1:
             raise SystemExit('Duplicate deploy dispatch.')
         tree = ast.parse(text)
-        functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == 'launch_exact']
-        if len(functions) != 1 or len(functions[0].args.args) != 2:
-            raise SystemExit('Unknown launch_exact contract.')
+        functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == 'launch_trud_deploy']
+        if len(functions) != 1 or functions[0].args.args:
+            raise SystemExit('Unknown fixed deploy launcher contract.')
     else:
         usage = 'usage: system-maintenance-submit debian13-upgrade|apt-current-upgrade|reboot-host|post-upgrade-finalize'
         if usage + '|deploy-trud-compatible' not in text:

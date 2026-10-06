@@ -1,5 +1,8 @@
 """Execute the bootstrap against isolated files, never a real maintenance service."""
 import json
+import hashlib
+from types import SimpleNamespace
+from unittest import mock
 import os
 from pathlib import Path
 import subprocess
@@ -7,19 +10,7 @@ import tempfile
 import unittest
 
 OPS = Path(__file__).resolve().parents[1]
-WORKER = '''#!/usr/bin/env python3
-ACTIONS={"debian13-upgrade","apt-current-upgrade","reboot-host","post-upgrade-finalize"}
-def launch_exact(argv, prefix):
-    return argv, prefix
-def launch_reboot():
-    return 'reboot'
-def main(req):
-    if req["action"]=="apt-current-upgrade":
-        unit=launch_exact(["/fixed/apt"], "apt")
-        elif_marker
-'''.replace('        elif_marker', '    elif req["action"]=="reboot-host":\n        unit=launch_reboot()')
-# Installer deliberately expects the existing nested dispatch indentation.
-WORKER = WORKER.replace('    if req[', '        if req[').replace('        unit=launch_exact', '            unit=launch_exact').replace('    elif req[', '        elif req[').replace('        unit=launch_reboot', '            unit=launch_reboot')
+WORKER = (OPS / 'tests' / 'maintenance-worker-reviewed.fixture').read_text()
 MOCK = r'''#!/usr/bin/env python3
 import os, pathlib, signal, subprocess, sys
 name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
@@ -89,7 +80,7 @@ if __name__=="__main__": main()
         (r/'watcher').write_text('start'); (r/'starts').write_text('0')
         if mode=='unknown_worker': (r/'sbin/system-maintenance-worker').write_text(WORKER.replace('ACTIONS=', 'OTHER='))
         if mode=='unknown_submit': (r/'bin/system-maintenance-submit').write_text(submit.replace('ACTIONS=', 'OTHER='))
-        if mode=='no_launcher': (r/'sbin/system-maintenance-worker').write_text(WORKER.replace('def launch_exact', 'def other_launcher'))
+        if mode=='no_launcher': (r/'sbin/system-maintenance-worker').write_text(WORKER.replace('def launch_reboot', 'def other_launcher'))
         if mode=='pending': (r/'inbox/old.json').write_text('{}')
         if mode=='unsafe_file': (r/'sbin/system-maintenance-worker').chmod(0o666)
         if mode=='symlink':
@@ -148,7 +139,7 @@ if __name__=="__main__": main()
         rejected=subprocess.run(['python3',str(r/'bin/system-maintenance-submit'),'arbitrary-root-command'],capture_output=True,text=True)
         self.assertNotEqual(rejected.returncode,0)
         self.assertEqual(len(list((r/'requests/inbox').glob('*.json'))),1)
-        self.assertIn('unit=launch_exact(["'+str(r/'sbin/deploy-trud-compatible')+'"], "trud-deploy")',(r/'sbin/system-maintenance-worker').read_text())
+        self.assertIn('unit=launch_trud_deploy()', (r/'sbin/system-maintenance-worker').read_text())
         self.assertEqual((r/'watcher').read_text(),'start')
         self.assertTrue(list((r/'backups').glob('*/before/system-maintenance-worker')))
         self.assertNotIn('trud-1-site.service',(r/'calls').read_text())
@@ -161,6 +152,43 @@ if __name__=="__main__": main()
         second=self.execute(r)
         self.assertEqual(second.returncode,0,second.stderr)
         for p,data in content.items():self.assertEqual(p.read_bytes(),data)
+
+    def test_observed_worker_fixed_dispatch_publishes_launched_not_deployed(self):
+        self.assertEqual(hashlib.sha256(WORKER.encode()).hexdigest(),
+            'be2e36aa8a6b37fb7a8f8967dccf7a7f324f41eed7f928c7e1e0693f38694071')
+        r=self.fixture(); result=self.execute(r)
+        self.assertEqual(result.returncode,0,result.stderr)
+        namespace={'__name__':'reviewed_fixture'}
+        exec(compile((r/'sbin/system-maintenance-worker').read_text(),'worker','exec'),namespace)
+        calls=[]; results=[]
+        namespace['run']=lambda argv, **kwargs: calls.append(argv)
+        namespace['publish']=lambda value: results.append(dict(value))
+        namespace['ARCHIVE']=r/'archive'; namespace['ARCHIVE'].mkdir()
+        request=r/'inbox/test-release.json'
+        request.write_text(json.dumps({'schema':1,'request_id':'test-release','action':'deploy-trud-compatible'}))
+        with mock.patch.object(namespace['os'],'geteuid',return_value=0), \
+             mock.patch.object(namespace['os'],'uname',return_value=SimpleNamespace(nodename=namespace['HOST'])):
+            namespace['process'](request)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0][0],'systemd-run')
+        self.assertEqual(calls[0][-1],str(r/'sbin/deploy-trud-compatible'))
+        self.assertIn('--no-block',calls[0])
+        self.assertEqual(results[0]['status'],'LAUNCHED')
+        self.assertTrue(results[0]['unit'].startswith('trud-deploy-'))
+        self.assertFalse(request.exists())
+
+    def test_fixed_worker_launcher_refuses_foreign_arguments_and_helper_drift(self):
+        r=self.fixture(); result=self.execute(r)
+        self.assertEqual(result.returncode,0,result.stderr)
+        namespace={'__name__':'reviewed_fixture'}
+        exec(compile((r/'sbin/system-maintenance-worker').read_text(),'worker','exec'),namespace)
+        calls=[]; namespace['run']=lambda argv: calls.append(argv)
+        with self.assertRaises(TypeError): namespace['launch_trud_deploy']('/arbitrary/command')
+        helper=r/'sbin/deploy-trud-compatible'; helper.write_text('foreign helper')
+        with self.assertRaisesRegex(RuntimeError,'checksum mismatch'): namespace['launch_trud_deploy']()
+        helper.chmod(0o666)
+        with self.assertRaisesRegex(RuntimeError,'unsafe'): namespace['launch_trud_deploy']()
+        self.assertEqual(calls,[])
 
     def test_missing_manifest_parent_is_created_privately(self):
         r=self.fixture(missing_parent=True); result=self.execute(r)
@@ -179,6 +207,7 @@ if __name__=="__main__": main()
                         '/etc/system-maintenance/trud-release.conf':r/'etc/trud-release.conf'}.items():
             script=script.replace(old,str(new))
         script=script.replace('info.st_uid != 0 or ','')
+        script=script.replace('19d3f246b88056fd391b54cf6d572724a3ef747ce1f9070be1a5dc0846f3c8ce', hashlib.sha256((r/'sbin/system-maintenance-worker').read_bytes()).hexdigest())
         (r/'src/smoke.sh').write_text(script)
         env={**os.environ,'PATH':str(r/'bin')+':'+os.environ['PATH'],'FAKE_ROOT':str(r)}
         def smoke():

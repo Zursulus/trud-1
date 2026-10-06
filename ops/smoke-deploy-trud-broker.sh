@@ -3,7 +3,7 @@ set -Eeuo pipefail
 [[ $(id -u) -eq 0 && $# -eq 0 ]] || { echo 'root, no arguments required' >&2; exit 2; }
 SRC="$(cd "$(dirname "$0")" && pwd)"
 python3 - <<'PY'
-import ast, pathlib, stat
+import ast, hashlib, pathlib, stat
 paths = ('/usr/local/sbin/system-maintenance-worker',
          '/usr/local/bin/system-maintenance-submit',
          '/usr/local/sbin/deploy-trud-compatible',
@@ -23,8 +23,8 @@ for name in paths[:2]:
         raise SystemExit(f'Deploy action missing: {name}')
     compile(text, name, 'exec')
 worker = pathlib.Path(paths[0]).read_text()
-if 'unit=launch_exact(["/usr/local/sbin/deploy-trud-compatible"], "trud-deploy")' not in worker:
-    raise SystemExit('Deploy dispatch missing.')
+if hashlib.sha256(worker.encode()).hexdigest() != '19d3f246b88056fd391b54cf6d572724a3ef747ce1f9070be1a5dc0846f3c8ce':
+    raise SystemExit('Reviewed fixed deploy worker mismatch.')
 PY
 cmp "$SRC/trud-release-157.conf" /etc/system-maintenance/trud-release.conf
 cmp "$SRC/deploy-trud-compatible.sh" /usr/local/sbin/deploy-trud-compatible
