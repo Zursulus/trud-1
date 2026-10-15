@@ -1,6 +1,6 @@
 #!/bin/bash
 # Claude, 15.10.2026. Создаёт учётку claude-ro: читает ЛЮБЫЕ файлы, писать может только в /home/claude-ro.
-# Запуск: sudo bash claude-ro-setup.sh            — шаг 1 (установка) + шаг 2 (вход в Desktop Commander)
+# Всё ставится в отдельный файл-диск 600 МБ (/var/lib/claude-ro.img): переполнить основной диск невозможно.
 # Отмена: sudo bash claude-ro-remove.sh
 set -Eeuo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Запусти через sudo"; exit 1; }
@@ -8,13 +8,22 @@ U=claude-ro; H=/home/$U; DC=$H/.local/desktop-commander
 NODE=$(command -v node || true); [ -x "${NODE:-}" ] || NODE=/opt/node/current/bin/node
 [ -x "$NODE" ] || { echo "Не найден node"; exit 1; }
 NPM="$(dirname "$NODE")/npm"; [ -x "$NPM" ] || { echo "Не найден npm рядом с $NODE"; exit 1; }
-FREE=$(df -Pk /home | awk 'NR==2{print $4}'); [ "$FREE" -gt 3000000 ] || { echo "Меньше 3 ГБ свободно в /home — сначала расширь диск"; exit 1; }
+CAP=600   # МБ: потолок для всего, что поставит claude-ro (отдельный файл-диск)
+IMG=/var/lib/claude-ro.img
+FREE=$(df -Pm / | awk 'NR==2{print $4}'); [ "$FREE" -gt $((CAP+400)) ] || { echo "Нужно хотя бы $((CAP+400)) МБ свободно, а есть $FREE"; exit 1; }
 # Не скачивать браузер Chrome/Chromium (в первый раз он занял весь остаток диска песочницы)
-NOBROWSER="PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"
-guard() { local f; f=$(df -Pk /home | awk 'NR==2{print $4}'); [ "$f" -gt 1000000 ] || { echo "СТОП: свободно меньше 1 ГБ после шага '$1'. Откати: sudo bash $(dirname "$0")/claude-ro-remove.sh"; systemctl stop claude-ro-dc.service 2>/dev/null || true; exit 1; }; }
+NOBROWSER="TMPDIR=/home/claude-ro/tmp npm_config_cache=/home/claude-ro/.npm PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"
+guard() { local f; f=$(df -Pk / | awk 'NR==2{print $4}'); [ "$f" -gt 300000 ] || { echo "СТОП: на основном диске меньше 300 МБ после шага '$1'. Откати: sudo bash $(dirname "$0")/claude-ro-remove.sh"; systemctl stop claude-ro-dc.service 2>/dev/null || true; exit 1; }; }
 
 echo "== 1/4 учётка $U (без пароля, без входа, без sudo)"
-id $U >/dev/null 2>&1 || useradd --system --create-home --home-dir $H --shell /usr/sbin/nologin $U
+if ! mountpoint -q $H; then
+  [ -e $IMG ] || { fallocate -l ${CAP}M $IMG; chmod 600 $IMG; mkfs.ext4 -q -m 0 $IMG; }
+  mkdir -p $H; grep -q "^$IMG " /etc/fstab || echo "$IMG $H ext4 loop,nodev,nosuid 0 2" >> /etc/fstab
+  systemctl daemon-reload; mount $H
+fi
+id $U >/dev/null 2>&1 || useradd --system --no-create-home --home-dir $H --shell /usr/sbin/nologin $U
+chown $U:$U $H; chmod 750 $H; mkdir -p $H/tmp; chown $U:$U $H/tmp
+echo "   папка $H = отдельный диск ${CAP} МБ: $(df -h $H | awk 'NR==2{print $2}')"
 passwd -l $U >/dev/null
 for g in sudo wheel adm; do gpasswd -d $U $g >/dev/null 2>&1 || true; done
 
@@ -29,12 +38,13 @@ cat > /etc/systemd/system/claude-ro-dc.service <<UNIT
 Description=Desktop Commander for Claude (read-only everywhere)
 After=network-online.target
 Wants=network-online.target
+RequiresMountsFor=$H
 [Service]
 User=$U
 Group=$U
 Environment=HOME=$H
 Environment=PATH=$(dirname "$NODE"):/usr/local/bin:/usr/bin:/bin
-Environment=PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+Environment=TMPDIR=$H/tmp PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WorkingDirectory=$H
 ExecStart=$NODE $JS remote --disable-no-sleep
 Restart=always
@@ -46,7 +56,7 @@ NoNewPrivileges=yes
 # Вся система только для чтения, кроме своей папки
 ProtectSystem=strict
 ReadWritePaths=$H
-PrivateTmp=yes
+TemporaryFileSystem=/tmp:size=50M
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
