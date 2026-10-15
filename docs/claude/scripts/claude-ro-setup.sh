@@ -55,15 +55,21 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 
-echo "== 4/4 вход в аккаунт Desktop Commander (один раз)"
-echo "Сейчас появится ссылка — открой её в браузере и войди в тот же аккаунт Desktop Commander."
-echo "Когда увидишь, что устройство подключено, нажми Ctrl+C — дальше служба запустится сама."
-trap 'echo; echo "Ctrl+C принят, продолжаю установку службы..."' INT
-sudo -u $U -H env $NOBROWSER PATH="$(dirname "$NODE"):/usr/bin:/bin" "$NODE" "$JS" remote --disable-no-sleep || true
-trap - INT
-guard "вход"
+echo "== 4/4 запуск службы и ссылка для входа"
 systemctl enable --now claude-ro-dc.service
 sleep 3; systemctl --no-pager --lines=5 status claude-ro-dc.service || true
+LINKFILE=/tmp/claude-ro-login-link.txt; LINK=""
+for i in $(seq 1 30); do
+  LINK=$(journalctl -u claude-ro-dc.service --since "-5min" -o cat 2>/dev/null | grep -o 'https://mcp.desktopcommander.app/device/verify?user_code=[A-Z0-9-]*' | tail -1)
+  [ -n "$LINK" ] && break; sleep 2
+done
+if [ -n "$LINK" ]; then
+  echo "$LINK" > "$LINKFILE"; chmod 644 "$LINKFILE"
+  echo; echo "ССЫЛКА ДЛЯ ВХОДА (Claude пришлёт её в чат кликабельной): $LINK"
+  echo "Код действует 15 минут. Терминал можно не трогать."
+else
+  echo "Ссылку в журнале не нашёл. Посмотреть: sudo journalctl -u claude-ro-dc -n 30"
+fi
 echo "Жду 30 секунд и проверяю, что служба не съела диск..."; sleep 30; guard "запуск службы"
 df -h /home | tail -1
 echo "ГОТОВО. Проверка: sudo -u $U touch /etc/claude-test  -> должно быть 'Read-only file system' или 'Permission denied'"
