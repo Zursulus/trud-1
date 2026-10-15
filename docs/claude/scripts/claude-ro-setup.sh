@@ -53,7 +53,9 @@ systemctl daemon-reload
 echo "== 4/4 вход в аккаунт Desktop Commander (один раз)"
 echo "Сейчас появится ссылка — открой её в браузере и войди в тот же аккаунт Desktop Commander."
 echo "Когда увидишь, что устройство подключено, нажми Ctrl+C — дальше служба запустится сама."
+trap 'echo; echo "Ctrl+C принят, продолжаю установку службы..."' INT
 sudo -u $U -H env PATH="$(dirname "$NODE"):/usr/bin:/bin" "$NODE" "$JS" remote --disable-no-sleep || true
+trap - INT
 systemctl enable --now claude-ro-dc.service
 sleep 3; systemctl --no-pager --lines=5 status claude-ro-dc.service || true
 echo "ГОТОВО. Проверка: sudo -u $U touch /etc/claude-test  -> должно быть 'Read-only file system' или 'Permission denied'"
