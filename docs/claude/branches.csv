@@ -1,0 +1,166 @@
+branch,last,author,in_prod,ahead_of_prod,prs,task,last_commit
+fix/deploy-broker-selfservice-133-20261006,2026-10-06,Zursulus,нет,4,,133,#133 pin self-service deploy to one promotion ref
+fix/deploy-broker-v2-133-20261006,2026-10-06,Zursulus,да,0,,133,#159 restore workbench contrast browser regression
+fix/production-monitor-orchestra-164-20261006,2026-10-06,Zursulus,нет,3,#165 open→main,164,fix: align production monitoring with Orchestra release contract
+fix/release-public-atomic-20261005,2026-10-06,Zursulus,нет,4,#157 open→fix/ui-flow-polish-20261005,,Add CI guard for synthetic maintenance fixtures
+fix/release-workbench-160-20261006,2026-10-06,Zursulus,нет,8,#162 open→fix/deploy-broker-bootstrap-20261005,160,#161 test #160 release launcher contract
+fix/release-workbench-contrast-160-20261006,2026-10-06,Zursulus,нет,4,#163 open→fix/workbench-contrast-regression-20261006,160,Test corrected #160 release postcheck
+fix/workbench-contrast-regression-20261006,2026-10-06,Zursulus,да,0,#160 open→fix/release-public-atomic-20261005,,#159 restore workbench contrast browser regression
+fix/deploy-broker-bootstrap-20261005,2026-10-05,Zursulus,да,0,#158 closed→fix/release-public-atomic-20261005,,Use service context inside rehearsal steps and preserve helper executable mode
+fix/night-ui-readiness-20261004,2026-10-05,Zursulus,да,0,#155 open→release/143-cumulative-rc,,Scope staff moderation queues by finalization authority
+fix/ui-flow-polish-20261005,2026-10-05,Zursulus,да,0,#156 open→fix/night-ui-readiness-20261004,,test: await access approval POST navigation
+agent/144-appserver-e2e-smoke,2026-10-03,Zursulus,нет,3,#147 open→main,144,agent: issue #144
+agent/144-orchestra-e2e-smoke,2026-10-03,Zursulus,нет,3,#145 open→main,144,agent: issue #144
+agent/146-orchestra-cron-smoke,2026-10-03,Zursulus,нет,1,#148 open→release/cycle3-final-rc,146,agent: issue #146
+agent/151-151-1791047086-0c8690a8,2026-10-03,Zursulus,нет,1,#153 open→release/cycle3-final-rc,151,Orchestra Issue #151
+agent/152-152-1791051729-ff4ddd3d,2026-10-03,Zursulus,нет,1,#154 open→release/cycle3-final-rc,152,Orchestra Issue #152
+feature/deploy-broker-133,2026-10-03,Zursulus,нет,6,#139 open→validation/deploy-broker-133-base,133,Make Moscow-midnight expiry regression deterministic (#140)
+feature/vtb-74-dryrun,2026-10-03,Zursulus,нет,2,#130 closed→validation/security-80-prod-base,74,#74 add read-only VTB registry parser and real-sample tests
+feature/vtb-debt-export-135,2026-10-03,Zursulus,нет,16,#136 open→validation/security-80-prod-base,135,Match localized debt amount in browser regression (#135)
+feature/vtb-dryrun-74,2026-10-03,Zursulus,нет,18,#137 open→validation/vtb-74-prod-base,74,Make Moscow-midnight expiry regression deterministic (#140)
+feature/workbench-meter-access-131,2026-10-03,Zursulus,нет,7,#132 closed→validation/security-80-prod-base,131,#131 add Chromium/WebKit mobile meter-binding acceptance
+fix/131-resident-multimeter,2026-10-03,Zursulus,нет,15,,131,Keep resident meter lifecycle check in portal UI
+fix/143-c-migration-release,2026-10-03,Zursulus,нет,6,,143,Make Moscow-midnight expiry regression deterministic (#140)
+issue143/a-resident-multimeter-v2,2026-10-03,Zursulus,нет,14,,issue143,Fix resident multi-meter correctness (#143)
+issue143/a-resident-multimeter-v3,2026-10-03,Zursulus,нет,13,,issue143,Fix meter-binding E2E strict locator (#131)
+issue143/c-migration-aware,2026-10-03,Zursulus,нет,6,,issue143,Make Moscow-midnight expiry regression deterministic (#140)
+orchestra/control-lane-20261003,2026-10-03,Zursulus,нет,3,#142 open→main,,chore: add non-merge orchestra control lane
+release/143-cumulative-rc,2026-10-03,Zursulus,да,0,#149 open→validation/cycle3-final-rc-base,143,#143 cumulative release candidate
+release/security-80-prod,2026-10-03,Zursulus,нет,76,#128 closed→validation/security-80-prod-base,80,#80 fix private attachment regression expectation
+release/security-80-prod-v1,2026-10-03,Zursulus,нет,46,#129 open→validation/security-80-prod-base,80,#80 align unsafe-extension regression with security-specific form error
+release/workbench-actions-131,2026-10-03,Zursulus,нет,13,#138 open→validation/workbench-actions-131-base,131,Fix meter-binding E2E strict locator (#131)
+feature/staff-registry-editor-125,2026-10-02,Zursulus,да,0,#126 merged→fix/resident-invite-ambiguity-prod,125,#125 keep cross-browser editor search fixture stable
+fix/resident-invite-ambiguity-prod,2026-10-02,Zursulus,нет,7,,,#125 UI: fix workbench editor contrast and labels
+fix/workbench-editor-contrast-125,2026-10-02,Zursulus,нет,6,#127 merged→fix/resident-invite-ambiguity-prod,125,#125 update workbench entry E2E label
+release/cycle3-final-rc,2026-10-02,Zursulus,да,0,,,#125 Staff Workspace: direct personal/contact data editor
+release/security-80-prod-final,2026-10-02,Zursulus,да,0,,80,#125 Staff Workspace: direct personal/contact data editor
+validation/cycle3-final-rc-base,2026-10-02,Zursulus,да,0,,,#125 Staff Workspace: direct personal/contact data editor
+validation/deploy-broker-133-base,2026-10-02,Zursulus,да,0,,133,#125 Staff Workspace: direct personal/contact data editor
+validation/security-80-prod-base,2026-10-02,Zursulus,да,0,,80,#125 Staff Workspace: direct personal/contact data editor
+validation/vtb-74-prod-base,2026-10-02,Zursulus,да,0,,74,#125 Staff Workspace: direct personal/contact data editor
+validation/workbench-actions-131-base,2026-10-02,Zursulus,да,0,,131,#125 Staff Workspace: direct personal/contact data editor
+feature/admin-panel-ci-recovery,2026-10-01,Zursulus,да,0,#119 merged→fix/resident-invite-ambiguity-prod,,Preserve search while following links and simplify resident access labels
+feature/admin-panel-integration,2026-10-01,Zursulus,нет,157,#120 merged→feature/water-admin,,Port read-only workbench to integration without changing security workspace (#118)
+feature/admin-resident-release-121,2026-10-01,Zursulus,да,0,#122 merged→fix/resident-invite-ambiguity-prod,121,Block legacy fallback after explicit resident grant ends (#121)
+feature/water-admin,2026-10-01,Zursulus,нет,158,#1 closed→main,,Merge #120: preserve admin workbench in integration
+fix/resident-document-filters-121,2026-10-01,Zursulus,да,0,#124 merged→fix/resident-invite-ambiguity-prod,121,Consume streaming test response through Django client wrapper
+fix/staff-workspace-logout-121,2026-10-01,Zursulus,да,0,#123 merged→fix/resident-invite-ambiguity-prod,121,fix: make staff workspace logout available without resident access
+validation/staff-registry-editor-125-base,2026-10-01,Zursulus,да,0,,125,Merge pull request #124 from Zursulus/fix/resident-document-filters-121
+chore/roles-guide-sync-integration,2026-09-30,Zursulus,нет,141,#104 merged→feature/water-admin,,Resolve PR #104 against current staff workspace
+fix/issue-114-mixed-role-switch,2026-09-30,Zursulus,нет,155,#115 merged→feature/water-admin,issue-114,Fix #114: drop global mixed-role context processor
+fix/security-scanner-stream-v1,2026-09-30,Zursulus,нет,136,#113 merged→feature/water-admin,,Test scanner command for TCP-compatible streaming
+release/issue-114-mixed-role-prod,2026-09-30,Zursulus,да,0,#116 merged→fix/resident-invite-ambiguity-prod,issue-114,Fix #114: drop global production mixed-role context
+feature/internal-roles-guide-v1,2026-09-29,Zursulus,да,0,,,test: cover internal web roles guide
+feature/issue-106-simple-workspace,2026-09-29,Zursulus,нет,131,#107 merged→feature/water-admin,issue-106,test: isolate staff water browser sessions
+fix/combined-role-ux-prod,2026-09-29,Zursulus,да,0,#108 merged→fix/resident-invite-ambiguity-prod,,test: cover mixed resident staff login guidance
+fix/issue-106-query-budget,2026-09-29,Zursulus,нет,133,#112 merged→feature/water-admin,issue-106,perf: avoid duplicate staff water context lookup
+fix/issue-106-simple-workspace-prod,2026-09-29,Zursulus,да,0,#111 merged→fix/resident-invite-ambiguity-prod,issue-106,test: align legacy work-tab e2e with simplified navigation
+fix/line-senior-self-review-policy-prod,2026-09-29,Zursulus,да,0,#110 merged→fix/resident-invite-ambiguity-prod,,test: expect roles guide v1.1
+fix/line-senior-self-review-prod,2026-09-29,Zursulus,да,0,,,Merge #108: mixed resident/staff UX
+fix/resident-invite-ambiguity-clean,2026-09-29,Zursulus,нет,1,,,fix: bind resident access requests to the requesting cabinet
+fix/resident-request-invite-ambiguity-integration-v1,2026-09-29,Zursulus,нет,108,#105 merged→feature/water-admin,,fix: bind resident access requests to exact cabinet
+fix/resident-request-invite-ambiguity-v1,2026-09-29,Zursulus,нет,11,,,test: reject ambiguous unbound invite approval
+ci/issue-99-production-base,2026-09-28,Zursulus,да,0,,issue-99,Release #97: granular resident access production backport
+design/access-control-v2,2026-09-28,Zursulus,нет,3,,,"docs: map people, property, water, governance and delegation relationships"
+docs/reconcile-roadmap-after-access-v2,2026-09-28,Zursulus,нет,106,#103 merged→feature/water-admin,,docs: reconcile roadmap after access v2 production
+feature/access-control-v2-foundation,2026-09-28,Zursulus,нет,11,,,access v2: keep resolver fixtures within account field limits
+feature/issue-97-resident-grants,2026-09-28,Zursulus,нет,97,#98 merged→feature/water-admin,issue-97,access: merge security and granular invite migration branches
+feature/issue-99-access-control-v2-foundation,2026-09-28,Zursulus,нет,101,#100 merged→feature/water-admin,issue-99,Fix access center browser expectations
+fix/issue-99-production-migration-graph,2026-09-28,Zursulus,нет,104,#101 merged→feature/water-admin,issue-99,Add merge node for security and access v2 migrations
+release/issue-97-production,2026-09-28,Zursulus,да,0,,issue-97,Release #97: granular resident access production backport
+release/issue-99-production,2026-09-28,Zursulus,да,0,#102 closed→ci/issue-99-production-base,issue-99,Release #99: include E2E contract in guarded allowlist
+chore/github-workflow-reorg,2026-09-27,Zursulus,да,0,#77 merged→feature/water-admin,,docs: separate roadmap from operational tracking
+docs/staff-workspace-architecture-v1,2026-09-27,Zursulus,да,0,#68 merged→feature/water-admin,,Update canonical plan for staff workspace phase
+feature/staff-governance-89,2026-09-27,Zursulus,нет,64,,89,Add governance workspace tests for #89
+feature/staff-workspace-access,2026-09-27,Zursulus,да,0,#79 merged→feature/water-admin,,Update roadmap through Staff Workspace Access
+feature/staff-workspace-appeals,2026-09-27,Zursulus,да,0,#71 merged→feature/water-admin,,Fix appeals workspace regression assertions
+feature/staff-workspace-documents,2026-09-27,Zursulus,нет,49,#85 merged→feature/water-admin,,Update Staff Workspace release baseline and Documents state
+feature/staff-workspace-finance,2026-09-27,Zursulus,да,0,#72 merged→feature/water-admin,,Keep finance E2E ORM outside Playwright sync context
+feature/staff-workspace-governance-89,2026-09-27,Zursulus,нет,73,#91 merged→feature/water-admin,89,Fix governance tests to use staff board permissions
+feature/staff-workspace-slice-1,2026-09-27,Zursulus,да,0,#69 merged→feature/water-admin,,Make water table keyboard-scrollable
+feature/staff-workspace-water,2026-09-27,Zursulus,да,0,#70 merged→feature/water-admin,,Fix water hub action selector in browser smoke
+fix/admin-return-to-work,2026-09-27,Zursulus,да,0,#83 merged→feature/water-admin,,Match admin return-link regression to actual label
+fix/issue-86-work-tab,2026-09-27,Zursulus,нет,34,#87 closed→feature/water-admin,issue-86,Fix #86: cover dedicated Work tab regression
+fix/issue-86-work-tab-v2,2026-09-27,Zursulus,нет,58,#88 merged→feature/water-admin,issue-86,Fix #86: scope bottom-nav E2E to mobile viewports
+fix/issue-92-mfa-password-policy,2026-09-27,Zursulus,нет,86,#95 merged→feature/water-admin,issue-92,Fix MFA profile test to use default TOTP device
+fix/issue-92-optional-2fa,2026-09-27,Zursulus,нет,92,#96 merged→feature/water-admin,issue-92,Issue #92: replace legacy mandatory-OTP expectation
+release/documents-84-clean,2026-09-27,Zursulus,да,0,,84,Prepare clean Documents release without security hardening
+release/documents-worktab-84-86-clean,2026-09-27,Zursulus,да,0,,84,Release #84/#86: run clean Work-tab mobile E2E
+release/governance-89-clean,2026-09-27,Zursulus,да,0,,89,Release #89: clean governance Staff Workspace
+release/issue-92-optional-2fa,2026-09-27,Zursulus,да,0,,issue-92,Release #92: allow legacy-policy test update
+release/issue-92-prod-hotfix,2026-09-27,Zursulus,да,0,,issue-92,Release #92: fix production password-policy smoke check
+security/appeal-attachments-spam-alerts,2026-09-27,Zursulus,нет,27,#81 merged→feature/water-admin,,Harden legacy appeal admin upload path
+security/appeal-attachments-spam-alerts-v2,2026-09-27,Zursulus,да,0,,,Merge pull request #79 from Zursulus/feature/staff-workspace-access
+security/appeal-attachments-spam-alerts-v3,2026-09-27,Zursulus,да,0,,,Merge pull request #79 from Zursulus/feature/staff-workspace-access
+security/appeal-attachments-spam-alerts-v4,2026-09-27,Zursulus,да,0,,,Merge pull request #79 from Zursulus/feature/staff-workspace-access
+security/appeal-attachments-spam-alerts-v5,2026-09-27,Zursulus,да,0,,,Merge pull request #79 from Zursulus/feature/staff-workspace-access
+security/appeal-attachments-spam-alerts-v6,2026-09-27,Zursulus,да,0,,,Merge pull request #79 from Zursulus/feature/staff-workspace-access
+chore/zur-36-dependabot,2026-09-26,Zursulus,нет,1,#66 merged→feature/water-admin,zur-36,chore: add bounded weekly Dependabot config
+chore/zur-36-ruff-baseline,2026-09-26,Zursulus,нет,2,,zur-36,ZUR-36 compare Ruff default with narrow correctness gate
+fix/appeals-tabs-mobile,2026-09-26,Zursulus,да,0,#67 merged→feature/water-admin,,test(portal): cover appeal status tabs
+zur-201-reading-reconciliation,2026-09-26,Zursulus,да,0,#64 merged→feature/water-admin,zur-201,fix(water): avoid locking nullable joined account
+zur-267-password-reset,2026-09-26,Zursulus,да,0,#65 merged→feature/water-admin,zur-267,fix(ui): preserve Russian password reset labels
+zur-112-installer-fix,2026-09-25,Zursulus,да,0,#54 merged→feature/water-admin,zur-112,ZUR-112 avoid pipefail false negative in nginx verification
+zur-112-portal-failure-sweep,2026-09-25,Zursulus,да,0,#53 merged→feature/water-admin,zur-112,ZUR-112 cover all resident portal routes in browser
+zur-115-admin-sweep,2026-09-25,Zursulus,да,0,#55 merged→feature/water-admin,zur-115,ZUR-115 add full admin GET smoke coverage
+zur-115-admin-upload-limit,2026-09-25,Zursulus,да,0,#56 merged→feature/water-admin,zur-115,ZUR-115: cover oversized admin import rejection
+zur-120-journald-retention,2026-09-25,Zursulus,да,0,#58 merged→feature/water-admin,zur-120,ZUR-120: test journald retention rendering
+zur-120-nginx-header-scope,2026-09-25,Zursulus,нет,2,#59 closed→feature/water-admin,zur-120,ZUR-120: test scoped nginx headers and migration
+zur-120-nginx-header-scope-v2,2026-09-25,Zursulus,да,0,#60 merged→feature/water-admin,zur-120,ZUR-120: test scoped nginx headers and migration
+zur-120-nginx-security-headers,2026-09-25,Zursulus,да,0,#57 merged→feature/water-admin,zur-120,ZUR-120: test nginx security headers transform
+zur-129-performance-baseline,2026-09-25,Zursulus,да,0,#61 merged→feature/water-admin,zur-129,ZUR-129: tighten dashboard query budget
+zur-136-business-integrity-audit,2026-09-25,Zursulus,да,0,#62 merged→feature/water-admin,zur-136,ZUR-136: test aggregate integrity audit
+zur-136-guarded-deploy,2026-09-25,Zursulus,да,0,#63 merged→feature/water-admin,zur-136,ZUR-136: test guarded audit deploy
+golubevna/zur-54-charge-obligation-foundation,2026-09-24,Zursulus,да,0,#44 merged→feature/water-admin,zur-54,ZUR-54: fix payer constraint class scope
+golubevna/zur-54-finance-reporting,2026-09-24,Zursulus,да,0,#45 merged→feature/water-admin,zur-54,ZUR-54: cover finance report privacy and balances
+golubevna/zur-54-person-plot-obligation,2026-09-24,Zursulus,да,0,#47 merged→feature/water-admin,zur-54,ZUR-54: cover explicit person and plot reporting
+golubevna/zur-54-resident-finance-context,2026-09-24,Zursulus,да,0,#46 merged→feature/water-admin,zur-54,ZUR-54: cover resident charge status and privacy
+golubevna/zur-63-reference-exact,2026-09-24,Zursulus,да,0,#35 merged→feature/water-admin,zur-63,ZUR-63: target visible mobile controls in reference e2e flow
+golubevna/zur-65-accessibility-gate,2026-09-24,Zursulus,нет,10,#37 closed→feature/water-admin,zur-65,ZUR-65: fix desktop logout contrast
+golubevna/zur-65-accessibility-gate-refresh,2026-09-24,Zursulus,да,0,#43 merged→feature/water-admin,zur-65,ZUR-65: refresh accessibility gate on current feature base
+golubevna/zur-66-public-balance-e2e,2026-09-24,Zursulus,нет,1,#36 closed→feature/water-admin,zur-66,ZUR-66: cover public site and water balance in browser E2E
+golubevna/zur-66-public-balance-e2e-refresh,2026-09-24,Zursulus,да,0,#42 merged→feature/water-admin,zur-66,ZUR-66: refresh public and balance E2E on current base
+golubevna/zur-68-identity-membership,2026-09-24,Zursulus,да,0,#38 merged→feature/water-admin,zur-68,ZUR-68: cover identity and membership boundaries
+golubevna/zur-69-access-request,2026-09-24,Zursulus,да,0,#39 merged→feature/water-admin,zur-69,ZUR-69: use stable resident access role values in tests
+golubevna/zur-70-portal-access-resolver,2026-09-24,Zursulus,да,0,#40 merged→feature/water-admin,zur-70,ZUR-70: cover historical appeal authority
+golubevna/zur-71-registry-person-dry-run,2026-09-24,Zursulus,да,0,#41 merged→feature/water-admin,zur-71,ZUR-71: use canonical preseeded resident slots in tests
+zur-53-board-polls,2026-09-24,Zursulus,нет,17,#50 merged→feature/water-admin,zur-53,ZUR-53: align generated board audit index name
+zur-53-deploy,2026-09-24,Zursulus,да,0,#51 merged→feature/water-admin,zur-53,ZUR-53: validate guarded deploy script in CI
+zur-64-line-controller-water,2026-09-24,Zursulus,да,0,#48 merged→feature/water-admin,zur-64,ZUR-64: make scoped workspace E2E locator unambiguous
+zur-96-cumulative-production-release,2026-09-24,Zursulus,да,0,#49 merged→feature/water-admin,zur-96,ZUR-96: validate cumulative deploy script in CI
+golubevna/zur-57-deploy-resident-portal,2026-09-23,Zursulus,да,0,#21 merged→feature/water-admin,zur-57,ZUR-57: validate resident portal deploy script in CI
+golubevna/zur-58-resident-numbers,2026-09-23,Zursulus,да,0,#22 merged→feature/water-admin,zur-58,ZUR-58: validate guarded number deploy in CI
+golubevna/zur-59-private-registry,2026-09-23,Zursulus,да,0,#23 merged→feature/water-admin,zur-59,ZUR-59: validate private registry deploy script in CI
+golubevna/zur-60-letter-hotfix-v2,2026-09-23,Zursulus,да,0,#25 merged→feature/water-admin,zur-60,ZUR-60: guarded hotfix для доступного письма
+golubevna/zur-60-letter-image-hotfix,2026-09-23,Zursulus,нет,1,,zur-60,test
+golubevna/zur-60-public-home-letter,2026-09-23,Zursulus,да,0,#24 merged→feature/water-admin,zur-60,ZUR-60: allow frontend regression test in guarded deploy
+golubevna/zur-61-explicit-legacy-map,2026-09-23,Zursulus,да,0,#29 merged→feature/water-admin,zur-61,ZUR-61: test explicit legacy account mapping
+golubevna/zur-61-guarded-deploy,2026-09-23,Zursulus,да,0,#27 merged→feature/water-admin,zur-61,ZUR-61: pin deploy workflow validation
+golubevna/zur-61-import-reestra-1300-i-podhotovka-testovoho-polzovatelya-333,2026-09-23,Zursulus,да,0,#26 merged→feature/water-admin,zur-61,ZUR-61: test private registry importer
+golubevna/zur-61-reserve-305,2026-09-23,Zursulus,да,0,#28 merged→feature/water-admin,zur-61,ZUR-61: validate reserve 305 deploy script
+golubevna/zur-62-static-permissions,2026-09-23,Zursulus,да,0,#30 merged→feature/water-admin,zur-62,ZUR-62: test public static and private upload permission split
+golubevna/zur-63-cache-bust,2026-09-23,Zursulus,нет,3,#33 closed→feature/water-admin,zur-63,ZUR-63: restore approved dashboard photo and stronger login dimming
+golubevna/zur-63-full-redesign,2026-09-23,Zursulus,да,0,#34 merged→feature/water-admin,zur-63,ZUR-63: remove obsolete layered polish stylesheet
+golubevna/zur-63-visual-polish,2026-09-23,Zursulus,да,0,#31 merged→feature/water-admin,zur-63,ZUR-63: visual polish resident portal to approved mobile-first concept
+golubevna/zur-63-visual-round2,2026-09-23,Zursulus,да,0,#32 merged→feature/water-admin,zur-63,ZUR-63: load screenshot-driven polish stylesheet
+golubevna/zur-56-pererabotat-lichnii-kabinet-chlena-tsn-v-druzhelyubnii,2026-09-22,Zursulus,да,0,#20 merged→feature/water-admin,zur-56,ZUR-56: accept stricter private cache headers
+codex/zur-40-controller-mobile,2026-09-21,Zursulus,да,0,#7 merged→feature/water-admin,zur-40,test: fix exact controller date button match
+feature/zur-41-admin-navigation,2026-09-21,Zursulus,да,0,#9 merged→feature/water-admin,zur-41,ZUR-41: update controller e2e for simplified dashboard
+feature/zur-41-moderation-ux,2026-09-21,Zursulus,да,0,#8 merged→feature/water-admin,zur-41,Fix ZUR-41 moderation e2e confirmation text
+feature/zur-42-private-data-write,2026-09-21,Zursulus,да,0,#12 merged→feature/water-admin,zur-42,test: зафиксировать writable path для runtime uploads
+feature/zur-42-public-content,2026-09-21,Zursulus,да,0,#10 merged→feature/water-admin,zur-42,ZUR-42: проверить ролевую навигацию публичного контента
+feature/zur-42-public-root-fix,2026-09-21,Zursulus,да,0,#11 merged→feature/water-admin,zur-42,ZUR-42: учесть regression-тест public root в allowlist
+feature/zur-43-mobile-polish,2026-09-21,Zursulus,да,0,#14 merged→feature/water-admin,zur-43,ZUR-43: improve mobile balance layout
+feature/zur-43-water-balance,2026-09-21,Zursulus,да,0,#13 merged→feature/water-admin,zur-43,ZUR-43: добавить regression-тесты водного баланса
+feature/zur-46-cache-bust,2026-09-21,Zursulus,да,0,#16 merged→feature/water-admin,zur-46,ZUR-46: обновить cache key app.js
+feature/zur-46-urgent-news-popup,2026-09-21,Zursulus,да,0,#15 merged→feature/water-admin,zur-46,ZUR-46: auto-open featured public news once per session
+feature/zur-47-first-smart-article,2026-09-21,Zursulus,да,0,#19 merged→feature/water-admin,zur-47,ZUR-47: проверить редакционный интерфейс публичных материалов
+feature/zur-47-smart-news,2026-09-21,Zursulus,да,0,#18 merged→feature/water-admin,zur-47,ZUR-47: оформить блок умных текстов о главном
+main,2026-09-21,Zursulus,нет,2,,,Merge pull request #17 from Zursulus/ops/production-status-monitor
+ops/production-status-monitor,2026-09-21,Zursulus,нет,1,#17 merged→main,,ops: add production status monitor
+codex/zur-10-finance,2026-09-20,Zursulus,да,0,#6 merged→feature/water-admin,zur-10,test: cover ZUR-10 finance core
+golubevna/zur-8-deploy-test-utf8,2026-09-20,Zursulus,нет,1,#5 merged→feature/water-admin,zur-8,test: read deploy script as UTF-8
+zur-35-playwright-e2e,2026-09-20,Zursulus,нет,5,#4 merged→feature/water-admin,zur-35,test: prepare Django session before Playwright loop
+chore/work-system-agents,2026-09-19,Zursulus,нет,1,#3 closed→feature/water-admin,,docs: add concise agent working guide
+feature/zur-12-water-import-package,2026-09-18,Zursulus,да,0,#2 merged→feature/water-admin,zur-12,ZUR-12: expose package dry-run inside protected admin
+backup/production-clean-2026-09-16,2026-09-16,Zursulus,да,0,,09,Show latest group water total on account cards

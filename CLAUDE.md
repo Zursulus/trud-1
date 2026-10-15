@@ -1,0 +1,51 @@
+# CLAUDE.md — Труд-1
+
+Рабочие правила Claude в этом репозитории. Codex/ChatGPT этот файл автоматически не читает.
+
+> **Для ChatGPT / Codex:** этот файл и папка `docs/claude/` — справка от Claude.
+> Читать можно. **Не изменять, не удалять, не брать отсюда задачи.** Задачи — только GitHub Issues.
+
+## Кто работает в проекте
+
+- **ChatGPT / Codex** — основной исполнитель с сентября 2026. Его правила: `AGENTS.md`
+  (лежит в рабочих ветках, в `main` его нет), Notion «WORK SYSTEM», Notion «Труд-1 — PROJECT STATE».
+- **Claude** — подключён 15.10.2026. Сначала инвентаризация и справка, дальше задачи владельца.
+- Владелец — Николай (GitHub `Zursulus`).
+
+## Правила Claude
+
+1. Свои ветки называю только `claude/…`. В чужие ветки (`codex/`, `fix/`, `feature/`, `golubevna/`,
+   `release/`, `agent/`, `zur-…` и т.д.) не пушу и не удаляю их без явной команды владельца.
+2. `AGENTS.md`, `docs/PLAN.md`, `backend/README.md`, `ops/*` — правила ChatGPT. Меняю только по прямому
+   поручению владельца, точечно.
+3. **Production не трогаю.** Деплой, root/su, миграции на проде, сервер — только по прямой команде владельца.
+   Push в GitHub ≠ деплой.
+4. С 06.10.2026 в Notion действует **GLOBAL STOP / PAUSED_BY_USER**: ChatGPT остановлен владельцем.
+   Это не мешает Claude выполнять прямые поручения владельца в этом чате.
+5. Инварианты проекта (из AGENTS.md, соблюдаю так же):
+   - никаких реальных ПД жителей, бэкапов, секретов в публичном репозитории (repo публичный!);
+   - не угадывать и не выкидывать спорные данные владельцев/участков/счётчиков — сохранять для проверки;
+   - не обходить историю/валидацию прямым SQL или `QuerySet.update()`;
+   - не ослаблять auth/MFA/права/CSRF ради зелёных тестов;
+   - сначала sandbox, потом production.
+6. Если источники расходятся — сначала установить факт, потом что-то менять.
+
+## Где что лежит (коротко)
+
+| Что | Где |
+|---|---|
+| Код Django-сайта | не в `main`! Рабочая линия — ветки вокруг production-коммита `6fb32ef` |
+| Задачи | GitHub Issues (Linear — только архив, не использовать) |
+| Что реально на проде | https://trud-1.ru/admin/deployment-status/ (marker) |
+| Решения, история, состояние | Notion: Portfolio Map → Труд-1 → Knowledge Hub → PROJECT STATE |
+| Правила ChatGPT | Notion: «WORK SYSTEM — стандарт работы Николая с ChatGPT / Work / Codex» |
+| Полная инвентаризация | `docs/claude/INVENTORY.md` |
+
+Проверки (из AGENTS.md):
+
+```bash
+python backend/manage.py check
+python backend/manage.py makemigrations --check --dry-run
+python backend/manage.py test water config
+python -m unittest discover -s ops/tests -v
+```
