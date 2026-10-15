@@ -11,7 +11,7 @@ NODE=/opt/node/current/bin/node; [ -x "$NODE" ] || NODE=$(command -v node || tru
 NPM="$(dirname "$NODE")/npm"; [ -x "$NPM" ] || { echo "Не найден npm рядом с $NODE"; exit 1; }
 CAP=600   # МБ: потолок для всего, что поставит claude-ro (отдельный файл-диск)
 IMG=/var/lib/claude-ro.img
-FREE=$(df -Pm / | awk 'NR==2{print $4}'); [ "$FREE" -gt $((CAP+400)) ] || { echo "Нужно хотя бы $((CAP+400)) МБ свободно, а есть $FREE"; exit 1; }
+FREE=$(df -Pm / | awk 'NR==2{print $4}'); mountpoint -q $H || [ "$FREE" -gt $((CAP+400)) ] || { echo "Нужно хотя бы $((CAP+400)) МБ свободно, а есть $FREE"; exit 1; }
 # Не скачивать браузер Chrome/Chromium (в первый раз он занял весь остаток диска песочницы)
 NOBROWSER="TMPDIR=/home/claude-ro/tmp npm_config_cache=/home/claude-ro/.npm PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"
 guard() { local f; f=$(df -Pk / | awk 'NR==2{print $4}'); [ "$f" -gt 300000 ] || { echo "СТОП: на основном диске меньше 300 МБ после шага '$1'. Откати: sudo bash $(dirname "$0")/claude-ro-remove.sh"; systemctl stop claude-ro-dc.service 2>/dev/null || true; exit 1; }; }
