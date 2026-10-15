@@ -5,7 +5,8 @@
 set -Eeuo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Запусти через sudo"; exit 1; }
 U=claude-ro; H=/home/$U; DC=$H/.local/desktop-commander
-NODE=$(command -v node || true); [ -x "${NODE:-}" ] || NODE=/opt/node/current/bin/node
+NODE=/opt/node/current/bin/node; [ -x "$NODE" ] || NODE=$(command -v node || true)   # нужен Node 22+ (в /usr/bin на проде Node 20)
+"$NODE" -e 'process.exit(typeof WebSocket==="function"?0:1)' || { echo "Нужен Node 22+, а $NODE — $("$NODE" -v)"; exit 1; }
 [ -x "$NODE" ] || { echo "Не найден node"; exit 1; }
 NPM="$(dirname "$NODE")/npm"; [ -x "$NPM" ] || { echo "Не найден npm рядом с $NODE"; exit 1; }
 CAP=600   # МБ: потолок для всего, что поставит claude-ro (отдельный файл-диск)
@@ -66,11 +67,11 @@ UNIT
 systemctl daemon-reload
 
 echo "== 4/4 запуск службы и ссылка для входа"
-systemctl enable --now claude-ro-dc.service
+systemctl enable claude-ro-dc.service; systemctl restart claude-ro-dc.service
 sleep 3; systemctl --no-pager --lines=5 status claude-ro-dc.service || true
 LINKFILE=/tmp/claude-ro-login-link.txt; LINK=""
 for i in $(seq 1 30); do
-  LINK=$(journalctl -u claude-ro-dc.service --since "-5min" -o cat 2>/dev/null | grep -o 'https://mcp.desktopcommander.app/device/verify?user_code=[A-Z0-9-]*' | tail -1)
+  LINK=$(journalctl -u claude-ro-dc.service --since "-5min" -o cat 2>/dev/null | grep -o 'https://mcp.desktopcommander.app/device/verify?user_code=[A-Z0-9-]*' | tail -1 || true)
   [ -n "$LINK" ] && break; sleep 2
 done
 if [ -n "$LINK" ]; then
