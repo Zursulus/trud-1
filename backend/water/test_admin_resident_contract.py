@@ -22,6 +22,7 @@ from .controller_scope import ControllerLineAccess
 from .access_control import AccessAssignment
 from .access_policy import ScopeType
 from .appeal_workflow import close_resolved_appeal, send_board_reply
+from ._test_auth import verify_admin_otp
 from .models import (
     Account, AppealCategory, BillingPeriod, BillingPolicy, Charge,
     ControllerReadingSubmission, Membership, Meter, Payment, PaymentAllocation,
@@ -62,6 +63,7 @@ class AdminResidentContractTests(TestCase):
         response = client.post(url, {"username": user.username, "password": self.password})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(int(client.session["_auth_user_id"]), user.pk)
+        verify_admin_otp(client, user)
         return client
 
     def _new_appeal(self):

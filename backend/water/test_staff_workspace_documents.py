@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, AccountDocument, DocumentCategory, ResidentAccess, User
 
 
@@ -51,7 +52,7 @@ class StaffWorkspaceDocumentsTests(TestCase):
         self._media.cleanup()
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def make_account_document(self, *, title="Личный документ", visible=True, published_at=None):
         return AccountDocument.objects.create(

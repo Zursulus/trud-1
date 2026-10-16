@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .access_control import AccessAssignment
+from ._test_auth import login_with_admin_otp
 from .models import Account, Person, User
 from .resident_models import ResidentIdentity
 
@@ -53,14 +54,14 @@ class AccountEditorPrivacyTests(TestCase):
         self.assertEqual(latest.phone, self.account.phone)
 
     def test_ordinary_administrator_form_hides_legacy_contacts(self):
-        self.client.force_login(self.administrator)
+        login_with_admin_otp(self.client, self.administrator)
         response = self.client.get(self._url())
         self.assertEqual(response.status_code, 200)
         self._assert_private_values_absent(response)
         self.assertEqual(set(response.context["form"].fields), {"plot", "notes", "version"})
 
     def test_ordinary_administrator_forged_contact_post_only_saves_work_fields(self):
-        self.client.force_login(self.administrator)
+        login_with_admin_otp(self.client, self.administrator)
         old_version = self.account.version
         old_history = self.account.history.count()
         response = self.client.post(self._url(), self._post_data(
@@ -75,13 +76,13 @@ class AccountEditorPrivacyTests(TestCase):
         self.assertEqual(self.account.history.latest().history_user_id, self.administrator.pk)
 
     def test_ordinary_administrator_post_without_contact_fields_preserves_them(self):
-        self.client.force_login(self.administrator)
+        login_with_admin_otp(self.client, self.administrator)
         response = self.client.post(self._url(), self._post_data())
         self.assertRedirects(response, f"/work/accounts/{self.account.pk}/")
         self._assert_contact_values_preserved()
 
     def test_validation_error_does_not_echo_forged_contact_fields_or_write(self):
-        self.client.force_login(self.administrator)
+        login_with_admin_otp(self.client, self.administrator)
         old_history = self.account.history.count()
         response = self.client.post(self._url(), self._post_data(
             version=self.account.version + 1,
@@ -98,7 +99,7 @@ class AccountEditorPrivacyTests(TestCase):
 
     def test_non_superuser_with_global_private_access_keeps_contact_edit_and_history(self):
         self.assertFalse(self.private_editor.is_superuser)
-        self.client.force_login(self.private_editor)
+        login_with_admin_otp(self.client, self.private_editor)
         response = self.client.get(self._url())
         self.assertContains(response, self.account.contact_name)
         self.assertContains(response, self.account.phone)
@@ -135,7 +136,7 @@ class AccountEditorPrivacyTests(TestCase):
             capabilities=["registry.contacts.view"], scope_type="person", scope_object_id=scoped_person.pk,
             starts=timezone.localdate(), basis="Синтетическая проверка области", granted_by=self.private_editor,
         )
-        self.client.force_login(scoped_editor)
+        login_with_admin_otp(self.client, scoped_editor)
         response = self.client.get(self._url())
         self.assertEqual(response.status_code, 200)
         self._assert_private_values_absent(response)
@@ -146,7 +147,7 @@ class AccountEditorPrivacyTests(TestCase):
         self._assert_contact_values_preserved()
 
     def test_account_edit_return_keeps_only_bounded_search_query(self):
-        self.client.force_login(self.administrator)
+        login_with_admin_otp(self.client, self.administrator)
         raw_query = "  номер   &next=https://example.test/ " + "1" * 200
         expected_query = " ".join(raw_query.split())[:160]
         response = self.client.post(

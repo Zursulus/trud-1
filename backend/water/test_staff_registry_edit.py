@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .access_control import AccessAssignment
+from ._test_auth import login_with_admin_otp
 from .models import Account, LandPlot, Person, User
 from .resident_models import ResidentIdentity
 
@@ -31,7 +32,7 @@ class StaffRegistryEditorTests(TestCase):
         )
 
     def test_person_contact_edit_preserves_history_and_increments_version(self):
-        self.client.force_login(self.editor)
+        login_with_admin_otp(self.client, self.editor)
         before = self.person.version
         response = self.client.post(
             f"/work/access/people/{self.person.pk}/edit/",
@@ -51,7 +52,7 @@ class StaffRegistryEditorTests(TestCase):
         self.assertGreaterEqual(self.person.history.count(), 2)
 
     def test_account_contact_and_land_plot_address_are_separate_edits(self):
-        self.client.force_login(self.editor)
+        login_with_admin_otp(self.client, self.editor)
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/edit/",
             {
@@ -86,7 +87,7 @@ class StaffRegistryEditorTests(TestCase):
         self.assertGreaterEqual(self.plot.history.count(), 2)
 
     def test_stale_person_form_does_not_overwrite_newer_change(self):
-        self.client.force_login(self.editor)
+        login_with_admin_otp(self.client, self.editor)
         stale_version = self.person.version
         self.person.notes = "Более свежая правка"
         self.person.save()
@@ -117,7 +118,7 @@ class StaffRegistryEditorTests(TestCase):
 
 
     def test_workbench_search_finds_person_by_phone_and_email(self):
-        self.client.force_login(self.editor)
+        login_with_admin_otp(self.client, self.editor)
         for query in (self.person.phone, self.person.email):
             with self.subTest(query=query):
                 response = self.client.get("/work/panel/", {"q": query})
@@ -153,7 +154,7 @@ class StaffRegistryEditorTests(TestCase):
         self.assertEqual(denied.status_code, 404)
 
     def test_validation_error_keeps_original_person_data(self):
-        self.client.force_login(self.editor)
+        login_with_admin_otp(self.client, self.editor)
         before = self.person.version
         response = self.client.post(
             f"/work/access/people/{self.person.pk}/edit/",

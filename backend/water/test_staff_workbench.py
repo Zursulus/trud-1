@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from .access_control import assignment_from_role, revoke_assignment
 from .access_policy import ScopeType
+from ._test_auth import login_with_admin_otp
 from .models import Account, LandPlot, Meter, Person, PlotRelation, ResidentAccess, SupplyNode, User
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
@@ -27,7 +28,7 @@ class WorkbenchTests(TestCase):
             basis='Тестовое основание', verified_by=self.admin, can_view_account=True, can_submit_water=True)
         self.node = SupplyNode.objects.create(name='Тестовый узел')
         self.meter = Meter.objects.create(serial='PANEL-METER', kind='individual', node=self.node, account=self.account)
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
 
     def test_real_links_and_read_only(self):
         for kind, obj in [('account', self.account), ('plot', self.plot), ('person', self.person)]:

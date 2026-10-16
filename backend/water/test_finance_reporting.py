@@ -9,6 +9,7 @@ from django.urls import reverse
 from .finance_models import ChargeObligation
 from .finance_reporting import explicit_person_id, explicit_plot_id, obligation_report_queryset, outstanding_amount
 from .management.commands.setup_roles import ADMIN, PRIVATE_REGISTRY
+from ._test_auth import login_with_admin_otp
 from .models import Account, BillingPeriod, Charge, LandPlot, Payment, PaymentAllocation, Person, User
 from .resident_models import TsnMembership
 
@@ -142,7 +143,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
         self.client = Client()
 
     def test_general_administrator_sees_finance_but_not_person_name(self):
-        self.client.force_login(self.admin_user)
+        login_with_admin_otp(self.client, self.admin_user)
         response = self.client.get(reverse('admin:water_chargeobligation_changelist'))
 
         self.assertEqual(response.status_code, 200)
@@ -156,7 +157,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
         self.assertNotContains(detail, self.person.full_name)
 
     def test_private_registry_permission_reveals_explicit_person_only(self):
-        self.client.force_login(self.private_user)
+        login_with_admin_otp(self.client, self.private_user)
         response = self.client.get(reverse('admin:water_chargeobligation_changelist'))
 
         self.assertEqual(response.status_code, 200)
@@ -164,7 +165,7 @@ class FinanceReportAdminPrivacyTests(TestCase):
         self.assertContains(response, self.plot.label)
 
     def test_report_is_read_only_even_for_administrator(self):
-        self.client.force_login(self.admin_user)
+        login_with_admin_otp(self.client, self.admin_user)
         add_response = self.client.get(reverse('admin:water_chargeobligation_add'))
         change_response = self.client.post(
             reverse('admin:water_chargeobligation_change', args=[self.obligation.pk]),

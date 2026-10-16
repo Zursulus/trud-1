@@ -7,6 +7,7 @@ from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from .models import Account, Person, User
+from ._test_auth import login_with_admin_otp
 from .board_polls import (
     BoardAuditEvent, BoardDiscussionComment, BoardMembership, BoardPoll, BoardQuestion, BoardVote,
 )
@@ -84,7 +85,7 @@ class SiteFindingTests(TestCase):
             self.assertEqual(self.client.get(path).status_code, 403)
 
     def test_appeal_search_accepts_unicode_without_integer_errors(self):
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         for param in ('q', 'account'):
             for value in ('²', '１２３', '123', 'текст'):
                 with self.subTest(param=param, value=value):
@@ -98,7 +99,7 @@ class SiteFindingTests(TestCase):
         for account in (self.account, other):
             meter = Meter.objects.create(serial=f'AUDIT-{account.pk}', kind='individual', account=account, node=node)
             Reading.objects.create(meter=meter, date=timezone.localdate(), value='1')
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         page = self.client.get(f'/work/accounts/{self.account.pk}/')
         link = re.search(r'href="([^"]+)">Журнал показаний', page.content.decode())[1]
         journal = self.client.get(link)
@@ -184,7 +185,7 @@ class SiteFindingTests(TestCase):
         self.assertContains(page, f'href="{account_url}"')
         self.assertNotContains(page, f'href="{statement_url}"')
         self.assertEqual(self.client.get(account_url).status_code, 200)
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
         for link in (account_url, statement_url):
             self.assertContains(page, f'href="{link}"')
@@ -221,7 +222,7 @@ class SiteFindingTests(TestCase):
             for obj, name, key in cases:
                 with self.subTest(model=obj._meta.label):
                     url = reverse(name, args=[key])
-                    self.client.force_login(self.admin)
+                    login_with_admin_otp(self.client, self.admin)
                     page = self.client.get(reverse(f'admin:{obj._meta.app_label}_{obj._meta.model_name}_change', args=[obj.pk]))
                     self.assertContains(page, f'href="{url}"')
                     self.assertNotContains(page, f'href="{obj.document.url}"')
@@ -232,7 +233,7 @@ class SiteFindingTests(TestCase):
                     self.assertEqual(self.client.get(url).status_code, 403)
                     self.client.logout()
                     self.assertEqual(self.client.get(url).status_code, 302)
-            self.client.force_login(self.admin)
+            login_with_admin_otp(self.client, self.admin)
             inline = self.client.get(f'/admin/water/boardpoll/{poll.pk}/change/')
             self.assertContains(inline, f'href="{reverse("staff_workspace:governance_protocol", args=[poll.pk])}"')
             self.assertNotContains(inline, f'href="{protocol.document.url}"')
@@ -243,7 +244,7 @@ class SiteFindingTests(TestCase):
     def test_nonfinite_reading_threshold_has_validation_error(self):
         from decimal import Decimal
         from .reading_review_config import _parse_threshold
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         for raw in ('NaN', 'sNaN', '-NaN', 'Infinity', '-Infinity'):
             with self.subTest(threshold=raw):
                 value, error = _parse_threshold(raw)
@@ -257,7 +258,7 @@ class SiteFindingTests(TestCase):
 
     def test_empty_finance_account_title_has_dash_fallback(self):
         account = Account.objects.create(number=None, plot='')
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         page = self.client.get(f'/work/finance/accounts/{account.pk}/')
         self.assertContains(page, '<title>Финансы · — ·')
         self.assertNotContains(page, 'None')
@@ -269,7 +270,7 @@ class SiteFindingTests(TestCase):
         node.notes = 'Изменение'
         node._change_reason = 'Синтетическая причина'
         node.save()
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         page = self.client.get(f'/admin/water/supplynode/{node.pk}/history/')
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'Синтетическая причина')
@@ -281,7 +282,7 @@ class SiteFindingTests(TestCase):
         from .models import ResidentAccess
         from .portal_permissions import PortalGrant
         today = timezone.localdate()
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         url = f'/work/accounts/{self.account.pk}/'
         self.assertEqual(self.client.get(url).context['access_count'], 0)
         for index, (starts, ends, account) in enumerate((

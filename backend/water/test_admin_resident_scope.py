@@ -17,6 +17,7 @@ from .access_policy import ScopeType
 from .access_workflow import end_portal_grant, update_portal_grant_rights
 from .document_workflow import create_account_document, update_account_document
 from .finance_workflow import approve_billing_period, approve_charge, cancel_charge, create_payment, confirm_payment, reverse_payment, allocate_confirmed_payment
+from ._test_auth import verify_admin_otp
 from .models import Account, AccountDocument, BillingPeriod, BillingPolicy, Charge, DocumentCategory, Payment, PaymentAllocation, Person, User
 from .portal_permissions import PortalGrant
 from .resident_models import ResidentIdentity
@@ -219,6 +220,7 @@ class ServiceAccountScopeTests(TestCase):
                                    can_view_account=True, can_view_documents=True, basis="Documents only", verified_by=self.admin)
         staff, reader = Client(), Client()
         self.assertEqual(staff.post("/admin/login/", {"username": self.admin.username, "password": self.password}).status_code, 302)
+        verify_admin_otp(staff, self.admin)
         self.assertEqual(reader.post("/admin/cabinet/login/", {"username": resident.username, "password": self.password}).status_code, 302)
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             publication_date = timezone.localtime(timezone.now() - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M")
@@ -262,6 +264,7 @@ class ServiceAccountScopeTests(TestCase):
         person = Person.objects.create(full_name="Synthetic invite recipient", email="contract-invite@example.test")
         staff, resident = Client(), Client()
         self.assertEqual(staff.post("/admin/login/", {"username": self.admin.username, "password": self.password}).status_code, 302)
+        verify_admin_otp(staff, self.admin)
         issued = staff.post("/work/access/invite/", {
             "person": person.pk, "account": self.a.pk, "email": person.email, "basis": "Synthetic verified invitation",
             "can_view_account": "on", "can_use_appeals": "on",

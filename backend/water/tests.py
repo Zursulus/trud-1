@@ -9,6 +9,7 @@ from ._legacy_suite import *  # noqa: F401,F403
 from . import _legacy_suite as legacy
 
 from django.contrib.auth.models import Group
+from django.urls import reverse
 
 
 class ResidentPortalTests(legacy.ResidentPortalTests):
@@ -31,14 +32,22 @@ class ResidentPortalTests(legacy.ResidentPortalTests):
 
 
 class AccessTests(legacy.AccessTests):
-    def test_superuser_can_use_password_without_otp(self):
+    def test_password_only_cannot_open_admin_and_first_login_starts_setup(self):
         self.client.force_login(self.admin)
-        self.assertEqual(self.client.get('/admin/water/account/').status_code, 200)
+        response = self.client.get('/admin/water/account/', follow=True)
+        self.assertEqual(response.request['PATH_INFO'], reverse('two_factor:setup'))
         self.assertFalse(TOTPDevice.objects.filter(user=self.admin, confirmed=True).exists())
 
-    # Historical policy required the technical superuser to enroll OTP before
-    # opening Admin. Issue #92 intentionally makes 2FA optional for all staff.
-    test_password_only_cannot_open_admin_and_first_login_starts_setup = None
+    # Replace the inherited optional-admin expectation; historical suite stays intact.
+    test_regular_manager_can_use_password_without_otp = None
+
+    def test_regular_manager_password_requires_setup(self):
+        call_command('setup_roles', stdout=StringIO())
+        manager = User.objects.create_user(username='password-manager', is_staff=True)
+        manager.groups.add(Group.objects.get(name='Администратор ТСН'))
+        self.client.force_login(manager)
+        response = self.client.get('/admin/water/account/', follow=True)
+        self.assertEqual(response.request['PATH_INFO'], reverse('two_factor:setup'))
 
 
 class RoleAuditTests(legacy.RoleAuditTests):

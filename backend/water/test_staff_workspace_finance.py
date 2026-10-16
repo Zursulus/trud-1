@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from ._test_auth import login_with_admin_otp
 from .models import (
     Account,
     BillingPeriod,
@@ -63,7 +64,7 @@ class StaffWorkspaceFinanceTests(TestCase):
         )
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def _calculate_and_approve_charge(self):
         self.login(self.manager)

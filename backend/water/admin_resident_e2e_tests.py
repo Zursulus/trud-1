@@ -14,6 +14,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connections
 from django.test import override_settings
 from django.utils import timezone
+from django_otp.oath import totp
+from django_otp.plugins.otp_totp.models import TOTPDevice
+from django_otp.util import random_hex
 from playwright.sync_api import expect, sync_playwright
 
 from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews
@@ -42,16 +45,27 @@ class AdminResidentBrowserTests(StaticLiveServerTestCase):
         self.assertFalse(ResidentAccess.objects.filter(user__in=[self.staff, self.resident]).exists())
 
     def _login(self, page, user):
-        path = "/admin/login/?next=/work/appeals/" if user.is_staff else "/admin/cabinet/login/"
-        page.goto(self.live_server_url + path)
-        page.locator("#id_username").fill(user.username)
-        page.locator("#id_password").fill(self.password)
         if user.is_staff:
-            page.locator('#login-form input[type="submit"]').click()
-            # A suffix glob also matches the login page's ?next= value.
-            # Wait for the destination itself before issuing another request.
+            def fixture():
+                # A fresh synthetic key avoids replaying the same TOTP when
+                # logout scenarios log in repeatedly within one time step.
+                device, _ = TOTPDevice.objects.get_or_create(user=user, name="default")
+                device.key = random_hex()
+                device.last_t = -1
+                device.save()
+                return device
+            device = self._db(fixture)
+            page.goto(self.live_server_url + "/admin/account/login/?next=/work/appeals/")
+            page.locator('[name="auth-username"]').fill(user.username)
+            page.locator('[name="auth-password"]').fill(self.password)
+            page.locator('button.btn-primary[type="submit"]').click()
+            page.locator('[name="token-otp_token"]').fill(str(totp(device.bin_key)).zfill(6))
+            page.locator('button.btn-primary[type="submit"]').click()
             page.wait_for_url(self.live_server_url + "/work/appeals/")
         else:
+            page.goto(self.live_server_url + "/admin/cabinet/login/")
+            page.locator("#id_username").fill(user.username)
+            page.locator("#id_password").fill(self.password)
             page.get_by_role("button", name="Войти", exact=True).click()
             page.wait_for_url("**/admin/cabinet/")
         page.wait_for_load_state("networkidle")

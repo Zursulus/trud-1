@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
 
+from ._test_auth import login_with_admin_otp
 from .models import User
 
 
@@ -15,7 +16,7 @@ class StaffWorkTabTests(TestCase):
         cls.manager.groups.add(Group.objects.get(name="Администратор ТСН"))
 
     def test_legacy_work_route_remains_available_but_is_not_primary_navigation(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
 
         response = self.client.get("/work/tasks/")
         self.assertEqual(response.status_code, 200)
@@ -33,7 +34,7 @@ class StaffWorkTabTests(TestCase):
         anonymous = self.client.get("/work/more/roles-guide/")
         self.assertEqual(anonymous.status_code, 302)
 
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         more = self.client.get("/work/more/")
         self.assertEqual(more.status_code, 200)
         self.assertContains(more, "Роли и полномочия")

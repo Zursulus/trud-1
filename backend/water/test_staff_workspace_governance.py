@@ -7,6 +7,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .board_polls import BoardAuditEvent, BoardMembership, BoardPoll, BoardProtocol, BoardQuestion, BoardVote
+from ._test_auth import login_with_admin_otp
 from .models import User
 
 
@@ -46,7 +47,7 @@ class StaffWorkspaceGovernanceTests(TestCase):
         self.question = BoardQuestion.objects.create(poll=self.poll, order=1, text="Поддержать рабочий вариант?")
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def test_view_permission_controls_workspace_and_more_card(self):
         self.login(self.no_permission)

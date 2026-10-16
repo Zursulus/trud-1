@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .controller_scope import ControllerLineAccess
+from ._test_auth import verify_admin_otp
 from .models import Account, ControllerReadingSubmission, Membership, Meter, Person, Reading, ResidentAccess, ResidentInvite, SupplyNode, User, WaterGroup
 from .portal import issue_granular_invite
 from .portal_permissions import PortalGrant
@@ -47,6 +48,7 @@ class AccessWaterConcurrencyContractTests(PostgreSQLConcurrencyMixin, Transactio
         client = self._form_client(url)
         self.assertEqual(self._post(client, url, {"username": actor.username, "password": self.password}).status_code, 302)
         self.assertEqual(int(client.session["_auth_user_id"]), actor.pk)
+        verify_admin_otp(client, actor)
         return client
 
     def test_two_redemptions_consume_one_granular_invite_once(self):

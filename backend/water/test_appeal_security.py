@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from .appeal_security import enforce_resident_submission_limits, validate_appeal_attachment
 from .access_control import AccessAssignment
+from ._test_auth import login_with_admin_otp
 from .models import Account, AppealCategory, Person, ResidentAccess, ResidentAppeal, ResidentAppealMessage, User
 from .resident_models import ResidentAppealAttachment, ResidentIdentity
 from .security_models import SecurityAlert
@@ -255,7 +256,7 @@ class AppealSpamAlertTests(TestCase):
             fingerprint='a' * 64,
             detail='test_review',
         )
-        self.client.force_login(admin_user)
+        login_with_admin_otp(self.client, admin_user)
         response = self.client.get(reverse('staff_workspace:security'))
         self.assertEqual(response.status_code, 200)
         response = self.client.post(reverse('staff_workspace:security'), {'alert_id': alert.pk})
@@ -280,7 +281,7 @@ class AppealSpamAlertTests(TestCase):
             enforce_error = error
         self.assertIsNotNone(enforce_error)
 
-        self.client.force_login(admin_user)
+        login_with_admin_otp(self.client, admin_user)
         response = self.client.get(reverse('staff_workspace:security'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Подозрение на спам')
