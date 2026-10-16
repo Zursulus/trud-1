@@ -261,3 +261,18 @@ class SiteFindingTests(TestCase):
         page = self.client.get(f'/work/finance/accounts/{account.pk}/')
         self.assertContains(page, '<title>Финансы · — ·')
         self.assertNotContains(page, 'None')
+
+    def test_history_missing_reason_is_dash_and_existing_reason_is_preserved(self):
+        import re
+        from .models import SupplyNode
+        node = SupplyNode.objects.create(name='Синтетическая история')
+        node.notes = 'Изменение'
+        node._change_reason = 'Синтетическая причина'
+        node.save()
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/admin/water/supplynode/{node.pk}/history/')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Синтетическая причина')
+        self.assertIsNone(re.search(r'<td>\s*None\s*</td>', page.content.decode()))
+        self.assertRegex(page.content.decode(), r'<td>\s*—\s*</td>')
+        self.assertIsNone(node.history.order_by('history_id').first().history_change_reason)
