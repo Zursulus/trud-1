@@ -25,6 +25,7 @@ from .models import (
     User,
     WaterGroup,
 )
+from .security_models import SecurityAlert
 
 
 class StaffWorkspaceTests(TestCase):
@@ -86,6 +87,67 @@ class StaffWorkspaceTests(TestCase):
         response = self.client.get("/work/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
+
+    def test_security_banner_is_visible_with_permission(self):
+        SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_SUSPICIOUS_FILE, fingerprint="a" * 64,
+        )
+        SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_MALWARE,
+            severity=SecurityAlert.SEVERITY_CRITICAL,
+            fingerprint="b" * 64,
+        )
+        SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_MALWARE,
+            severity=SecurityAlert.SEVERITY_CRITICAL,
+            fingerprint="c" * 64,
+            resolved_at=timezone.now(),
+        )
+        self.login(self.manager)
+        for path in ("/work/", "/work/search/", "/work/more/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertTrue(response.context["can_view_security_alerts"])
+                self.assertEqual(response.context["security_alert_count"], 2)
+                self.assertEqual(response.context["security_critical_count"], 1)
+                self.assertContains(response, 'role="status"')
+                self.assertContains(response, "Безопасность: 2 сигналов требуют проверки; критических — 1.")
+                self.assertContains(response, '<a class="ws-secondary" href="/work/security/">Открыть сигналы</a>', html=True)
+                if path == "/work/more/":
+                    self.assertContains(response, "Безопасность · 2")
+
+    def test_security_banner_is_hidden_without_permission(self):
+        SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_MALWARE,
+            severity=SecurityAlert.SEVERITY_CRITICAL,
+            fingerprint="a" * 64,
+        )
+        self.login(self.operator)
+        for path in ("/work/", "/work/search/", "/work/more/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertFalse(response.context["can_view_security_alerts"])
+                self.assertEqual(response.context["security_alert_count"], 0)
+                self.assertEqual(response.context["security_critical_count"], 0)
+                self.assertNotContains(response, 'role="status"')
+                self.assertNotContains(response, "Открыть сигналы")
+                self.assertNotContains(response, "/work/security/")
+
+    def test_security_banner_is_hidden_without_open_alerts(self):
+        SecurityAlert.objects.create(
+            kind=SecurityAlert.KIND_MALWARE,
+            severity=SecurityAlert.SEVERITY_CRITICAL,
+            fingerprint="a" * 64,
+            resolved_at=timezone.now(),
+        )
+        self.login(self.manager)
+        response = self.client.get("/work/more/")
+        self.assertTrue(response.context["can_view_security_alerts"])
+        self.assertEqual(response.context["security_alert_count"], 0)
+        self.assertEqual(response.context["security_critical_count"], 0)
+        self.assertNotContains(response, 'role="status"')
+        self.assertNotContains(response, "Открыть сигналы")
+        self.assertContains(response, "<strong>Безопасность</strong>", html=True)
 
     def test_search_account_and_return_preserve_the_query(self):
         self.login(self.manager)
