@@ -2,10 +2,12 @@
 
 Run: python backend/manage.py test public_site.e2e_tests -v 2
 """
+import re
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 from django.test import SimpleTestCase
 from playwright.sync_api import expect, sync_playwright
@@ -13,6 +15,7 @@ from playwright.sync_api import expect, sync_playwright
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT_DIR = REPOSITORY_ROOT / 'backend' / 'test-artifacts'
+CONTENT_ROUTE = re.compile(r'/admin/public/content/(?:\?.*)?$')
 FEED = {
     'news': [{
         'id': 7, 'title': 'Проверка публичной новости', 'category': 'Объявление',
@@ -52,7 +55,15 @@ class PublicContentBrowserTests(SimpleTestCase):
         super().tearDownClass()
 
     def _feed(self, page, payload=FEED):
-        page.route('**/admin/public/content/', lambda route: route.fulfill(json=payload))
+        def respond(route):
+            query = parse_qs(urlsplit(route.request.url).query)
+            if 'news' in query:
+                selected = [item for item in payload['news'] if str(item['id']) == query['news'][0]]
+                route.fulfill(json={**payload, 'news': selected, 'article': selected[0] if selected else None})
+            else:
+                route.fulfill(json=payload)
+
+        page.route(CONTENT_ROUTE, respond)
 
     def _assert_no_overflow(self, page):
         self.assertTrue(page.evaluate(
@@ -144,7 +155,7 @@ class PublicContentBrowserTests(SimpleTestCase):
             try:
                 page = browser.new_page()
                 pending = []
-                page.route('**/admin/public/content/', lambda route: pending.append(route))
+                page.route(CONTENT_ROUTE, lambda route: pending.append(route))
                 page.goto(self.url + '?news=7', wait_until='domcontentloaded')
                 expect(page.locator('#news-grid')).to_have_attribute('aria-busy', 'true')
                 expect(page.locator('#news-grid')).to_have_text('Загружаем новости…')
@@ -159,13 +170,13 @@ class PublicContentBrowserTests(SimpleTestCase):
                 expect(page.locator('.news-card')).to_have_count(1)
                 expect(page.locator('#news-dialog')).not_to_be_visible()
                 self.assertNotIn('Следующий материал', page.locator('body').inner_text())
-                page.unroute('**/admin/public/content/')
+                page.unroute(CONTENT_ROUTE)
                 self._feed(page, {'news': [], 'documents': []})
                 page.goto(self.url)
                 expect(page.locator('#news-grid')).to_have_text('Пока нет опубликованных новостей.')
                 expect(page.locator('#documents-list')).to_have_text('Пока нет опубликованных документов.')
                 self.assertEqual(page.locator('.news-card').count(), 0)
-                page.unroute('**/admin/public/content/')
+                page.unroute(CONTENT_ROUTE)
                 attempts = []
 
                 def response(route):
@@ -175,7 +186,7 @@ class PublicContentBrowserTests(SimpleTestCase):
                     else:
                         route.fulfill(json=FEED)
 
-                page.route('**/admin/public/content/', response)
+                page.route(CONTENT_ROUTE, response)
                 page.goto(self.url)
                 expect(page.locator('#news-grid')).to_contain_text('Не удалось загрузить новости.')
                 expect(page.locator('#documents-list')).to_contain_text('Не удалось загрузить документы.')
@@ -185,6 +196,47 @@ class PublicContentBrowserTests(SimpleTestCase):
                 expect(page.locator('.document-row')).to_have_count(1)
                 expect(page.locator('#news-grid')).to_have_attribute('aria-busy', 'false')
                 self.assertEqual(len(attempts), 2)
+            finally:
+                browser.close()
+
+    def test_homepage_blocks_and_forum_navigation_follow_feed(self):
+        announcement = {
+            'title': 'Тестовое главное объявление', 'label': 'Важно',
+            'subtitle': 'Синтетический анонс', 'body': 'Текст объявления',
+            'button_text': 'Открыть новость', 'button_url': '/?news=7', 'image_url': '',
+        }
+        payload = {
+            **FEED, 'announcement': announcement,
+            'contacts': {'office_hours': 'По записи'}, 'forum_url': '/admin/cabinet/forum/',
+        }
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                for width in (320, 390, 1280):
+                    context = browser.new_context(viewport={'width': width, 'height': 844})
+                    try:
+                        page = context.new_page()
+                        self._feed(page, payload)
+                        page.goto(self.url)
+                        expect(page.locator('#important-title')).to_have_text(announcement['title'])
+                        expect(page.locator('#important .primary')).to_have_attribute('href', urljoin(self.url, '/?news=7'))
+                        expect(page.locator('#contacts')).to_be_visible()
+                        expect(page.locator('#contacts-content')).to_contain_text('По записи')
+                        forum = page.get_by_role('link', name='Обсуждения', exact=True)
+                        expect(forum).to_have_attribute('href', '/admin/cabinet/forum/')
+                        expect(forum).to_be_visible()
+                        self._assert_no_overflow(page)
+
+                        page.unroute(CONTENT_ROUTE)
+                        self._feed(page, {**FEED, 'announcement': None, 'contacts': None, 'forum_url': None})
+                        page.reload()
+                        expect(page.locator('.news-card')).to_have_count(1)
+                        expect(page.locator('#important-title')).to_have_text('Оформление прав на земельные участки')
+                        expect(page.locator('#contacts')).not_to_be_visible()
+                        expect(forum).not_to_be_visible()
+                        self._assert_no_overflow(page)
+                    finally:
+                        context.close()
             finally:
                 browser.close()
 

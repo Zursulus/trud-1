@@ -2,6 +2,8 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.test import override_settings
+from django.urls import reverse
 from django.utils import timezone
 from playwright.sync_api import sync_playwright
 
@@ -11,6 +13,7 @@ from .models import (
 )
 
 
+@override_settings(FORUM_ENABLED=True)
 class ResidentPortalBrowserTests(StaticLiveServerTestCase):
     password = 'resident-browser-password-2026!'
 
@@ -60,13 +63,16 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertGreaterEqual(hero_height, 180)
             self.assertLessEqual(hero_height, 195)
             self.assertTrue(page.locator('.home-plot-card').is_visible())
-            self.assertEqual(page.locator('.home-shortcuts .shortcut').count(), 4)
+            self.assertEqual(page.locator('.home-shortcuts .shortcut').count(), 5)
+            self.assertEqual(page.locator('.shortcut-forum').get_attribute('href'), reverse('forum:index'))
             self.assertTrue(page.get_by_text('Что требует внимания', exact=True).is_visible())
             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
 
             nav = page.locator('.bottom-nav')
             self.assertTrue(nav.is_visible())
-            self.assertEqual(page.locator('.bottom-nav a').count(), 5)
+            self.assertEqual(nav.get_by_role('link').count(), 6)
+            self.assertEqual(nav.get_by_role('link', name='Обсуждения', exact=True).get_attribute('href'),
+                             reverse('forum:index'))
             self.assertTrue(page.evaluate("getComputedStyle(document.querySelector('.bottom-nav')).borderRadius === '0px'"))
             self.assertTrue(page.evaluate("[...document.querySelectorAll('.bottom-nav a')].every(a => a.getBoundingClientRect().height >= 44)"))
 
