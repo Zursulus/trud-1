@@ -82,3 +82,10 @@ class SiteFindingTests(TestCase):
         self.client.force_login(self.staff)
         for path in paths:
             self.assertEqual(self.client.get(path).status_code, 403)
+
+    def test_appeal_search_accepts_unicode_without_integer_errors(self):
+        self.client.force_login(self.admin)
+        for param in ('q', 'account'):
+            for value in ('²', '１２３', '123', 'текст'):
+                with self.subTest(param=param, value=value):
+                    self.assertEqual(self.client.get('/work/appeals/', {param: value}).status_code, 200)
