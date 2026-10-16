@@ -4,6 +4,8 @@ import vm from 'node:vm';
 
 class Element {
   constructor(){this.textContent='';this.open=false;this.children=[];this.dataset={};this.classList={add(){}};}
+  get childNodes(){return this.children;}
+  cloneNode(){return new Element();}
   append(...children){this.children.push(...children);}
   replaceChildren(...children){this.children=children;}
   setAttribute(){}
@@ -20,7 +22,7 @@ for(const initialId of [1,13,999]){
   const requests=[];
   const context={
     document:{
-      querySelector(selector){if(!elements.has(selector))elements.set(selector,new Element());return elements.get(selector);},
+      querySelector(selector){if(selector==='#public-preview-data')return null;if(!elements.has(selector))elements.set(selector,new Element());return elements.get(selector);},
       createElement(){return new Element();},
     },
     window:{location:{href:`https://synthetic.invalid/?news=${initialId}`},addEventListener(){}},

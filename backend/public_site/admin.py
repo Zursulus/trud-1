@@ -1,9 +1,10 @@
 from django import forms
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from water.admin_documents import ProtectedDocumentAdminMixin
 
-from .models import PublicDocument, PublicDocumentCategory, PublicNews
+from .models import PublicDocument, PublicDocumentCategory, PublicNews, HomepageAnnouncement, SiteContacts
 from .publication_workflow import apply_publication_state
 
 
@@ -104,3 +105,23 @@ class PublicDocumentAdmin(ProtectedDocumentAdminMixin, PublicationAdmin):
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj)) + ('original_name', 'file_size')
         return fields
+
+
+class HomepageAdminForm(PublicationAdminForm):
+    change_reason = forms.CharField(
+        label='Причина изменения', required=False, max_length=100,
+        widget=forms.Textarea(attrs={'rows': 2}),
+    )
+
+
+@admin.register(HomepageAnnouncement, SiteContacts)
+class HomepageBlockAdmin(PublicationAdmin, SimpleHistoryAdmin):
+    form = HomepageAdminForm
+
+    def get_readonly_fields(self, request, obj=None):
+        return super().get_readonly_fields(request, obj) + ('version',)
+
+    def has_add_permission(self, request):
+        if self.model is SiteContacts and SiteContacts.objects.exists():
+            return False
+        return super().has_add_permission(request)

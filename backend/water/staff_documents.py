@@ -11,7 +11,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 
-from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews
+from public_site.models import PublicDocument, PublicDocumentCategory, PublicNews, HomepageAnnouncement, SiteContacts
 from public_site.publication_workflow import PUBLICATION_CONFIRMATION_ERROR, apply_publication_state
 
 from .access_resolver import can_any
@@ -30,7 +30,7 @@ def _can(user, capability):
 
 def _can_use_workspace(user):
     return any(_can(user, capability) for capability in (
-        "documents.account.view", "documents.public.view", "news.view",
+        "documents.account.view", "documents.public.view", "news.view", "site.announcement.view", "site.contacts.view",
     ))
 
 
@@ -154,8 +154,9 @@ class PublicNewsForm(PublicationFormBase):
     class Meta:
         model = PublicNews
         fields = ("title", "category", "summary", "body", "published_on", "is_featured", "is_published")
+        labels = {"published_on": "Опубликовать с даты"}
         widgets = {
-            "published_on": forms.DateInput(attrs={"type": "date"}),
+            "published_on": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "body": forms.Textarea(attrs={"rows": 10}),
             "summary": forms.Textarea(attrs={"rows": 3}),
         }
@@ -177,6 +178,8 @@ def _save_public_form(form, *, actor, can_publish):
         is_published=desired_published,
         confirmed=form.cleaned_data.get("confirm_publication", False),
     )
+    obj._history_user = actor
+    obj._change_reason = form.cleaned_data.get("change_reason") or "Создание записи"
     obj.save()
     reason = (form.cleaned_data.get("change_reason") or "Создание записи").strip()
     _log_content(actor, obj, CHANGE if was_existing else ADDITION, reason)
@@ -188,7 +191,24 @@ def dashboard(request):
     context = _base_context(request, section="documents")
     q = " ".join((request.GET.get("q") or "").split())[:160]
     context["q"] = q
+    if _can(request.user, "site.announcement.view"):
+        from public_site.homepage import active_announcement
+        active = active_announcement()
+        context["announcements"] = list(HomepageAnnouncement.objects.all()[:30])
+        for item in context["announcements"]:
+            item._active_announcement_id = active.pk if active else None
+        context["can_add_announcement"] = _can(request.user, "site.announcement.create")
+    if _can(request.user, "site.contacts.view"):
+        context["site_contacts"] = SiteContacts.objects.first()
+        context["can_view_contacts"] = True
+        context["can_add_contacts"] = _can(request.user, "site.contacts.create")
 
+    context.update({
+        "can_publish_announcements": _can(request.user, "site.announcement.publish"),
+        "can_publish_contacts": _can(request.user, "site.contacts.publish"),
+        "can_publish_news": _can(request.user, "news.publish"),
+        "can_publish_documents": _can(request.user, "documents.public.publish"),
+    })
     can_account = _can(request.user, "documents.account.view")
     can_public = _can(request.user, "documents.public.view")
     can_news = _can(request.user, "news.view")
@@ -243,7 +263,7 @@ def dashboard(request):
         context.update({
             "news_count": PublicNews.objects.count(),
             "news_draft_count": PublicNews.objects.filter(is_published=False).count(),
-            "news_items": list(queryset.order_by("-published_on", "-id")[:30]),
+            "news_items": list(queryset.order_by("-is_featured", "-published_on", "-id")[:30]),
         })
 
     return TemplateResponse(request, "water/work/documents/dashboard.html", context)
@@ -322,7 +342,7 @@ def public_document_create(request):
             messages.success(request, "Публичный документ сохранён.")
             return HttpResponseRedirect(reverse("staff_workspace:public_document", args=[item.pk]))
     context = _base_context(request, section="documents")
-    context.update({"form": form, "mode": "create"})
+    context.update({"form": form, "mode": "create", "can_publish": can_publish})
     return TemplateResponse(request, "water/work/documents/public_form.html", context)
 
 
@@ -384,7 +404,7 @@ def news_create(request):
             messages.success(request, "Новость сохранена.")
             return HttpResponseRedirect(reverse("staff_workspace:news", args=[item.pk]))
     context = _base_context(request, section="documents")
-    context.update({"form": form, "mode": "create"})
+    context.update({"form": form, "mode": "create", "can_publish": can_publish})
     return TemplateResponse(request, "water/work/documents/news_form.html", context)
 
 

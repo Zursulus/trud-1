@@ -5,6 +5,11 @@ const articleSummary=document.querySelector('#article-summary');
 const articleBody=document.querySelector('#article-body');
 const newsGrid=document.querySelector('#news-grid');
 const documentsList=document.querySelector('#documents-list');
+const importantBlock=document.querySelector('#important');
+const originalImportant=importantBlock?Array.from(importantBlock.childNodes,node=>node.cloneNode(true)):[];
+const contactsBlock=document.querySelector('#contacts');
+const contactsContent=document.querySelector('#contacts-content');
+const originalContacts=contactsContent?Array.from(contactsContent.childNodes,node=>node.cloneNode(true)):[];
 let articles=[];
 const articleLoads=new Map();
 let contentStatus='loading';
@@ -147,7 +152,7 @@ function newsCard(item,index){
   meta.className='card-meta';
   const tag=document.createElement('span');
   tag.className='tag';
-  tag.textContent=String(item.category||'Новость').toUpperCase();
+  tag.textContent=String(item.category||'Новость').toUpperCase()+(item.featured?' · Закреплено':'');
   const date=document.createElement('span');
   date.textContent=formatDate(item.date);
   meta.append(tag,date);
@@ -193,6 +198,76 @@ function documentRow(item){
   return link;
 }
 
+function publicLink(value){
+  if(!value)return '';
+  try{
+    const url=new URL(value,window.location.origin);
+    return ['http:','https:'].includes(url.protocol)?url.href:'';
+  }catch(error){return '';}
+}
+
+function renderHomepageBlocks(payload){
+  if(importantBlock){
+    const item=payload.announcement;
+    if(!item){
+      importantBlock.replaceChildren(...originalImportant.map(node=>node.cloneNode(true)));
+    }else{
+      const copy=document.createElement('div');
+      copy.className='notice-copy';
+      const label=document.createElement('div');
+      label.className='notice-kicker';
+      label.textContent=item.label||'';
+      const title=document.createElement('h1');
+      title.id='important-title';
+      title.textContent=item.title;
+      const subtitle=document.createElement('p');
+      subtitle.className='notice-lead';
+      subtitle.textContent=item.subtitle||'';
+      const body=document.createElement('div');
+      body.className='notice-text';
+      body.append(...renderArticleBody(item.body));
+      copy.append(label,title,subtitle,body);
+      const href=publicLink(item.button_url);
+      if(href&&item.button_text){
+        const actions=document.createElement('div');
+        actions.className='notice-actions';
+        const button=document.createElement('a');
+        button.className='primary';
+        button.href=href;
+        button.textContent=item.button_text;
+        actions.append(button);
+        copy.append(actions);
+      }
+      importantBlock.replaceChildren(copy);
+      const imageUrl=publicLink(item.image_url);
+      if(imageUrl&&new URL(imageUrl).origin===window.location.origin){
+        const image=document.createElement('img');
+        image.src=imageUrl;
+        image.alt='';
+        image.style.cssText='max-width:100%;height:auto;border-radius:12px';
+        importantBlock.append(image);
+      }
+    }
+  }
+  if(contactsBlock&&contactsContent){
+    const item=payload.contacts;
+    contactsBlock.hidden=!item&&originalContacts.length===0;
+    contactsContent.replaceChildren(...originalContacts.map(node=>node.cloneNode(true)));
+    if(item){
+      contactsContent.replaceChildren();
+      for(const [key,label] of [['email','Почта'],['phone','Телефон'],['address','Адрес'],['office_hours','Часы приёма'],['how_to_contact','Как связаться']]){
+        if(!item[key])continue;
+        const paragraph=document.createElement('p');
+        paragraph.style.whiteSpace='pre-line';
+        const strong=document.createElement('strong');
+        strong.textContent=label+': ';
+        paragraph.append(strong,document.createTextNode(item[key]));
+        contactsContent.append(paragraph);
+      }
+    }
+  }
+}
+
 function contentState(message,retry=false){
   const state=document.createElement('div');
   state.className='content-state';
@@ -222,13 +297,21 @@ async function loadPublicContent(){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),15000);
   try{
-    const response=await fetch('/admin/public/content/',{headers:{Accept:'application/json'},credentials:'same-origin',signal:controller.signal});
-    if(!response.ok)throw new Error(`HTTP ${response.status}`);
-    const payload=await response.json();
+    const preview=document.querySelector('#public-preview-data');
+    let payload;
+    if(preview){
+      payload=JSON.parse(preview.textContent);
+    }else{
+      const response=await fetch('/admin/public/content/',{headers:{Accept:'application/json'},credentials:'same-origin',signal:controller.signal});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      payload=await response.json();
+    }
     if(!Array.isArray(payload.news)||!Array.isArray(payload.documents))throw new Error('Invalid public content');
-    articles=[...payload.news];
+    renderHomepageBlocks(payload);
+    articles=payload.news.slice();
+    if(payload.article&&!articles.some(item=>item.id===payload.article.id))articles.push(payload.article);
     contentStatus='ready';
-    newsGrid.replaceChildren(...(articles.length?articles.map(newsCard):[contentState('Пока нет опубликованных новостей.')]));
+    newsGrid.replaceChildren(...(payload.news.length?payload.news.map(newsCard):[contentState('Пока нет опубликованных новостей.')]));
     documentsList.replaceChildren(...(payload.documents.length?payload.documents.map(documentRow):[contentState('Пока нет опубликованных документов.')]));
   }catch(error){
     articles=[];
