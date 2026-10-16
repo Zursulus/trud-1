@@ -109,7 +109,7 @@ class BoardVoteAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return bool(request.method in ('GET', 'HEAD', 'OPTIONS'))
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -124,7 +124,7 @@ class BoardDiscussionCommentAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return bool(request.method in ('GET', 'HEAD', 'OPTIONS'))
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -155,7 +155,7 @@ class BoardAuditEventAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return bool(request.method in ('GET', 'HEAD', 'OPTIONS'))
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
