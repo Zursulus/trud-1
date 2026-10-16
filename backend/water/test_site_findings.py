@@ -254,3 +254,10 @@ class SiteFindingTests(TestCase):
                 self.assertEqual(response.context['threshold'], '20')
                 self.assertEqual(self.client.get('/admin/water/readings/export-xlsx/', {'threshold': raw}).status_code, 400)
         self.assertEqual(_parse_threshold('25.5'), (Decimal('25.5'), None))
+
+    def test_empty_finance_account_title_has_dash_fallback(self):
+        account = Account.objects.create(number=None, plot='')
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/finance/accounts/{account.pk}/')
+        self.assertContains(page, '<title>Финансы · — ·')
+        self.assertNotContains(page, 'None')

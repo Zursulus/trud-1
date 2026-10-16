@@ -1,5 +1,5 @@
 {% extends 'water/work/base.html' %}
-{% block title %}Финансы · {{ account.plot|default:account.number }}{% endblock %}
+{% block title %}Финансы · {{ account.plot|default:account.number|default:'—' }}{% endblock %}
 {% block content %}
 <nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:finance' %}">Финансы</a><span aria-hidden="true">›</span><span>{{ account.number|default:'без номера' }}</span></nav>
 <section class="ws-object-head{% if account.archived %} is-archived{% endif %}"><div><p class="ws-eyebrow">Финансовая карточка</p><h1>{{ account.plot|default:'Участок не указан' }}</h1><div class="ws-object-meta"><span>Л/с <strong>{{ account.number|default:'не присвоен' }}</strong></span>{% if account.archived %}<span class="ws-badge ws-badge-muted">Архив</span>{% endif %}</div></div>{% if can_open_account %}<a class="ws-secondary" href="{% url 'staff_workspace:account' account.pk %}">Карточка участка</a>{% endif %}</section>
