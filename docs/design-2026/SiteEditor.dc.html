@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Правление — редактор сайта</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=Manrope:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0d5c74}a:hover{color:#083f50}
+.prev{background-image:linear-gradient(180deg,rgba(14,33,48,.1),rgba(14,33,48,.8)),url(/_blob/0bd6918f3e5fb8bcecbb9c77d113260a);background-size:cover;background-position:center 60%}
+</style>
+</helmet>
+<div style="font-family:Manrope,'Segoe UI',sans-serif;color:#13222e;background:#f4f7f8;min-height:100%;padding:28px;box-sizing:border-box;display:flex;flex-direction:column;gap:22px">
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px">
+    <div><a href="Work.dc.html" style="font-size:14px;text-decoration:none">← Правление</a><h1 style="margin:6px 0 0;font-family:Unbounded,sans-serif;font-size:32px;font-weight:700">Сайт</h1></div>
+    <a href="Main.dc.html" style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #dfe6ea;border-radius:14px;padding:12px 18px;text-decoration:none;color:#13222e;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Открыть сайт</a>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px" role="tablist" aria-label="Разделы сайта">
+    <button type="button" role="tab" aria-selected="true" style="border:0;background:#13222e;color:#ffffff;font:inherit;font-weight:700;padding:10px 18px;border-radius:999px">Главное объявление</button>
+    <button type="button" role="tab" aria-selected="false" style="border:1px solid #dfe6ea;background:#ffffff;font:inherit;font-weight:700;padding:10px 18px;border-radius:999px;color:#13222e">Новости · 12</button>
+    <button type="button" role="tab" aria-selected="false" style="border:1px solid #dfe6ea;background:#ffffff;font:inherit;font-weight:700;padding:10px 18px;border-radius:999px;color:#13222e">Документы · 8</button>
+    <button type="button" role="tab" aria-selected="false" style="border:1px solid #dfe6ea;background:#ffffff;font:inherit;font-weight:700;padding:10px 18px;border-radius:999px;color:#13222e">Контакты и приём</button>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+    <form style="flex:1 1 420px;min-width:0;background:#ffffff;border-radius:22px;padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <h2 style="margin:0;font-size:20px">Что видят все на главной</h2>
+        <span style="background:#e6f2ec;color:#2f6b52;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700">На сайте</span>
+      </div>
+      <label for="tag" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Метка<input id="tag" value="Важно для членов ТСН" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:12px 14px"></label>
+      <label for="title" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Заголовок<input id="title" value="Оформите права на свой участок" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:12px 14px"></label>
+      <label for="text" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Текст<textarea id="text" rows="3" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:12px 14px;resize:vertical">Администрация Феодосии просит каждого члена ТСН зарегистрировать право собственности.</textarea></label>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+        <label for="btn" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Кнопка<input id="btn" value="Читать письмо" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:12px 14px"></label>
+        <label for="link" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Ведёт на<select id="link" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:12px 14px;background:#ffffff"><option>Документ: письмо № 2-47-10604</option><option>Новость</option><option>Внешняя ссылка</option></select></label>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+        <label for="from" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">Показывать с<input id="from" type="date" value="2026-08-27" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:11px 14px"></label>
+        <label for="to" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:14px">по<input id="to" type="date" style="font:inherit;font-weight:400;font-size:16px;border:1px solid #cfd8dd;border-radius:12px;padding:11px 14px"></label>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;border:1px dashed #9fb3bd;border-radius:14px;padding:12px">
+        <div class="prev" style="width:84px;height:56px;border-radius:10px;flex:none"></div>
+        <span style="flex:1;font-size:14px;color:#506270">Фон: закат над Орджоникидзе</span>
+        <button type="button" style="border:1px solid #cfd8dd;background:#ffffff;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700">Заменить</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;padding-top:4px">
+        <button type="button" style="flex:2 1 200px;min-height:52px;border:0;border-radius:16px;background:#0d5c74;color:#ffffff;font:inherit;font-weight:700;font-size:16px">Опубликовать изменения</button>
+        <button type="button" style="flex:1 1 140px;min-height:52px;border:1px solid #cfd8dd;border-radius:16px;background:#ffffff;font:inherit;font-weight:700;color:#13222e">Сохранить черновик</button>
+      </div>
+      <span style="font-size:13px;color:#506270">Все изменения сохраняются в истории: кто и когда менял, можно вернуть прежний вариант.</span>
+    </form>
+
+    <div style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b>Так это увидят жители</b><span style="display:flex;gap:6px"><button type="button" aria-pressed="true" style="border:0;background:#13222e;color:#ffffff;border-radius:10px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700">Компьютер</button><button type="button" aria-pressed="false" style="border:1px solid #cfd8dd;background:#ffffff;border-radius:10px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700">Телефон</button></span></div>
+      <div class="prev" style="border-radius:22px;min-height:320px;padding:28px;box-sizing:border-box;color:#ffffff;display:flex;flex-direction:column;justify-content:flex-end;gap:12px">
+        <span style="align-self:flex-start;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.04em">ВАЖНО ДЛЯ ЧЛЕНОВ ТСН</span>
+        <b style="font-family:Unbounded,sans-serif;font-size:28px;line-height:1.15">Оформите права на свой участок</b>
+        <span style="font-size:15px;line-height:1.5;opacity:.92">Администрация Феодосии просит каждого члена ТСН зарегистрировать право собственности.</span>
+        <span style="align-self:flex-start;background:#f08a4b;color:#13222e;font-weight:700;padding:12px 18px;border-radius:14px">Читать письмо</span>
+      </div>
+      <div style="background:#ffffff;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px">
+        <b style="font-size:15px">Недавние изменения</b>
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#506270"><span>[Имя] изменил заголовок</span><span>сегодня 13:40</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;color:#506270"><span>[Имя] опубликовал новость «[тема]»</span><span>14 окт</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Кабинет жителя на телефоне</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=Manrope:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0d5c74}a:hover{color:#083f50}
+.top{background-image:linear-gradient(180deg,rgba(14,33,48,.2),rgba(14,33,48,.75)),url(/_blob/0bd6918f3e5fb8bcecbb9c77d113260a);background-size:cover;background-position:center 58%}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;font-family:Manrope,'Segoe UI',sans-serif;color:#13222e;background:#f4f7f8;display:flex;flex-direction:column;overflow:hidden">
+  <div class="top" style="padding:28px 20px 56px;color:#ffffff;display:flex;flex-direction:column;gap:6px">
+    <span style="font-size:14px;opacity:.9">Добрый день, [Имя]</span>
+    <b style="font-family:Unbounded,sans-serif;font-size:26px">Участок № 333</b>
+    <span style="font-size:14px;opacity:.9">К оплате 23,45 ₽ · показания до 25 окт</span>
+  </div>
+  <div style="margin-top:-36px;padding:0 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <a href="Controller.dc.html" style="background:#0d5c74;color:#ffffff;border-radius:22px;padding:18px;text-decoration:none;display:flex;flex-direction:column;gap:10px;min-height:120px;box-sizing:border-box">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>
+      <b style="font-size:17px;line-height:1.25">Передать показания</b>
+    </a>
+    <a href="#" style="background:#f08a4b;color:#13222e;border-radius:22px;padding:18px;text-decoration:none;display:flex;flex-direction:column;gap:10px;min-height:120px;box-sizing:border-box">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#13222e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
+      <b style="font-size:17px;line-height:1.25">Оплатить 23,45 ₽</b>
+    </a>
+  </div>
+  <div style="padding:20px 16px 0;display:flex;flex-direction:column;gap:10px;flex:1">
+    <b style="font-size:16px">Ждёт вас</b>
+    <a href="#" style="display:flex;align-items:center;gap:12px;background:#ffffff;border-radius:18px;padding:14px;text-decoration:none;color:#13222e;min-height:44px"><span style="width:40px;height:40px;border-radius:12px;background:#eeeafb;display:flex;align-items:center;justify-content:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6a5aa8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 12l3 3 5-6"/></svg></span><span style="flex:1"><b>Проголосовать</b><br><span style="font-size:14px;color:#506270">Опрос правления</span></span><span aria-hidden="true" style="color:#506270">›</span></a>
+    <a href="#" style="display:flex;align-items:center;gap:12px;background:#ffffff;border-radius:18px;padding:14px;text-decoration:none;color:#13222e;min-height:44px"><span style="width:40px;height:40px;border-radius:12px;background:#e6f2f5;display:flex;align-items:center;justify-content:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d5c74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6"/></svg></span><span style="flex:1"><b>Новый документ</b><br><span style="font-size:14px;color:#506270">Для вашего участка</span></span><span aria-hidden="true" style="color:#506270">›</span></a>
+    <a href="#" style="display:flex;align-items:center;gap:12px;background:#ffffff;border-radius:18px;padding:14px;text-decoration:none;color:#13222e;min-height:44px"><span style="width:40px;height:40px;border-radius:12px;background:#eef1e6;display:flex;align-items:center;justify-content:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5d7a3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg></span><span style="flex:1"><b>Ответ правления</b><br><span style="font-size:14px;color:#506270">По обращению «[тема]»</span></span><span aria-hidden="true" style="color:#506270">›</span></a>
+  </div>
+  <nav aria-label="Разделы" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#ffffff;border-top:1px solid #e3e9ec;padding:8px 4px 18px">
+    <a href="#" aria-current="page" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#0d5c74;font-size:12px;font-weight:700;min-height:44px;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Главная</a>
+    <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#506270;font-size:12px;min-height:44px;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>Вода</a>
+    <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#506270;font-size:12px;min-height:44px;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Платежи</a>
+    <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#506270;font-size:12px;min-height:44px;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg>Обращения</a>
+    <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#506270;font-size:12px;min-height:44px;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Ещё</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
