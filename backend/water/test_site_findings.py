@@ -189,3 +189,53 @@ class SiteFindingTests(TestCase):
         for link in (account_url, statement_url):
             self.assertContains(page, f'href="{link}"')
             self.assertEqual(self.client.get(link).status_code, 200)
+
+    def test_admin_file_links_use_protected_downloads(self):
+        from tempfile import TemporaryDirectory
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from public_site.models import PublicDocument, PublicDocumentCategory
+        from .board_polls import BoardProtocol
+        from .models import AccountDocument, DocumentCategory
+        poll = self.poll()
+        poll.closed_at = timezone.now()
+        poll.save()
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            payload = b'%PDF-1.4\nsynthetic private file'
+            account_doc = AccountDocument.objects.create(
+                account=self.account, category=DocumentCategory.objects.create(name='Синтетическая'),
+                title='Закрытый файл', document=SimpleUploadedFile('account.pdf', payload),
+            )
+            public_doc = PublicDocument.objects.create(
+                category=PublicDocumentCategory.objects.create(name='Синтетическая'),
+                title='Черновик', document=SimpleUploadedFile('draft.pdf', payload),
+            )
+            protocol = BoardProtocol.objects.create(
+                poll=poll, document=SimpleUploadedFile('protocol.pdf', payload), uploaded_by=self.admin,
+            )
+            cases = (
+                (account_doc, 'staff_workspace:account_document_download', account_doc.pk),
+                (public_doc, 'staff_workspace:public_document_download', public_doc.pk),
+                (protocol, 'staff_workspace:governance_protocol', poll.pk),
+            )
+            for obj, name, key in cases:
+                with self.subTest(model=obj._meta.label):
+                    url = reverse(name, args=[key])
+                    self.client.force_login(self.admin)
+                    page = self.client.get(reverse(f'admin:{obj._meta.app_label}_{obj._meta.model_name}_change', args=[obj.pk]))
+                    self.assertContains(page, f'href="{url}"')
+                    self.assertNotContains(page, f'href="{obj.document.url}"')
+                    download = self.client.get(url)
+                    self.assertEqual(download.status_code, 200)
+                    self.assertEqual(b''.join(download.streaming_content), payload)
+                    self.client.force_login(self.staff)
+                    self.assertEqual(self.client.get(url).status_code, 403)
+                    self.client.logout()
+                    self.assertEqual(self.client.get(url).status_code, 302)
+            self.client.force_login(self.admin)
+            inline = self.client.get(f'/admin/water/boardpoll/{poll.pk}/change/')
+            self.assertContains(inline, f'href="{reverse("staff_workspace:governance_protocol", args=[poll.pk])}"')
+            self.assertNotContains(inline, f'href="{protocol.document.url}"')
+            self.assertNotContains(inline, 'namespace(')
+            self.client.logout()
+            self.assertEqual(self.client.get(reverse('public_document_download', args=[public_doc.pk])).status_code, 404)

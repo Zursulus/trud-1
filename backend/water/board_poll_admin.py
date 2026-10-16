@@ -1,4 +1,11 @@
+from types import SimpleNamespace
+
 from django.contrib import admin
+from django.contrib.admin.widgets import AdminFileWidget
+from django.db import models
+from django.urls import reverse
+
+from .admin_documents import ProtectedDocumentAdminMixin
 from django.core.exceptions import PermissionDenied
 
 from .board_polls import (
@@ -22,7 +29,24 @@ class BoardQuestionInline(admin.TabularInline):
         return False
 
 
+class ProtocolFileLink(SimpleNamespace):
+    def __str__(self):
+        return self.name
+
+
+class BoardProtocolFileWidget(AdminFileWidget):
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        if value and getattr(value.instance, 'pk', None):
+            context['widget']['value'] = ProtocolFileLink(
+                name=value.name,
+                url=reverse('staff_workspace:governance_protocol', args=[value.instance.poll_id]),
+            )
+        return context
+
+
 class BoardProtocolInline(admin.StackedInline):
+    formfield_overrides = {models.FileField: {'widget': BoardProtocolFileWidget}}
     model = BoardProtocol
     extra = 0
     max_num = 1
@@ -131,7 +155,12 @@ class BoardDiscussionCommentAdmin(admin.ModelAdmin):
 
 
 @admin.register(BoardProtocol)
-class BoardProtocolAdmin(admin.ModelAdmin):
+class BoardProtocolAdmin(ProtectedDocumentAdminMixin, admin.ModelAdmin):
+    document_download_url = 'staff_workspace:governance_protocol'
+
+    def document_download_id(self, obj):
+        return obj.poll_id
+
     list_display = ('poll', 'original_name', 'file_size', 'uploaded_by', 'uploaded_at')
     readonly_fields = ('original_name', 'file_size', 'uploaded_by', 'uploaded_at')
 
