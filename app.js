@@ -308,7 +308,7 @@ async function loadPublicContent(){
     }
     if(!Array.isArray(payload.news)||!Array.isArray(payload.documents))throw new Error('Invalid public content');
     renderHomepageBlocks(payload);
-    const forumLink=document.getElementById('forum-link');
+    const forumLink=document.querySelector('#forum-link');
     if(forumLink)forumLink.hidden=payload.forum_url!=='/admin/cabinet/forum/';
     articles=payload.news.slice();
     if(payload.article&&!articles.some(item=>item.id===payload.article.id))articles.push(payload.article);

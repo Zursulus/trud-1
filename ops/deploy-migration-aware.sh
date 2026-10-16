@@ -1,5 +1,5 @@
 #!/bin/bash
-# Migration-aware release path for the reviewed SecurityAlert 0034 release.
+# Reviewed migration releases; release-20261016 preserves the public root.
 # Run only through the checksum-pinned deploy-trud-compatible broker.
 set -Eeuo pipefail
 umask 077
@@ -15,8 +15,23 @@ TARGET=${1:?Target full SHA required}
 EXPECTED=${2:?Expected installed full SHA required}
 [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$EXPECTED" =~ ^[0-9a-f]{40}$ ]]
 
+KIND=${3:-security-alert-0034}
+case "$KIND" in
+    security-alert-0034|release-20261016) ;;
+    *) exit 2 ;;
+esac
+NEW_RELEASE=0
+if [ "$KIND" = release-20261016 ]; then
+    NEW_RELEASE=1
+    test "$EXPECTED" = 6fb32eff0f389eda944371d802cd14dec8eb2adb
+fi
+MIGRATION_INTENT='account:0001_initial,account:0002_email_max_length,account:0003_alter_emailaddress_create_unique_verified_email,account:0004_alter_emailaddress_drop_unique_email,account:0005_emailaddress_idx_upper_email,account:0006_emailaddress_lower,account:0007_emailaddress_idx_email,account:0008_emailaddress_unique_primary_email_fixup,account:0009_emailaddress_unique_primary_email,forum:0001_initial,public_site:0002_publicimage_alter_publicnews_is_featured_and_more'
 exec 9>/run/trud-backup.lock
+# The standard verified backup takes the same lock itself. For this release,
+# acquire our lock AFTER it finishes, then recheck live state and take a cold dump.
+if [ "$NEW_RELEASE" = 0 ]; then
 flock -n 9 || { echo 'Выполняется бэкап или обновление.'; exit 1; }
+fi
 
 gitapp() { runuser -u trudsite -- git -C "$APP" "$@"; }
 manage() {
@@ -78,6 +93,7 @@ verify_public() {
     done
 }
 
+verify_live() {
 test -z "$(gitapp status --porcelain)"
 test "$(gitapp rev-parse HEAD)" = "$EXPECTED"
 gitapp cat-file -e "$TARGET^{commit}"
@@ -91,10 +107,24 @@ if marker.get('project') != 'trud-1' or marker.get('commit') != sys.argv[2]:
     raise SystemExit('Маркер production не соответствует ожидаемой версии.')
 PY
 systemctl is-active --quiet trud-1-site.service
+}
+verify_live
+manage migrate --check
 manage showmigrations water | grep -F '[X] 0033_residentaccessrequest_requester_user' >/dev/null
 
+if [ "$NEW_RELEASE" = 1 ]; then
+    manage showmigrations water | grep -F '[X] 0034_security_alert' >/dev/null
+    manage showmigrations public_site | grep -F '[X] 0001_initial' >/dev/null
+    # The only dependency addition is pinned allauth; never upgrade Django here.
+    cmp <(gitapp show "$EXPECTED:backend/requirements.txt"; printf 'django-allauth==65.18.0\n') \
+        <(gitapp show "$TARGET:backend/requirements.txt")
+    runuser -u trudsite -- "$APP/.venv/bin/python" -c \
+        'from importlib.metadata import version; assert version("django-allauth") == "65.18.0"'
+else
+    test "$(gitapp rev-parse "$EXPECTED:backend/requirements.txt")" = \
+        "$(gitapp rev-parse "$TARGET:backend/requirements.txt")"
+fi
 for path in \
-    backend/requirements.txt \
     ops/backup-trud-site.sh \
     ops/trud-1-backup.service \
     ops/trud-1-backup.timer
@@ -106,6 +136,16 @@ do
         exit 1
     }
 done
+if [ "$NEW_RELEASE" = 1 ]; then
+EXPECTED_SENSITIVE=$(cat <<'EOF'
+backend/config/settings.py
+backend/forum/migrations/0001_initial.py
+backend/forum/migrations/__init__.py
+backend/public_site/migrations/0002_publicimage_alter_publicnews_is_featured_and_more.py
+backend/water/management/commands/setup_roles.py
+EOF
+)
+else
 EXPECTED_SENSITIVE=$(cat <<'EOF'
 backend/config/settings.py
 backend/water/management/commands/setup_roles.py
@@ -113,6 +153,7 @@ backend/water/management/commands/vtb_registry_dryrun.py
 backend/water/migrations/0034_security_alert.py
 EOF
 )
+fi
 ACTUAL_SENSITIVE=$(gitapp diff --name-only "$EXPECTED" "$TARGET" -- \
     backend/config/settings.py \
     ':(glob)backend/**/management/**' \
@@ -123,7 +164,18 @@ test "$ACTUAL_SENSITIVE" = "$(printf '%s\n' "$EXPECTED_SENSITIVE" | sort)" || {
     exit 1
 }
 
+if [ "$NEW_RELEASE" = 1 ]; then
+    test -x /usr/local/sbin/trud-1-backup
+    # Failure exits here: no checkout, migrate or service stop is permitted.
+    VERIFIED_BACKUP=$(systemd-run --quiet --wait --pipe --collect \
+        --property=EnvironmentFile=-/etc/trud-1-backup.env /usr/local/sbin/trud-1-backup)
+    printf '%s\n' "$VERIFIED_BACKUP"
+    flock -n 9 || { echo 'Выполняется бэкап или обновление.'; exit 1; }
+    verify_live
+    manage migrate --check
+fi
 nginx -t -q
+if [ "$NEW_RELEASE" = 0 ]; then
 PUBLIC_ROOT=$(/usr/bin/python3 - "$NGINX_SITE" "$PUBLIC_RELEASES" <<'PY'
 import pathlib, re, sys
 site, releases = map(pathlib.Path, sys.argv[1:])
@@ -158,15 +210,20 @@ probe_b=$(mktemp -d "$PUBLIC_RELEASES/.trud-exchange-b.XXXXXXXX")
  exchange_public publish
  exchange_public restore)
 rmdir "$probe_a" "$probe_b"
+fi
 
-BACKUP=$(mktemp -d /var/backups/trud-migration-0034.XXXXXXXX)
+BACKUP=$(mktemp -d "/var/backups/trud-$KIND.XXXXXXXX")
 printf '%s\n' "$EXPECTED" > "$BACKUP/previous-commit"
 printf '%s\n' "$TARGET" > "$BACKUP/target-commit"
 cp -p "$STATUS" "$BACKUP/deployment-status.json"
+if [ "$NEW_RELEASE" = 0 ]; then
 tar -C "$PUBLIC_ROOT" -czf "$BACKUP/public-root.tar.gz" .
 tar -tzf "$BACKUP/public-root.tar.gz" >/dev/null
 printf '%s\n' "$PUBLIC_ROOT" > "$BACKUP/public-root-path"
 printf '%s\n' "$PUBLIC_STAGE" > "$BACKUP/public-previous-path"
+else
+    printf '%s\n' "$VERIFIED_BACKUP" > "$BACKUP/verified-backup.log"
+fi
 
 STOPPED=0
 CHANGED_CODE=0
@@ -178,11 +235,11 @@ rollback() {
     if [ "$CHANGED_CODE" = 1 ]; then
         systemctl stop trud-1-site.service || failed=1
         gitapp checkout --detach "$EXPECTED" || failed=1
-        # 0034 is additive. Never auto-drop its table during recovery.
-        # Old code ignores the additive schema; reversing it could destroy alerts.
+        # New tables are additive. Never auto-drop them during recovery.
+        # Old code ignores these tables; reversing them could destroy new data.
         manage setup_roles || failed=1
         manage collectstatic --noinput || failed=1
-        exchange_public restore || failed=1
+        if [ "$NEW_RELEASE" = 0 ]; then exchange_public restore || failed=1; fi
         restore_tmp=$(mktemp /var/lib/trud-1/deployment-status.XXXXXXXX) || failed=1
         if [ -n "$restore_tmp" ]; then
             cp -p "$BACKUP/deployment-status.json" "$restore_tmp" &&
@@ -195,10 +252,12 @@ rollback() {
         smoke || failed=1
     fi
     if [ "$failed" = 0 ]; then
-        echo "Установка не завершена. Production-код возвращён на $EXPECTED; аддитивная схема 0034 могла остаться применённой."
+        echo "Установка не завершена. Production-код возвращён на $EXPECTED; аддитивная схема могла остаться применённой."
     else
         echo 'Откат не подтверждён. Требуется проверка администратором.' >&2
     fi
+    systemctl status trud-1-site.service --no-pager > "$BACKUP/service-status.txt" 2>&1
+    journalctl -u trud-1-site.service -n 80 --no-pager > "$BACKUP/service-journal.txt" 2>&1
     echo "Диагностика и резервная копия: $BACKUP"
     exit "$result"
 }
@@ -219,23 +278,43 @@ gitapp checkout --detach "$TARGET"
 manage check
 manage makemigrations --check --dry-run
 manage migrate --plan
+if [ "$NEW_RELEASE" = 1 ]; then
+    manage shell --no-imports -c 'from django.conf import settings; assert settings.FORUM_ENABLED and not settings.RESIDENT_EMAIL_LOGIN_ENABLED and not settings.FORUM_PUBLIC_READ; print("RELEASE_FLAGS=PASS")'
+    planned=$(manage shell --no-imports -c 'from django.db import connection; from django.db.migrations.executor import MigrationExecutor; e = MigrationExecutor(connection); print(",".join(sorted(f"{m.app_label}:{m.name}" for m, backwards in e.migration_plan(e.loader.graph.leaf_nodes()))))')
+    test "$planned" = "$MIGRATION_INTENT" || {
+        echo "Неожиданный план миграций: $planned" >&2; exit 1;
+    }
+fi
 manage migrate --noinput
+manage migrate --check
 manage setup_roles
 manage collectstatic --noinput
 manage showmigrations water | grep -F '[X] 0034_security_alert' >/dev/null
 
 # Scanner must be operational before accepting traffic from the new code.
 scanner_ready
+if [ "$NEW_RELEASE" = 0 ]; then
 exchange_public publish
 verify_public
+fi
 
 systemctl start trud-1-site.service
 systemctl is-active --quiet trud-1-site.service
 smoke
+if [ "$NEW_RELEASE" = 1 ]; then
+    for route in accounts/signup/ accounts/login/ admin/cabinet/accounts/signup/ admin/cabinet/accounts/login/ admin/cabinet/accounts/login/code/ admin/cabinet/accounts/login/code/confirm/; do
+        code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' "https://trud-1.ru/$route")
+        test "$code" = 404
+    done
+    code=$(curl --connect-timeout 3 --max-time 10 -sS -o /dev/null -w '%{http_code}' https://trud-1.ru/admin/cabinet/forum/)
+    test "$code" = 302
+fi
+if [ "$NEW_RELEASE" = 0 ]; then
 for file in "${PUBLIC_FILES[@]}"; do
     curl --connect-timeout 3 --max-time 10 -fsS "https://trud-1.ru/$file?release=$TARGET" |
         cmp - "$APP/$file"
 done
+fi
 
 status_tmp=$(mktemp /var/lib/trud-1/deployment-status.XXXXXXXX)
 printf '{"project":"trud-1","commit":"%s","deployed_at":"%s"}\n' \
@@ -260,7 +339,12 @@ fi
 
 echo "DEPLOY_MIGRATION_AWARE=PASS"
 echo "target=$TARGET"
-echo "migration=water:0034_security_alert"
-echo "public_root=$PUBLIC_ROOT"
-echo "previous_public=$PUBLIC_STAGE"
+if [ "$NEW_RELEASE" = 0 ]; then
+    echo "migration=water:0034_security_alert"
+    echo "public_root=$PUBLIC_ROOT"
+    echo "previous_public=$PUBLIC_STAGE"
+else
+    echo "migration=$MIGRATION_INTENT"
+    echo "public_static=unchanged"
+fi
 echo "backup=$BACKUP"

@@ -33,6 +33,14 @@ class Zur143MigrationReleaseTests(unittest.TestCase):
             'required-before-start',
         ):
             self.assertIn(token, self.wrapper)
+    def test_installed_entrypoint_contains_the_same_manifest_broker(self):
+        entrypoint = (OPS / 'deploy-compatible.sh').read_text()
+        self.assertIn(self.wrapper, entrypoint)
+        self.assertIn('release-20261016', self.wrapper)
+        self.assertIn("stat -c '%u'", self.wrapper)
+        self.assertIn('0022', self.wrapper)
+        self.assertLess(self.wrapper.index("stat -c '%u'"), self.wrapper.index('source "$MANIFEST"'))
+
     def test_wrapper_keeps_exact_target_branch_and_checksum_guards(self):
         for token in (
             'EXPECTED_LIVE_SHA',
@@ -85,7 +93,7 @@ class Zur143MigrationReleaseTests(unittest.TestCase):
 
     def test_rollback_is_truthful_for_additive_schema(self):
         self.assertIn('gitapp checkout --detach "$EXPECTED"', self.release)
-        self.assertIn("аддитивная схема 0034 могла остаться применённой", self.release)
+        self.assertIn("аддитивная схема могла остаться применённой", self.release)
         self.assertNotIn("migrate water 0033", self.release)
         self.assertIn("Never auto-drop", self.release)
 

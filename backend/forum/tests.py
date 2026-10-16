@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from water.models import User
+from water._test_auth import login_with_admin_otp
 from .models import Post, Profile, Report, Section, Topic
 
 
@@ -215,11 +216,11 @@ class ForumTests(TestCase):
         self.assertEqual(self.client.post(reverse('forum:report_topic', args=[self.topic.pk]), {'reason': 'Спам'}).status_code, 403)
 
     def test_hidden_topic_and_reply_are_invisible_even_to_author(self):
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         self.assertEqual(self.mod('hide', 'Спам', post=True).status_code, 302)
         self.client.force_login(self.author, backend='django.contrib.auth.backends.ModelBackend')
         self.assertNotContains(self.client.get(self.url), self.post.body)
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         self.assertContains(self.client.get(self.url), 'Спам')
         self.assertEqual(self.mod('hide', 'Спам темы').status_code, 302)
         self.topic.refresh_from_db()
@@ -235,7 +236,7 @@ class ForumTests(TestCase):
 
     def test_moderation_requires_permission_and_reason(self):
         self.assertEqual(self.mod('pin').status_code, 403)
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         self.assertTrue(self.moderator.has_perm('forum.moderate_forum'))
         self.assertEqual(self.mod('hide').status_code, 400)
         for action in ('pin', 'close'):
@@ -260,7 +261,7 @@ class ForumTests(TestCase):
         self.assertEqual(self.mod('pin').status_code, 302)
 
     def test_closed_topic_blocks_reply_and_edits(self):
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         self.mod('close')
         self.client.force_login(self.author, backend='django.contrib.auth.backends.ModelBackend')
         self.assertEqual(self.client.post(self.url, {'body': 'Ответ'}).status_code, 403)
@@ -315,6 +316,13 @@ class ForumTests(TestCase):
         self.assertNotContains(response, self.author.email)
         self.assertNotContains(response, self.author.first_name)
 
+    def test_moderator_staff_surfaces_require_verified_otp_session(self):
+        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        for url in (reverse('forum_moderation'), reverse('admin:forum_section_add')):
+            response = self.client.get(url, follow=True)
+            self.assertEqual(response.request['PATH_INFO'], reverse('two_factor:setup'))
+            self.assertEqual(response.status_code, 200)
+
     def test_report_enters_workspace_queue_and_can_be_resolved(self):
         url = reverse('forum:report_post', args=[self.post.pk])
         self.assertEqual(self.client.post(url, {'reason': 'Оскорбление'}).status_code, 302)
@@ -324,7 +332,7 @@ class ForumTests(TestCase):
         self.assertEqual(report.post, self.post)
         self.assertEqual(report.reporter, self.author)
         self.assertEqual(self.client.get(reverse('forum_moderation')).status_code, 302)
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         self.assertContains(self.client.get(reverse('forum_moderation')), 'Оскорбление')
         self.client.post(reverse('forum_moderation'), {'report_id': report.pk})
         report.refresh_from_db()
@@ -334,7 +342,7 @@ class ForumTests(TestCase):
 
     def test_sections_are_managed_by_board_in_admin(self):
         self.assertEqual(self.client.get(reverse('admin:forum_section_add')).status_code, 302)
-        self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+        login_with_admin_otp(self.client, self.moderator)
         response = self.client.post(reverse('admin:forum_section_add'), {'name': 'Благоустройство', 'description': 'Двор'})
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Section.objects.filter(name='Благоустройство').exists())
@@ -354,7 +362,7 @@ class ForumTests(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 404)
             self.assertIsNone(self.client.get('/admin/public/content/').json()['forum_url'])
             self.assertNotContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
-            self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
+            login_with_admin_otp(self.client, self.moderator)
             self.assertEqual(self.client.get(reverse('forum_moderation')).status_code, 404)
 
     def test_csrf_and_post_only_mutations(self):
@@ -374,3 +382,43 @@ class ForumTests(TestCase):
         self.assertContains(response, 'forum/forum.css')
         self.assertEqual(self.client.get('/admin/public/content/').json()['forum_url'], reverse('forum:index'))
         self.assertNotContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
+
+
+@override_settings(FORUM_ENABLED=True, FORUM_PUBLIC_READ=False, RESIDENT_EMAIL_LOGIN_ENABLED=False,
+                   EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class ProductionForumWithoutEmailLoginTests(TestCase):
+    def test_existing_accounts_can_read_but_signup_and_code_login_are_404(self):
+        before = User.objects.count()
+        for path in ('/accounts/signup/', '/accounts/login/', '/accounts/login/code/'):
+            self.assertEqual(self.client.get(path).status_code, 404)
+        for name in ('account_login', 'account_request_login_code', 'account_confirm_login_code',
+                     'account_signup', 'account_email', 'account_email_verification_sent',
+                     'account_logout', 'account_inactive'):
+            for method in ('get', 'post'):
+                with self.subTest(route=name, method=method):
+                    self.assertEqual(getattr(self.client, method)(reverse(name)).status_code, 404)
+        self.assertEqual(User.objects.count(), before)
+        self.assertEqual(len(mail.outbox), 0)
+        forum_url = reverse('forum:index')
+        self.assertRedirects(self.client.get(forum_url), reverse('resident_login') + '?next=' + forum_url)
+        self.assertNotContains(self.client.get(reverse('resident_login')), reverse('account_login'))
+        from water.models import Account, ResidentAccess
+        account = Account.objects.create(number='FORUM-RELEASE', plot='Синтетический участок')
+        for staff in (False, True):
+            user = User.objects.create_user('release-staff' if staff else 'release-resident',
+                                            password='synthetic-release-password', is_staff=staff)
+            if not staff:
+                ResidentAccess.objects.create(user=user, account=account, role='owner', starts=timezone.localdate())
+            response = self.client.post(reverse('admin:login' if staff else 'resident_login'), {
+                'username': user.username, 'password': 'synthetic-release-password',
+            })
+            self.assertEqual(response.status_code, 302)
+            self.assertContains(self.client.get(forum_url), 'Обсуждения')
+            for name in ('account_login', 'account_signup'):
+                self.assertNotContains(self.client.get(forum_url), reverse(name))
+            if not staff:
+                cabinet = self.client.get(reverse('resident_account', args=[account.pk]))
+                self.assertContains(cabinet, f'href="{forum_url}"')
+                self.assertContains(cabinet, 'Обсуждения')
+                self.assertContains(cabinet, 'bottom-nav forum-enabled')
+            self.client.logout()
