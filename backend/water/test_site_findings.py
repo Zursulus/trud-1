@@ -239,3 +239,18 @@ class SiteFindingTests(TestCase):
             self.assertNotContains(inline, 'namespace(')
             self.client.logout()
             self.assertEqual(self.client.get(reverse('public_document_download', args=[public_doc.pk])).status_code, 404)
+
+    def test_nonfinite_reading_threshold_has_validation_error(self):
+        from decimal import Decimal
+        from .reading_review_config import _parse_threshold
+        self.client.force_login(self.admin)
+        for raw in ('NaN', 'sNaN', '-NaN', 'Infinity', '-Infinity'):
+            with self.subTest(threshold=raw):
+                value, error = _parse_threshold(raw)
+                self.assertEqual(value, Decimal('20'))
+                self.assertTrue(error)
+                response = self.client.get('/admin/water/readings/review/', {'threshold': raw})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context['threshold'], '20')
+                self.assertEqual(self.client.get('/admin/water/readings/export-xlsx/', {'threshold': raw}).status_code, 400)
+        self.assertEqual(_parse_threshold('25.5'), (Decimal('25.5'), None))
