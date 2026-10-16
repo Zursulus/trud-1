@@ -1314,7 +1314,7 @@ class ControllerSubmissionTests(MFAAccessMixin, TestCase):
         self.assertContains(response, 'Вчера')
         self.assertContains(response, 'Сегодня')
         self.assertContains(response, f'value="{timezone.localdate().isoformat()}"')
-        self.assertContains(response, 'Отправить на проверку')
+        self.assertContains(response, 'Сохранить и дальше →')
         self.assertEqual(response.context['form'].fields['meter'].queryset.count(), 1)
 
     def test_repeated_pending_submission_updates_one_record_with_history(self):

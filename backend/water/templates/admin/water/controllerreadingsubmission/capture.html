@@ -1,4 +1,4 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/base_site.html" %}{% load static %}
 
 {% block extrastyle %}
   {{ block.super }}
@@ -14,17 +14,20 @@
     .date-shortcuts button.selected { background:var(--button-bg); color:var(--button-fg); }
     .capture .errorlist { color:var(--error-fg); font-weight:700; }
   </style>
+  <link rel="stylesheet" href="{% static 'water/sea-sunset.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'water/controller-2026.css' %}?v=1">
 {% endblock %}
 
 {% block content %}
-  <div class="capture">
+  <div class="capture"><header class="capture-head"><img src="{% static 'water/brand-sea.svg' %}" alt="" width="44" height="44"><h2>Внести показание</h2></header>
     <p>Выберите адрес, дату и внесите текущее показание. После отправки данные попадут на проверку.</p>
     <form method="post">
       {% csrf_token %}
       {{ form.non_field_errors }}
       <label for="{{ form.meter.id_for_label }}">{{ form.meter.label }}</label>{{ form.meter.errors }}{{ form.meter }}
-      <div class="identity" id="identity" hidden><strong id="address"></strong></div>
+      <div class="identity" id="identity" hidden><strong id="address"></strong><small id="last-reading"></small></div>
       <label for="{{ form.value.id_for_label }}">Текущее показание</label>{{ form.value.errors }}{{ form.value }}
+      <output class="ws-consumption" id="capture-consumption" for="{{ form.value.id_for_label }} {{ form.meter.id_for_label }} {{ form.date.id_for_label }}" aria-live="polite"></output>
       <label for="{{ form.date.id_for_label }}">Дата показания</label>{{ form.date.errors }}{{ form.date }}
       <div class="date-shortcuts" aria-label="Быстрый выбор даты">
         <button type="button" data-days="2">Позавчера</button>
@@ -32,10 +35,11 @@
         <button type="button" data-days="0">Сегодня</button>
       </div>
       <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>{{ form.notes.errors }}{{ form.notes }}
-      <button type="submit" class="default">Отправить на проверку</button>
+      <p class="capture-review-note">После сохранения показание отправится на проверку.</p><button type="submit" class="default">Сохранить и дальше →</button>
     </form>
   </div>
   {{ meter_data|json_script:"meter-data" }}
+  <script src="{% static 'water/reading-preview.js' %}"></script>
   <script>
     const select = document.getElementById('{{ form.meter.id_for_label }}');
     const data = JSON.parse(document.getElementById('meter-data').textContent);
@@ -43,11 +47,17 @@
       const item = data[option.value];
       if (item) option.textContent = item.address;
     }
+    const valueInput = document.getElementById('{{ form.value.id_for_label }}');
+    const consumption = document.getElementById('capture-consumption');
+    valueInput.setAttribute('aria-describedby', 'capture-consumption');
     const updateIdentity = () => {
       const item = data[select.value];
       document.getElementById('identity').hidden = !item;
       if (!item) return;
       document.getElementById('address').textContent = item.address;
+      document.getElementById('last-reading').textContent = item.previous_value == null
+        ? 'Первое показание'
+        : `Последнее в журнале: ${item.previous_value} м³ · ${item.previous_date.split('-').reverse().join('.')}`;
     };
     select.addEventListener('change', updateIdentity);
     updateIdentity();
@@ -70,5 +80,15 @@
       if (dateInput.value === isoDate(Number(button.dataset.days))) update();
     });
     dateInput.addEventListener('change', () => document.querySelectorAll('.date-shortcuts button').forEach((button) => button.classList.toggle('selected', dateInput.value === isoDate(Number(button.dataset.days)))));
+    const updateConsumption = () => {
+      const item = data[select.value];
+      window.TrudReadingPreview.update(consumption, valueInput.value,
+        item?.previous_value, item?.previous_date, dateInput.value);
+    };
+    select.addEventListener('change', updateConsumption);
+    valueInput.addEventListener('input', updateConsumption);
+    dateInput.addEventListener('change', updateConsumption);
+    document.querySelectorAll('.date-shortcuts button').forEach((button) => button.addEventListener('click', updateConsumption));
+    updateConsumption();
   </script>
 {% endblock %}

@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
 
+{% load static l10n %}
 {% block extrastyle %}
   {{ block.super }}
   <style>
@@ -68,9 +69,12 @@
       .meter-row, .line-summary { border-color: #475569; }
     }
   </style>
+  <link rel="stylesheet" href="{% static 'water/sea-sunset.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'water/controller-2026.css' %}?v=1">
 {% endblock %}
 
 {% block content %}
+<script src="{% static 'water/reading-preview.js' %}" defer></script>
 <div class="controller-workspace">
   <h1>Показания моей линии</h1>
   <p class="controller-intro">
@@ -148,10 +152,16 @@
                     min="0"
                     step="0.001"
                     name="value_{{ row.meter.pk }}"
+                    data-reading-preview
+                    data-previous="{% if row.previous %}{{ row.previous.value|unlocalize }}{% endif %}"
+                    data-previous-date="{% if row.previous %}{{ row.previous.date|date:'Y-m-d' }}{% endif %}"
+                    data-reading-date="{{ selected_date|date:'Y-m-d' }}"
+                    aria-describedby="consumption-{{ row.meter.pk }}"
                     value="{{ row.input_value }}"
                     aria-label="{{ row.label }}"
                     placeholder="0.000"
                   >
+                  <output id="consumption-{{ row.meter.pk }}" class="ws-consumption" aria-live="polite"></output>
                   {% if row.pending %}
                     <div class="meter-status pending">Ваше наблюдение на проверке</div>
                   {% elif row.approved %}

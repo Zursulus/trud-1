@@ -12,7 +12,7 @@ from .access_policy import ScopeType
 from .access_resolver import can
 from .board_polls import BoardMembership, BoardPoll, BoardQuestion, BoardVote
 from ._test_auth import login_with_admin_otp
-from .models import Account, ControllerReadingSubmission, Membership, Meter, Person, SupplyNode, User, WaterGroup
+from .models import Account, ControllerReadingSubmission, Membership, Meter, Person, Reading, SupplyNode, User, WaterGroup
 from .portal_permissions import PortalGrant, resolved_access_at, CAP_FINANCE, CAP_VIEW_ACCOUNT
 
 
@@ -230,11 +230,18 @@ class StaffAccessV2Tests(TestCase):
         self.assertContains(water, 'Передать показание на проверку')
         self.assertNotContains(water, 'Внести и сверить показания')
         self.assertEqual(self.client.get('/admin/water/controller-workspace/').status_code, 403)
+        previous = Reading.objects.create(meter=meter, date=timezone.localdate() - timedelta(days=1), value='12.345')
         capture = self.client.get('/admin/water/controllerreadingsubmission/capture/')
         self.assertEqual(capture.status_code, 200)
         choices = capture.context['form'].fields['meter'].queryset
         self.assertTrue(choices.filter(pk=meter.pk).exists())
         self.assertFalse(choices.filter(pk=other_meter.pk).exists())
+        metadata = capture.context['meter_data']
+        self.assertEqual(set(metadata), {str(meter.pk)})
+        self.assertEqual(metadata[str(meter.pk)]['previous_value'], '12.345')
+        self.assertEqual(metadata[str(meter.pk)]['previous_date'], previous.date.isoformat())
+        self.assertContains(capture, 'Сохранить и дальше →')
+        self.assertContains(capture, 'capture-consumption')
 
     def test_v2_access_admin_can_use_main_access_workspace_and_create_person(self):
         manager_person, manager_user = self._person_with_login('Полный Менеджер', 'full-manager-v2')

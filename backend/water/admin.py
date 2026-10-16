@@ -10,7 +10,7 @@ from django.contrib.admin.models import LogEntry
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.contrib import messages
 from django.template.response import TemplateResponse
@@ -919,11 +919,17 @@ class ControllerReadingSubmissionAdmin(RecordedAdmin):
                 f'{address} · {submission.value:.3f} м³ · {submission.date:%d.%m.%Y} — отправлено на проверку',
             )
             return HttpResponseRedirect(reverse('admin:water_controllerreading_capture'))
+        latest = Reading.objects.filter(meter_id=OuterRef('pk')).order_by('-date', '-pk')
         meter_data = {
             str(meter.pk): {
                 'address': meter.account.plot if meter.account else str(meter.group or meter.node),
+                'previous_value': format(meter.previous_value, '.3f') if meter.previous_value is not None else None,
+                'previous_date': meter.previous_date.isoformat() if meter.previous_date else None,
             }
-            for meter in self._capture_meters(form)
+            for meter in self._capture_meters(form).annotate(
+                previous_value=Subquery(latest.values('value')[:1]),
+                previous_date=Subquery(latest.values('date')[:1]),
+            )
         }
         context = {
             **self.admin_site.each_context(request), 'title': 'Внести показание',

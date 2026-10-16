@@ -1,0 +1,30 @@
+/* Legacy controller routes keep admin authentication and form processing. */
+html, body, #container, #content { background: var(--canvas); color: var(--ink); }
+#header { background: var(--ink); }
+#content h1 { font-family: var(--heading-font); line-height: 1.35; }
+.capture, .controller-workspace { min-width: 0; color: var(--ink); }
+.capture { max-width: 560px; background: white; border: 1px solid var(--border); border-radius: 22px; padding: 22px; box-sizing: border-box; }
+.capture-head { display: flex; gap: 14px; align-items: center; margin: -22px -22px 22px; padding: 22px; background: var(--ink); color: white; border-radius: 22px 22px 0 0; }
+.capture-head h2 { font-family: var(--heading-font); margin: 0; font-size: 22px; color: white; }
+.capture-head img { border-radius: 12px; }
+.capture p, .capture-review-note { line-height: 1.5; }
+.capture label { font-size: 15px; }
+.capture select, .capture input, .capture textarea { min-width: 0; border: 1px solid #8a9ba7; border-radius: 12px; background: white; color: var(--ink); font-size: 16px; }
+.capture #id_value { border: 2px solid var(--sea); border-radius: 16px; font: 700 34px/1.4 var(--heading-font); min-height: 76px; padding: 12px 16px; }
+.capture .default, .controller-date button, .controller-submit { background: var(--sea); color: white; border-radius: 16px; border: 0; min-height: 56px; font: 700 17px var(--body-font); }
+.capture .date-shortcuts button { background: white; color: var(--sea); border: 1px solid #8a9ba7; border-radius: 12px; min-width: 0; font-size: 14px; }
+.capture .date-shortcuts button.selected { background: var(--sea); color: white; }
+.capture-review-note { margin-bottom: 0; color: var(--secondary); }
+.capture .errorlist { color: #a12626; }
+.line-card { border-color: var(--border); border-radius: 22px; background: white; color: var(--ink); }
+.line-head { background: var(--ink); color: white; padding: 22px; }
+.line-head h2 { color: white; }
+.line-head p { color: #dfe6ea; }
+.meter-input { min-width: 0; }
+.meter-input input { min-height: 72px; padding: 12px 16px; border: 2px solid var(--sea); border-radius: 16px; background: white; color: var(--ink); font: 700 30px var(--heading-font); text-align: left; }
+.controller-date, .summary-item, .empty-lines { background: white; color: var(--ink); border-color: var(--border); }
+.line-summary, .meter-row.line-meter { background: var(--canvas); }
+.meter-meta, .summary-note, .summary-item span, .controller-intro { color: var(--secondary); }
+.ws-consumption { display: block; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--sea-soft); color: var(--sea); font-size: 14px; line-height: 1.5; }
+.ws-consumption.is-warning { color: #9f2f2f; background: #fff0f1; }
+@media(max-width:600px) { #content { padding: 16px !important; } .capture { padding: 18px; } .capture-head { margin: -18px -18px 18px; padding: 18px; } }

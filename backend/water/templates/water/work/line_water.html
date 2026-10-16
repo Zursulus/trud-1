@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
+{% load static l10n %}
 {% block title %}Показания линии{% endblock %}
 {% block content %}
+<script src="{% static 'water/reading-preview.js' %}" defer></script>
 <section class="ws-page-head ws-page-head-compact">
   <div>
     <p class="ws-eyebrow">Вода</p>
@@ -92,9 +94,15 @@
                 min="0"
                 step="0.001"
                 name="value_{{ row.meter.pk }}"
+                data-reading-preview
+                data-previous="{% if row.previous %}{{ row.previous.value|unlocalize }}{% endif %}"
+                data-previous-date="{% if row.previous %}{{ row.previous.date|date:'Y-m-d' }}{% endif %}"
+                data-reading-date="{{ selected_date|date:'Y-m-d' }}"
+                aria-describedby="consumption-{{ row.meter.pk }}"
                 value="{{ row.input_value }}"
                 placeholder="Введите значение"
               >
+              <output id="consumption-{{ row.meter.pk }}" class="ws-consumption" aria-live="polite"></output>
             </div>
             {% if row.error %}<div class="ws-meter-error">{{ row.error }}</div>{% endif %}
           </div>
