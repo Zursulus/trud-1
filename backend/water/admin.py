@@ -588,6 +588,11 @@ class MeterAdmin(RecordedAdmin):
 
 @admin.register(Reading)
 class ReadingAdmin(RecordedAdmin):
+    def lookup_allowed(self, lookup, value, request):
+        if lookup == 'meter__account__id__exact':
+            return True
+        return super().lookup_allowed(lookup, value, request)
+
     def has_view_permission(self, request, obj=None):
         return super().has_view_permission(request, obj) or _has_all_scope(request.user, 'water.reading.view')
 

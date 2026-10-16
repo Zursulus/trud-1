@@ -89,3 +89,21 @@ class SiteFindingTests(TestCase):
             for value in ('²', '１２３', '123', 'текст'):
                 with self.subTest(param=param, value=value):
                     self.assertEqual(self.client.get('/work/appeals/', {param: value}).status_code, 200)
+
+    def test_account_reading_journal_link_filters_only_this_account(self):
+        import re
+        from .models import Meter, Reading, SupplyNode
+        node = SupplyNode.objects.create(name='Синтетический узел')
+        other = Account.objects.create(number='AUDIT-2')
+        for account in (self.account, other):
+            meter = Meter.objects.create(serial=f'AUDIT-{account.pk}', kind='individual', account=account, node=node)
+            Reading.objects.create(meter=meter, date=timezone.localdate(), value='1')
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/accounts/{self.account.pk}/')
+        link = re.search(r'href="([^"]+)">Журнал показаний', page.content.decode())[1]
+        journal = self.client.get(link)
+        self.assertEqual(journal.status_code, 200)
+        self.assertEqual(list(journal.context['cl'].queryset.values_list('meter__account_id', flat=True)), [self.account.pk])
+        self.assertEqual(self.client.get('/admin/water/reading/', {'meter__account__phone__icontains': '1'}).status_code, 400)
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(link).status_code, 403)
