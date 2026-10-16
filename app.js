@@ -202,6 +202,8 @@ async function loadPublicContent(){
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const payload=await response.json();
     if(!Array.isArray(payload.news)||!Array.isArray(payload.documents))throw new Error('Invalid public content');
+    const forumLink=document.getElementById('forum-link');
+    if(forumLink)forumLink.hidden=payload.forum_url!=='/admin/cabinet/forum/';
     articles=payload.news;
     contentStatus='ready';
     newsGrid.replaceChildren(...(articles.length?articles.map(newsCard):[contentState('Пока нет опубликованных новостей.')]));

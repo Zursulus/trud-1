@@ -20,6 +20,7 @@
         <span><strong>ТРУД-1</strong><small>Рабочая база</small></span>
       </a>
       <nav class="ws-nav">
+        {% if forum_moderator %}<a href="{% url 'forum_moderation' %}">Жалобы форума</a>{% endif %}
         <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
         {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}>Найти</a>{% endif %}
         <a href="{% url 'staff_workspace:more' %}"{% if workspace_section != 'home' and workspace_section != 'search' and workspace_section != 'accounts' %} aria-current="page"{% endif %}>Ещё</a>

@@ -1,0 +1,1 @@
+{% extends 'forum/base.html' %}{% block content %}<section class="forum-card"><h1>{{ title }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить</button></form></section>{% endblock %}

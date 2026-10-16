@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import FileResponse, Http404, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -21,6 +22,7 @@ def public_content(request):
     ).select_related('category').order_by('-document_date', '-id')[:60]
 
     response = JsonResponse({
+        'forum_url': reverse('forum:index') if settings.FORUM_ENABLED else None,
         'news': [
             {
                 'id': item.pk,

@@ -6,6 +6,7 @@ from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
+from forum import views as forum_views
 from water import (
     access_request_views,
     appeal_admin_tools,
@@ -36,6 +37,9 @@ class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
 admin.site.__class__ = MainAdminOTPOnlySite
 
 urlpatterns = [
+    path('admin/cabinet/accounts/', include('forum.auth_urls')),
+    path('admin/cabinet/forum/', include('forum.urls')),
+    path('work/forum/', forum_views.workspace_moderation, name='forum_moderation'),
     path('work/', include('water.staff_workspace_urls')),
     path('admin/deployment-status/', deployment_status, name='deployment_status'),
     path('admin/water/passwords/', admin.site.admin_view(password_admin.password_access_admin), name='water_password_access_admin'),

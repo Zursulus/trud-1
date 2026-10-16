@@ -21,13 +21,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
     'axes', 'simple_history',
     'django_otp', 'django_otp.plugins.otp_static', 'django_otp.plugins.otp_totp',
-    'two_factor', 'water', 'public_site',
+    'two_factor', 'water', 'public_site', 'forum', 'allauth', 'allauth.account',
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware', 'django_otp.middleware.OTPMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware', 'axes.middleware.AxesMiddleware',
 ]
@@ -39,6 +40,7 @@ TEMPLATES = [{
         'django.template.context_processors.request', 'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
         'water.security_context.security_alerts',
+        'forum.access.navigation',
     ]},
 }]
 if DEBUG and os.environ.get('DJANGO_TEST_SQLITE') == '1':
@@ -115,3 +117,33 @@ APPEAL_MESSAGES_PER_MINUTE = int(os.environ.get('TRUD_APPEAL_MESSAGES_PER_MINUTE
 APPEAL_NEW_PER_TEN_MINUTES = int(os.environ.get('TRUD_APPEAL_NEW_PER_TEN_MINUTES', '3'))
 APPEAL_DAILY_UPLOAD_BYTES = int(os.environ.get('TRUD_APPEAL_DAILY_UPLOAD_BYTES', str(50 * 1024 * 1024)))
 APPEAL_TOTAL_UPLOAD_BYTES = int(os.environ.get('TRUD_APPEAL_TOTAL_UPLOAD_BYTES', str(100 * 1024 * 1024)))
+
+
+# Temporary resident features: installing the release does not enable them in production.
+RESIDENT_EMAIL_LOGIN_ENABLED = os.environ.get('TRUD_RESIDENT_EMAIL_LOGIN_ENABLED', '1' if DEBUG else '0') == '1'
+FORUM_ENABLED = os.environ.get('TRUD_FORUM_ENABLED', '1' if DEBUG else '0') == '1'
+FORUM_PUBLIC_READ = os.environ.get('TRUD_FORUM_PUBLIC_READ', '0') == '1'
+FORUM_MESSAGES_PER_MINUTE = int(os.environ.get('TRUD_FORUM_MESSAGES_PER_MINUTE', '3'))
+AUTHENTICATION_BACKENDS += ['forum.auth.EmailCodeBackend']
+ACCOUNT_ADAPTER = 'forum.auth.ResidentAccountAdapter'
+ACCOUNT_FORMS = {'request_login_code': 'forum.auth.ResidentRequestLoginCodeForm'}
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*']
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED = True
+ACCOUNT_LOGIN_BY_CODE_ENABLED = True
+ACCOUNT_LOGIN_BY_CODE_TIMEOUT = 180
+ACCOUNT_EMAIL_VERIFICATION_BY_CODE_TIMEOUT = 600
+ACCOUNT_LOGIN_BY_CODE_MAX_ATTEMPTS = 3
+ACCOUNT_EMAIL_VERIFICATION_BY_CODE_MAX_ATTEMPTS = 3
+ACCOUNT_EMAIL_VERIFICATION_SUPPORTS_CHANGE = False
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
+# Allauth sends through Django's standard mail backend; no separate mail transport.
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '0') == '1'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '0') == '1'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'webmaster@localhost')

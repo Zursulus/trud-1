@@ -100,6 +100,13 @@ class Command(BaseCommand):
                 ))
                 permissions.extend(public_permissions)
                 expected += len(public_site)
+                forum_codes = {'moderate_forum', 'add_section', 'change_section', 'view_section',
+                               'view_topic', 'view_post', 'view_report',
+                               'view_historicaltopic', 'view_historicalpost'}
+                permissions.extend(Permission.objects.filter(
+                    content_type__app_label='forum', codename__in=forum_codes,
+                ))
+                expected += len(forum_codes)
             if len(permissions) != expected:
                 missing = sorted(codes - {permission.codename for permission in permissions})
                 raise RuntimeError(f'Сначала выполните migrate: не найдены все права: {missing}')
