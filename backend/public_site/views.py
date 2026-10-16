@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import FileResponse, Http404, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -35,6 +36,7 @@ def public_content(request):
         'announcement': announcement_payload(active_announcement()),
         'contacts': contacts_payload(),
         'article': news_payload(article) if article else None,
+        'forum_url': reverse('forum:index') if settings.FORUM_ENABLED else None,
         'news': [
             news_payload(item)
             for item in news

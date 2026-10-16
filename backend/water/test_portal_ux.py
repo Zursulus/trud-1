@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from .models import (
     Account, AppealCategory, BillingPeriod, Charge, Meter, Reading, ResidentAccess,
@@ -42,6 +42,18 @@ class ResidentPortalUXTests(TestCase):
         self.assertContains(response, '184,600')
         self.assertContains(response, 'Садовая, 42')
         self.assertNotContains(response, 'Центральная, 58')
+
+    def test_forum_navigation_and_dashboard_shortcut_follow_feature_flag(self):
+        self.login()
+        with override_settings(FORUM_ENABLED=True):
+            response = self.client.get('/admin/cabinet/')
+            self.assertContains(response, 'Обсуждения')
+            self.assertContains(response, 'Вопросы соседей и правления')
+            self.assertContains(response, '#forum')
+            self.assertContains(response, 'href="/admin/cabinet/forum/"')
+        with override_settings(FORUM_ENABLED=False):
+            response = self.client.get('/admin/cabinet/')
+            self.assertNotContains(response, 'Обсуждения')
 
     def test_profile_uses_resident_number_not_legacy_full_name(self):
         self.user.first_name = 'Иван'
