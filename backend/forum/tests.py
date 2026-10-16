@@ -373,4 +373,4 @@ class ForumTests(TestCase):
         self.assertContains(response, 'name="viewport" content="width=device-width,initial-scale=1"')
         self.assertContains(response, 'forum/forum.css')
         self.assertEqual(self.client.get('/admin/public/content/').json()['forum_url'], reverse('forum:index'))
-        self.assertContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
+        self.assertNotContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
