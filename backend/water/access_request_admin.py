@@ -49,12 +49,12 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
     readonly_fields = (
         'submitted_at', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
         'status', 'matched_account', 'approved_role', 'decision_note', 'decided_by', 'decided_at',
-        'invite', 'decision_actions',
+        'invite', 'last_reading', 'consent_record', 'grant', 'decision_actions',
     )
     fields = (
         'submitted_at', 'full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message',
         'status', 'matched_account', 'approved_role', 'decision_note', 'decided_by', 'decided_at',
-        'invite', 'decision_actions',
+        'invite', 'last_reading', 'consent_record', 'grant', 'decision_actions',
     )
 
     def has_add_permission(self, request):
@@ -81,6 +81,9 @@ class ResidentAccessRequestAdmin(PrivateRegistryPermissionMixin, admin.ModelAdmi
     def decision_actions(self, obj):
         if not obj or obj.status != ResidentAccessRequest.STATUS_NEW:
             return 'Решение уже зафиксировано.'
+        if obj.consent_record_id:
+            return format_html('<a class="button" href="{}">Сверить заявку в рабочей базе</a>',
+                               reverse('staff_workspace:access_request', args=[obj.pk]))
         approve = reverse('admin:water_residentaccessrequest_approve', args=[obj.pk])
         reject = reverse('admin:water_residentaccessrequest_reject', args=[obj.pk])
         return format_html(

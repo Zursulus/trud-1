@@ -362,6 +362,8 @@ footer{
   color:var(--muted);
   font-size:12px;
 }
+footer{flex-wrap:wrap}
+footer>nav{flex-basis:100%;line-height:1.8;overflow-wrap:anywhere}
 footer .brand{font-size:19px}
 footer .brand-icon{width:34px;height:34px;font-size:25px}
 

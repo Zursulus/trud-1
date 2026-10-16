@@ -22,9 +22,18 @@ class Section(models.Model):
         return self.name
 
 
-class Profile(models.Model):
+class Profile(RecordedModel):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='forum_profile')
     nickname = models.CharField('Ник', max_length=40, blank=True)
+    registry_email = models.EmailField('Email, сверенный с реестром членов', blank=True)
+    email_verified_at = models.DateTimeField('Дата сверки', null=True, blank=True)
+    email_verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name='registry_email_verifications')
+
+    @property
+    def registry_email_matches(self):
+        return bool(self.email_verified_at and self.registry_email
+                    and self.registry_email.casefold() == self.user.email.casefold())
 
     def __str__(self):
         return self.nickname or f'Житель {self.user_id}'
@@ -107,3 +116,45 @@ class Report(models.Model):
     def clean(self):
         if self.post_id and self.post.topic_id != self.topic_id:
             raise ValidationError('Ответ не принадлежит теме.')
+
+
+from public_site.legal import AppendOnlyModel, LegalDocument
+
+
+class ConsentRecord(AppendOnlyModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='consent_records')
+    document = models.ForeignKey(LegalDocument, on_delete=models.PROTECT)
+    document_type = models.CharField('Тип документа', max_length=20,
+        choices=[('consent', 'Персональные данные'), ('rules', 'Правила форума'), ('binding', 'Данные заявки')])
+    version = models.CharField('Версия документа', max_length=40)
+    action = models.CharField('Действие', max_length=10, choices=[('accept', 'Принятие'), ('withdraw', 'Отзыв')])
+    created_at = models.DateTimeField('Время', default=timezone.now, editable=False)
+    ip = models.GenericIPAddressField('IP', null=True, blank=True)
+    user_agent = models.CharField('User-agent', max_length=1000, blank=True)
+
+    class Meta:
+        verbose_name = 'Запись согласия'
+        verbose_name_plural = 'Журнал согласий'
+        ordering = ['-id']
+        default_permissions = ('view',)
+
+    def clean(self):
+        expected = 'consent' if self.document_type == 'binding' else self.document_type
+        if self.document_id and (self.document.kind != expected or self.version != self.document.version):
+            raise ValidationError('Тип и версия должны соответствовать документу.')
+
+
+class DeletionRequest(RecordedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField('Получено', default=timezone.now, editable=False)
+    status = models.CharField('Статус', max_length=20, default='new',
+        choices=[('new', 'Ожидает рассмотрения'), ('done', 'Рассмотрена')])
+    decision = models.TextField('Решение и законные основания дальнейшего хранения', blank=True)
+
+    class Meta:
+        verbose_name = 'Заявка на удаление персональных данных'
+        verbose_name_plural = 'Заявки на удаление персональных данных'
+
+    def clean(self):
+        if self.status == 'done' and not self.decision.strip():
+            raise ValidationError('Укажите результат и основания хранения или удаления.')

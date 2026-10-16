@@ -7,6 +7,9 @@ from django.db import models
 from django.utils import timezone
 
 
+from .legal import LegalDocument
+
+
 PUBLIC_DOCUMENT_EXTENSIONS = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.odt', '.ods', '.txt'}
 
 

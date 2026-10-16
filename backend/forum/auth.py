@@ -62,7 +62,7 @@ class ResidentAccountAdapter(DefaultAccountAdapter):
         return super().login(request, user)
 
     def _check_user(self, user, email=None):
-        if not settings.RESIDENT_EMAIL_LOGIN_ENABLED or user.is_staff or user.is_superuser:
+        if not settings.RESIDENT_EMAIL_LOGIN_ENABLED or not user.is_active or user.is_staff or user.is_superuser:
             raise PermissionDenied(UNAVAILABLE)
         if email and email.casefold() != user.email.casefold():
             raise PermissionDenied(UNAVAILABLE)
@@ -110,3 +110,16 @@ def email_login_enabled(view):
             raise PermissionDenied(UNAVAILABLE)
         return view(request, *args, **kwargs)
     return wrapped
+
+
+from allauth.account.forms import SignupForm
+from django.db import transaction
+from .legal import ConsentForm
+
+
+class ResidentSignupForm(SignupForm, ConsentForm):
+    @transaction.atomic
+    def save(self, request):
+        user = super().save(request)
+        self.record(request, user)
+        return user

@@ -56,6 +56,8 @@ class ResidentFlowPolishTests(TestCase):
             username='flow-resident@example.test', email='flow-resident@example.test',
             password=self.password,
         )
+        from forum.test_helpers import record_consents
+        record_consents(self.user)
         self.access = ResidentAccess.objects.create(
             user=self.user, account=self.account, role='owner',
             starts=self.today - timedelta(days=30),

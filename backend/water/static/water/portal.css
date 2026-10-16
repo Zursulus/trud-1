@@ -127,3 +127,5 @@ svg{display:block}.chevron{width:18px;height:18px;color:#7f8995;flex:0 0 auto}
   .finance-section-nav,.finance-ledger-section{margin-left:26px;margin-right:26px;max-width:720px}
   .portal-payments .payment-due,.portal-payments .download-row,.portal-payments .help-callout{max-width:720px}
 }
+
+.legal-footer{max-width:1180px;margin:24px auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom));font-size:13px;line-height:1.7;overflow-wrap:anywhere}.bottom-nav~.legal-footer{padding-bottom:calc(86px + env(safe-area-inset-bottom))}

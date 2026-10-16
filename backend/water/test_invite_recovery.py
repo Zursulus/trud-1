@@ -13,6 +13,8 @@ class InviteRecoveryTests(TestCase):
             username='invite-recipient@example.test', email='invite-recipient@example.test',
             password='invite-recovery-password',
         )
+        from forum.test_helpers import record_consents
+        record_consents(self.recipient)
         self.other = User.objects.create_user(username='other-cabinet@example.test')
         self.invite, token = issue_invite(self.account, self.recipient.email, 'owner')
         self.invite_url = reverse('resident_invite', args=[token])

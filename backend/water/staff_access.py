@@ -18,6 +18,8 @@ from .access_scope import ScopeRef
 
 from .access_workflow import (
     approve_access_request,
+    approve_binding_request,
+    verify_registry_email,
     end_portal_grant,
     end_resident_access,
     issue_access_password_reset,
@@ -97,6 +99,13 @@ class GranularInviteForm(forms.Form):
             ).exists():
                 self.add_error("account", "Для этого жителя уже действует явный доступ к выбранному счёту.")
         return data
+
+
+class BindingApproveForm(GranularInviteForm):
+    email = None
+    checked = forms.BooleanField(label="Сверены личность, участок и основание доступа по закрытому реестру")
+    registry_email_checked = forms.BooleanField(
+        label="Также сверить email с реестром членов (совпадение проверяется сервером)", required=False)
 
 
 class AccessRequestRejectForm(forms.Form):
@@ -229,6 +238,9 @@ def access_dashboard(request):
     })
 
     if can_review:
+        if request.user.has_perm('water.access_private_registry'):
+            from forum.models import DeletionRequest
+            context['deletion_requests'] = DeletionRequest.objects.select_related('user').filter(status='new')[:40]
         requests = ResidentAccessRequest.objects.select_related("matched_account", "decided_by", "invite")
         if request_state != "all":
             requests = requests.filter(status=request_state)
@@ -435,7 +447,10 @@ def request_detail(request, request_id):
     )
     can_change = _can_change_requests(request.user)
     can_approve = can_change and (_can(request.user, "water.add_residentinvite") or _can_global(request.user, "access.invite.issue"))
-    approve_form = AccessRequestApproveForm(
+    is_binding = bool(request_obj.consent_record_id)
+    if is_binding:
+        can_approve = can_change and request.user.has_perm('water.access_private_registry') and request.user.has_perm('water.add_portalgrant')
+    approve_form = (BindingApproveForm if is_binding else AccessRequestApproveForm)(
         request.POST if request.method == "POST" and request.POST.get("action") == "approve" else None,
         initial={"email": request_obj.email, "role": "owner"},
         prefix="approve",
@@ -453,6 +468,10 @@ def request_detail(request, request_id):
                 raise PermissionDenied
             if approve_form.is_valid():
                 try:
+                    if is_binding:
+                        request_obj = approve_binding_request(request_obj.pk, actor=request.user, **approve_form.cleaned_data)
+                        messages.success(request, 'Сверено — доступ выдан. Решение сохранено в истории.')
+                        return HttpResponseRedirect(reverse('staff_workspace:access_request', args=[request_obj.pk]))
                     request_obj, _invite, raw = approve_access_request(
                         request_obj.pk,
                         account=approve_form.cleaned_data["account"],
@@ -466,6 +485,17 @@ def request_detail(request, request_id):
                 else:
                     invite_url = request.build_absolute_uri(reverse("resident_invite", args=[raw]))
                     messages.success(request, "Заявка одобрена. Одноразовое приглашение создано; доступ появится только после активации жителем.")
+        elif action == "verify_email":
+            if not can_change or not request_obj.grant_id:
+                raise PermissionDenied
+            try:
+                verify_registry_email(request_obj.requester_user, person=request_obj.grant.person,
+                                      account=request_obj.matched_account, actor=request.user)
+            except ValidationError as error:
+                messages.error(request, "; ".join(error.messages))
+            else:
+                messages.success(request, "Email сверен с реестром членов.")
+            return HttpResponseRedirect(reverse('staff_workspace:access_request', args=[request_obj.pk]))
         elif action == "reject":
             if not can_change:
                 raise PermissionDenied
@@ -493,6 +523,7 @@ def request_detail(request, request_id):
         "can_change_access_request": can_change,
         "can_approve_access_request": can_approve,
         "invite_url": invite_url,
+        "is_binding": is_binding,
     })
     return TemplateResponse(request, "water/work/access/request.html", context)
 

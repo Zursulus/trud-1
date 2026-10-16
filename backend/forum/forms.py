@@ -21,7 +21,7 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
         fields = ['nickname']
-        help_texts = {'nickname': 'Виден всем читателям. ФИО и участок указывайте только по своему желанию.'}
+        help_texts = {'nickname': 'Виден всем читателям. Не указывайте ФИО, участок, телефон или показания на форуме.'}
 
 
 class ReportForm(forms.ModelForm):

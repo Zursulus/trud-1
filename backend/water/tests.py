@@ -9,9 +9,34 @@ from ._legacy_suite import *  # noqa: F401,F403
 from . import _legacy_suite as legacy
 
 from django.contrib.auth.models import Group
+from django.urls import reverse
 
 
 class ResidentPortalTests(legacy.ResidentPortalTests):
+    def create_resident(self, *args, **kwargs):
+        from forum.test_helpers import record_consents
+        user = super().create_resident(*args, **kwargs)
+        record_consents(user)
+        return user
+
+    def test_one_time_invite_creates_nonstaff_user_and_cannot_be_reused(self):
+        from forum.test_helpers import consent_payload
+        invite, raw = issue_invite(self.account, 'new-resident@example.test', 'owner')
+        self.assertNotIn(raw, invite.token_hash)
+        url = f'/admin/cabinet/invite/{raw}/'
+        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.post(url, {'password1': self.password, 'password2': self.password})
+        self.assertRedirects(response, reverse('resident_legal_accept'))
+        response = self.client.post(reverse('resident_legal_accept'), consent_payload())
+        self.assertRedirects(response, '/admin/cabinet/')
+        user = User.objects.get(email='new-resident@example.test')
+        self.assertFalse(user.is_staff)
+        self.assertTrue(ResidentAccess.objects.filter(user=user, account=self.account).exists())
+        invite.refresh_from_db()
+        self.assertIsNotNone(invite.used_at)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 410)
+
     def test_resident_can_submit_only_own_meter_reading_with_attribution(self):
         resident = self.create_resident()
         self.client.force_login(resident)

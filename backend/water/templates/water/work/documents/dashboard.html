@@ -5,6 +5,7 @@
   <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Документы и контент</h1><p>Закрытые документы жителей, публичные документы и новости разделены по назначению и правам.</p></div>
 </section>
 
+{% if perms.public_site.view_legaldocument %}<section class="ws-section"><h2>Юридические документы сайта</h2><p>Сохранённые версии неизменяемы. Для изменения текста добавьте новую версию и дату.</p><a href="{% url 'admin:public_site_legaldocument_changelist' %}">Политика, отдельное согласие и правила форума</a></section>{% endif %}
 <form class="ws-search-form" method="get">
   <label for="documents-q">Поиск в доступных вам документах</label>
   <div class="ws-search-line"><input id="documents-q" name="q" value="{{ q }}" autocomplete="off" placeholder="Счёт, участок, название, категория"><button class="ws-primary" type="submit">Найти</button></div>

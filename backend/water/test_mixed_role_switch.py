@@ -28,6 +28,8 @@ class MixedRoleModeSwitchTests(TestCase):
             user=user, person=person, verified_by=self.admin, basis="Synthetic switch test",
         )
         if resident:
+            from forum.test_helpers import record_consents
+            record_consents(user)
             PortalGrant.objects.create(
                 person=person, account=self.account, starts=date(2026, 1, 1),
                 can_view_account=True, can_submit_water=True,

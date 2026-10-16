@@ -31,6 +31,8 @@ def _required_note(value, label='Основание решения'):
 def approve_access_request(request_id, *, account, email, role, decision_note, actor):
     """Approve one immutable request and issue exactly one one-time invite."""
     locked = ResidentAccessRequest.objects.select_for_update().get(pk=request_id)
+    if locked.consent_record_id:
+        raise ValidationError('Заявка с согласием обрабатывается через «Сверено — выдать доступ» в /work/.')
     _require_global(actor, 'access.request.decide')
     _require_global(actor, 'access.invite.issue')
     if locked.status != ResidentAccessRequest.STATUS_NEW:
@@ -51,6 +53,7 @@ def approve_access_request(request_id, *, account, email, role, decision_note, a
     locked.decided_by = actor
     locked.decided_at = timezone.now()
     locked.invite = invite
+    locked._history_user = actor
     locked.save()
     return locked, invite, raw
 
@@ -66,6 +69,7 @@ def reject_access_request(request_id, *, decision_note, actor):
     locked.decision_note = _required_note(decision_note, 'Причина отклонения')
     locked.decided_by = actor
     locked.decided_at = timezone.now()
+    locked._history_user = actor
     locked.save()
     return locked
 
@@ -172,3 +176,74 @@ def update_portal_grant_rights(grant_id, *, actor, can_view_account, can_view_fi
     grant.full_clean()
     grant.save(update_fields=list(fields))
     return grant
+
+
+@transaction.atomic
+def verify_registry_email(user, *, person, account, actor):
+    from forum.models import Profile
+    from .private_registry import MemberRegistryEntry
+    _require_global(actor, 'access.request.decide')
+    if not actor.has_perm('water.access_private_registry'):
+        raise PermissionDenied
+    if not user.email or not MemberRegistryEntry.objects.filter(
+        person=person, account=account, email__iexact=user.email,
+    ).exists():
+        raise ValidationError('Email не совпадает с записью этого человека и счёта в закрытом реестре членов.')
+    profile, _ = Profile.objects.get_or_create(user=user)
+    profile.registry_email = user.email
+    profile.email_verified_at = timezone.now()
+    profile.email_verified_by = actor
+    profile._history_user = actor
+    profile._change_reason = 'Правление сверило email с реестром членов'
+    profile.save()
+    return profile
+
+
+@transaction.atomic
+def approve_binding_request(request_id, *, person, account, basis, actor, checked,
+                            registry_email_checked=False, **rights):
+    from forum.legal import accepted_current
+    _require_global(actor, 'access.request.decide')
+    if not actor.has_perm('water.access_private_registry') or not actor.has_perm('water.add_portalgrant'):
+        raise PermissionDenied
+    locked = ResidentAccessRequest.objects.select_for_update().get(pk=request_id)
+    if locked.status != ResidentAccessRequest.STATUS_NEW or not locked.requester_user_id or not locked.consent_record_id:
+        raise ValidationError('Заявка уже решена или не содержит согласия вошедшего жителя.')
+    user = User.objects.select_for_update().get(pk=locked.requester_user_id)
+    if not checked or not user.is_active or not accepted_current(user, 'binding'):
+        raise ValidationError('Нужны сверка правлением, активный аккаунт и действующее согласие на данные заявки.')
+    if user.email.casefold() != locked.email.casefold():
+        raise ValidationError('Email заявителя изменился. Нужна новая заявка и сверка.')
+    if not all(accepted_current(user, kind) for kind in ('consent', 'rules')):
+        raise ValidationError('Житель должен принять текущие документы.')
+    # Serialize identity creation for the selected registry person as well as the login.
+    from .models import Person
+    person = Person.objects.select_for_update().get(pk=person.pk)
+    identity = ResidentIdentity.objects.filter(user=user).first()
+    if identity and identity.person_id != person.pk:
+        raise ValidationError('Кабинет уже связан с другим человеком. Устраните неоднозначность вручную.')
+    if ResidentIdentity.objects.filter(person=person).exclude(user=user).exists():
+        raise ValidationError('Этот человек уже связан с другим кабинетом.')
+    basis = _required_note(basis)
+    if identity is None:
+        identity = ResidentIdentity(user=user, person=person, verified_by=actor, basis=basis)
+        identity._history_user = actor
+        identity._change_reason = f'Сверена закрытая заявка №{locked.pk}'
+        identity.save()
+    grant = PortalGrant(person=person, account=account, starts=timezone.localdate(),
+                        basis=basis, verified_by=actor, **rights)
+    grant._history_user = actor
+    grant._change_reason = f'Сверена закрытая заявка №{locked.pk}'
+    grant.save()
+    if registry_email_checked:
+        verify_registry_email(user, person=person, account=account, actor=actor)
+    locked.status = ResidentAccessRequest.STATUS_APPROVED
+    locked.matched_account = account
+    locked.approved_role = ''
+    locked.decision_note = basis
+    locked.decided_by = actor
+    locked.decided_at = timezone.now()
+    locked.grant = grant
+    locked._history_user = actor
+    locked.save()
+    return locked

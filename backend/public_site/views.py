@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import render
+from .legal import LegalDocument, current_document
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -75,3 +77,15 @@ def public_document_download(request, document_id):
     response['Cache-Control'] = 'public, max-age=300'
     response['X-Content-Type-Options'] = 'nosniff'
     return response
+
+
+@require_GET
+def legal_document(request, kind):
+    if kind not in dict(LegalDocument.KINDS):
+        raise Http404
+    version = request.GET.get('version')
+    document = (LegalDocument.objects.filter(kind=kind, version=version).first()
+                if version else current_document(kind))
+    if document is None:
+        raise Http404
+    return render(request, 'public_site/legal_document.html', {'document': document})

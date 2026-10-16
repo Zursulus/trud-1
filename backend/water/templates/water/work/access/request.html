@@ -13,6 +13,9 @@
 </section>
 {% endif %}
 
+{% if request_obj.last_reading != None %}<p>Последнее показание для сверки: {{ request_obj.last_reading }} (в журнал показаний не вносится).</p>{% endif %}
+{% if request_obj.consent_record %}<p>Согласие на заявку: {{ request_obj.consent_record.version }} · {{ request_obj.consent_record.created_at|date:'d.m.Y H:i' }}</p>{% endif %}
+{% if request_obj.grant_id and can_change_access_request %}<form method="post">{% csrf_token %}<button name="action" value="verify_email" type="submit">Сверить email с реестром членов</button></form>{% endif %}
 <div class="ws-summary-grid">
   <div class="ws-summary"><span>Email</span><strong style="font-size:16px">{{ request_obj.email }}</strong></div>
   <div class="ws-summary"><span>Телефон</span><strong style="font-size:16px">{{ request_obj.phone|default:'—' }}</strong></div>
@@ -27,7 +30,7 @@
   <div class="ws-section-head"><h2>Зафиксированное решение</h2></div>
   <div class="ws-card-grid">
     <div class="ws-card"><span class="ws-card-kicker">Статус</span><strong>{{ request_obj.get_status_display }}</strong><p>{{ request_obj.decision_note|default:'Без служебного комментария' }}</p></div>
-    {% if request_obj.matched_account %}<div class="ws-card"><span class="ws-card-kicker">Проверенный счёт</span><strong>{{ request_obj.matched_account.number|default:'Без номера' }}</strong><p>{{ request_obj.matched_account.plot }} · {{ request_obj.get_approved_role_display }}</p></div>{% endif %}
+    {% if request_obj.matched_account %}<div class="ws-card"><span class="ws-card-kicker">Проверенный счёт</span><strong>{{ request_obj.matched_account.number|default:'Без номера' }}</strong><p>{{ request_obj.matched_account.plot }} · {{ request_obj.get_approved_role_display|default:'Явные права' }}</p></div>{% endif %}
     <div class="ws-card"><span class="ws-card-kicker">Аудит</span><strong>{{ request_obj.decided_at|date:'d.m.Y H:i' }}</strong><p>{{ request_obj.decided_by.username|default:'—' }}</p></div>
   </div>
 </section>
@@ -37,8 +40,8 @@
   {% if can_approve_access_request %}
   <div class="ws-finance-form">
     <h3>Проверить и одобрить</h3>
-    <p class="ws-finance-note">Одобрение создаёт только одноразовое приглашение. Доступ появится после активации жителем.</p>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve">{{ approve_form.as_p }}<button class="ws-primary" type="submit">Одобрить и создать приглашение</button></form>
+    <p class="ws-finance-note">{% if is_binding %}Выберите человека из закрытого реестра, счёт и необходимые права. Подтвердите ручную сверку; показание используется только для сверки.{% else %}Одобрение создаёт только одноразовое приглашение. Доступ появится после активации жителем.{% endif %}</p>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve">{{ approve_form.as_p }}<button class="ws-primary" type="submit">{% if is_binding %}Сверено — выдать доступ{% else %}Одобрить и создать приглашение{% endif %}</button></form>
   </div>
   {% else %}
   <div class="ws-banner ws-banner-warning">Вы можете проверить и отклонить заявку, но для одобрения требуется также полномочие Администратора ТСН на создание приглашения.</div>

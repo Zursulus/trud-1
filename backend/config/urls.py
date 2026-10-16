@@ -7,6 +7,7 @@ from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
 from forum import views as forum_views
+from forum import legal_views
 from water import (
     access_request_views,
     appeal_admin_tools,
@@ -37,6 +38,9 @@ class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
 admin.site.__class__ = MainAdminOTPOnlySite
 
 urlpatterns = [
+    path('admin/public/legal/<str:kind>/', public_views.legal_document, name='legal_document'),
+    path('admin/cabinet/legal/accept/', legal_views.accept_documents, name='resident_legal_accept'),
+    path('admin/cabinet/profile/', legal_views.legal_profile, name='resident_legal_profile'),
     path('admin/cabinet/accounts/', include('forum.auth_urls')),
     path('admin/cabinet/forum/', include('forum.urls')),
     path('work/forum/', forum_views.workspace_moderation, name='forum_moderation'),

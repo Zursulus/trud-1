@@ -10,7 +10,7 @@ REGISTRY = (
 PRIVATE_RECORDED = ('person', 'plotrelation', 'importbatch', 'importrow')
 PRIVATE_MODELS = (*PRIVATE_RECORDED, 'memberregistryentry')
 FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'charge', 'payment', 'paymentallocation')
-PUBLIC_SITE = ('publicnews', 'publicdocumentcategory', 'publicdocument')
+PUBLIC_SITE = ('publicnews', 'publicdocumentcategory', 'publicdocument', 'legaldocument')
 BOARD_VIEW = (
     'boardmembership', 'boardpoll', 'boardquestion', 'boardvote',
     'boarddiscussioncomment', 'boardprotocol', 'boardauditevent',
@@ -63,9 +63,11 @@ class Command(BaseCommand):
             'view_account',
             'view_landplot',
             # Applicant PII stays behind the separately revocable private-registry boundary.
-            # Add permission is deliberately omitted: residents create requests publicly.
+            # Add permission is deliberately omitted: signed-in residents create requests with separate consent.
             'view_residentaccessrequest',
             'change_residentaccessrequest',
+            'add_portalgrant',
+            'view_historicalresidentaccessrequest',
         }
 
         administrator = water_view | registry | finance | {
@@ -107,6 +109,11 @@ class Command(BaseCommand):
                     content_type__app_label='forum', codename__in=forum_codes,
                 ))
                 expected += len(forum_codes)
+            if name == PRIVATE_REGISTRY:
+                legal_codes = {'view_consentrecord', 'view_deletionrequest', 'change_deletionrequest',
+                               'view_historicaldeletionrequest', 'view_profile', 'view_historicalprofile'}
+                permissions.extend(Permission.objects.filter(content_type__app_label='forum', codename__in=legal_codes))
+                expected += len(legal_codes)
             if len(permissions) != expected:
                 missing = sorted(codes - {permission.codename for permission in permissions})
                 raise RuntimeError(f'Сначала выполните migrate: не найдены все права: {missing}')

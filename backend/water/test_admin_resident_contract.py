@@ -62,6 +62,9 @@ class AdminResidentContractTests(TestCase):
         response = client.post(url, {"username": user.username, "password": self.password})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(int(client.session["_auth_user_id"]), user.pk)
+        if response.url == reverse('resident_legal_accept'):
+            from forum.test_helpers import consent_payload
+            self.assertEqual(client.post(reverse('resident_legal_accept'), consent_payload()).status_code, 302)
         return client
 
     def _new_appeal(self):

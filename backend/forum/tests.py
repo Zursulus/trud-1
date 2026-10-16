@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from water.models import User
 from .models import Post, Profile, Report, Section, Topic
+from .test_helpers import consent_payload, record_consents
 
 
 @override_settings(FORUM_ENABLED=True, RESIDENT_EMAIL_LOGIN_ENABLED=True,
@@ -22,6 +23,7 @@ class EmailLoginTests(TestCase):
     def setUp(self):
         cache.clear()
         self.resident = User.objects.create_user('old-resident', email='resident@example.test')
+        record_consents(self.resident)
         self.login_url = reverse('account_login')
         self.confirm_url = reverse('account_confirm_login_code')
 
@@ -79,9 +81,9 @@ class EmailLoginTests(TestCase):
     def test_signup_without_password_and_email_code(self):
         url = reverse('account_signup')
         response = self.client.get(url)
-        self.assertEqual(set(response.context['form'].fields), {'email'})
+        self.assertEqual(set(response.context['form'].fields), {'email', 'consent', 'rules', 'legal_versions'})
         with patch('allauth.account.adapter.DefaultAccountAdapter.generate_email_verification_code', return_value='654321'):
-            response = self.client.post(url, {'email': 'new@example.test'})
+            response = self.client.post(url, {'email': 'new@example.test', **consent_payload()})
         self.assertRedirects(response, reverse('account_email_verification_sent'))
         user = User.objects.get(email='new@example.test')
         self.assertFalse(user.has_usable_password())
@@ -99,7 +101,7 @@ class EmailLoginTests(TestCase):
 
     def test_signup_code_expires_and_does_not_log_in(self):
         with patch('allauth.account.adapter.DefaultAccountAdapter.generate_email_verification_code', return_value='654321'):
-            self.client.post(reverse('account_signup'), {'email': 'new@example.test'})
+            self.client.post(reverse('account_signup'), {'email': 'new@example.test', **consent_payload()})
         with patch('allauth.account.internal.flows.code_verification.time.time', return_value=time.time() + 601):
             self.client.post(reverse('account_email_verification_sent'), {'code': '654321'})
         self.assertNotIn('_auth_user_id', self.client.session)
@@ -135,7 +137,7 @@ class EmailLoginTests(TestCase):
         self.assertFalse(EmailAddress.objects.exists())
 
     def test_existing_email_signup_never_creates_duplicate_user(self):
-        response = self.client.post(reverse('account_signup'), {'email': self.resident.email})
+        response = self.client.post(reverse('account_signup'), {'email': self.resident.email, **consent_payload()})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(User.objects.filter(email__iexact=self.resident.email).count(), 1)
         self.assertNotIn('_auth_user_id', self.client.session)
@@ -161,7 +163,7 @@ class EmailLoginTests(TestCase):
     def test_auth_csrf(self):
         client = Client(enforce_csrf_checks=True)
         self.assertEqual(client.post(self.login_url, {'email': self.resident.email}).status_code, 403)
-        self.assertEqual(client.post(reverse('account_signup'), {'email': 'new@example.test'}).status_code, 403)
+        self.assertEqual(client.post(reverse('account_signup'), {'email': 'new@example.test', **consent_payload()}).status_code, 403)
 
 
 @override_settings(FORUM_ENABLED=True, FORUM_PUBLIC_READ=False, RESIDENT_EMAIL_LOGIN_ENABLED=True)
@@ -171,6 +173,7 @@ class ForumTests(TestCase):
         cls.author = User.objects.create_user('private-username', email='private@example.test', first_name='СекретноеФИО')
         cls.other = User.objects.create_user('other', email='other@example.test')
         for user in (cls.author, cls.other):
+            record_consents(user)
             EmailAddress.objects.create(user=user, email=user.email, verified=True, primary=True)
         cls.section = Section.objects.create(name='Соседи', description='Жизнь ТСН')
         cls.topic = Topic.objects.create(section=cls.section, title='Вопрос соседям', body='Начальный текст', author=cls.author)

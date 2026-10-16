@@ -280,6 +280,8 @@ class StaffWorkspaceAccessTests(TestCase):
         dormant = User.objects.create_user(
             username="returning-resident", email="returning@example.test", password="Returning-resident-2026!",
         )
+        from forum.test_helpers import record_consents
+        record_consents(dormant)
         _invite, raw = issue_granular_invite(
             self.account, person, dormant.email, "Повторно проверено", actor=self.dual_user,
             can_view_finance=True,

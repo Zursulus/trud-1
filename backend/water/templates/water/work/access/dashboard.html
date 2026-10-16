@@ -23,6 +23,7 @@
   {% endif %}
 </div>
 
+{% if deletion_requests %}<section class="ws-section"><h2>Заявки на удаление ПД</h2>{% for item in deletion_requests %}<p>№{{ item.pk }} · {{ item.user.email }} · {{ item.created_at|date:'d.m.Y H:i' }} · <a href="{% url 'admin:forum_deletionrequest_change' item.pk %}">Рассмотреть и записать решение</a></p>{% endfor %}</section>{% endif %}
 <form class="ws-search-form" method="get">
   <label for="access-q">Поиск в доступном вам контуре</label>
   <div class="ws-search-line">

@@ -113,6 +113,7 @@
       </a>
     {% endif %}
 
+    {% if perms.public_site.view_legaldocument %}<a class="trud-card" href="{% url 'admin:public_site_legaldocument_changelist' %}"><strong>Юридические документы</strong><span>Политика, отдельное согласие и правила форума; новая редакция с версией и датой.</span></a>{% endif %}
     {% if perms.public_site.view_publicnews %}
       <a class="trud-card" href="{% url 'admin:public_site_publicnews_changelist' %}">
         <strong>Новости сайта</strong>

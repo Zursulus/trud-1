@@ -29,6 +29,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware', 'django_otp.middleware.OTPMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'forum.legal_middleware.ResidentConsentMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware', 'axes.middleware.AxesMiddleware',
 ]
@@ -94,6 +95,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_AGE = None  # Technical CSRF cookie expires with the browser session.
 SESSION_COOKIE_AGE = 8 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SECURE_SSL_REDIRECT = not DEBUG
@@ -126,7 +128,8 @@ FORUM_PUBLIC_READ = os.environ.get('TRUD_FORUM_PUBLIC_READ', '0') == '1'
 FORUM_MESSAGES_PER_MINUTE = int(os.environ.get('TRUD_FORUM_MESSAGES_PER_MINUTE', '3'))
 AUTHENTICATION_BACKENDS += ['forum.auth.EmailCodeBackend']
 ACCOUNT_ADAPTER = 'forum.auth.ResidentAccountAdapter'
-ACCOUNT_FORMS = {'request_login_code': 'forum.auth.ResidentRequestLoginCodeForm'}
+ACCOUNT_FORMS = {'request_login_code': 'forum.auth.ResidentRequestLoginCodeForm',
+                 'signup': 'forum.auth.ResidentSignupForm'}
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*']
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'

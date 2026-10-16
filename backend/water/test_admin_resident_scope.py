@@ -220,6 +220,8 @@ class ServiceAccountScopeTests(TestCase):
         staff, reader = Client(), Client()
         self.assertEqual(staff.post("/admin/login/", {"username": self.admin.username, "password": self.password}).status_code, 302)
         self.assertEqual(reader.post("/admin/cabinet/login/", {"username": resident.username, "password": self.password}).status_code, 302)
+        from forum.test_helpers import consent_payload
+        self.assertEqual(reader.post(reverse('resident_legal_accept'), consent_payload()).status_code, 302)
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             publication_date = timezone.localtime(timezone.now() - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M")
             self.assertEqual(staff.post("/work/documents/accounts/new/", {
@@ -272,6 +274,8 @@ class ServiceAccountScopeTests(TestCase):
         self.assertFalse(PortalGrant.objects.filter(person=person).exists())
         self.assertEqual(resident.post(invite_url, {"password1": self.password, "password2": self.password}).status_code, 302)
         user = User.objects.get(email=person.email)
+        from forum.test_helpers import consent_payload
+        self.assertEqual(resident.post(reverse('resident_legal_accept'), consent_payload()).status_code, 302)
         self.assertEqual(ResidentIdentity.objects.get(user=user).person_id, person.pk)
         grant = PortalGrant.objects.get(person=person, account=self.a)
         self.assertTrue(grant.can_use_appeals)

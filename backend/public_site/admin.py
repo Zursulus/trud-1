@@ -101,3 +101,23 @@ class PublicDocumentAdmin(PublicationAdmin):
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj)) + ('original_name', 'file_size')
         return fields + (('document',) if obj else ())
+
+
+from .legal import LegalDocument
+
+
+@admin.register(LegalDocument)
+class LegalDocumentAdmin(admin.ModelAdmin):
+    list_display = ('kind', 'version', 'effective_on', 'created_at')
+    list_filter = ('kind',)
+    actions = None
+    readonly_fields = ('created_at',)
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('kind', 'version', 'effective_on', 'body', 'created_at') if obj else ('created_at',)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

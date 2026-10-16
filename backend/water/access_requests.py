@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
 from .models import Account, ResidentAccess, ResidentInvite, User
 
@@ -10,8 +11,8 @@ class ResidentAccessRequest(models.Model):
 
     Submission is intentionally not proof of identity, ownership, membership or
     portal authority. A request may only be approved by staff after a separate
-    private-registry/document check, and approval creates an invite rather than
-    ResidentAccess directly.
+    private-registry/document check. Legacy requests create an invite; signed-in
+    residents can receive an explicit PortalGrant after manual verification.
     """
 
     STATUS_NEW = 'new'
@@ -32,6 +33,13 @@ class ResidentAccessRequest(models.Model):
         (CLAIM_PAYER, 'Плательщик'),
         (CLAIM_OTHER, 'Другое основание'),
     ]
+
+    history = HistoricalRecords()
+    last_reading = models.DecimalField('Последнее показание для сверки', max_digits=12, decimal_places=3, null=True, blank=True)
+    consent_record = models.ForeignKey('forum.ConsentRecord', on_delete=models.PROTECT,
+        null=True, blank=True, editable=False)
+    grant = models.OneToOneField('water.PortalGrant', on_delete=models.PROTECT,
+        null=True, blank=True, editable=False, related_name='access_request')
 
     full_name = models.CharField('Как к вам обращаться', max_length=200)
     email = models.EmailField('Электронная почта')
@@ -78,32 +86,40 @@ class ResidentAccessRequest(models.Model):
         self.plot_hint = ' '.join((self.plot_hint or '').split())
         self.message = (self.message or '').strip()
 
+        if self.last_reading is not None and self.last_reading < 0:
+            raise ValidationError({'last_reading': 'Показание не может быть отрицательным.'})
+        if self.consent_record_id and (
+            self.consent_record.user_id != self.requester_user_id
+            or self.consent_record.document_type != 'binding' or self.consent_record.action != 'accept'
+        ):
+            raise ValidationError('Нужно отдельное согласие этого заявителя на данные заявки.')
         if self.matched_account_id and self.matched_account.archived:
             raise ValidationError({'matched_account': 'Нельзя выдавать доступ к архивному лицевому счёту.'})
         if self.status == self.STATUS_APPROVED:
-            if not self.matched_account_id or not self.approved_role or not self.invite_id:
-                raise ValidationError('Одобренная заявка должна иметь проверенный счёт, роль и приглашение.')
+            if (not self.matched_account_id or not (self.invite_id or self.grant_id)
+                    or (self.invite_id and not self.approved_role)):
+                raise ValidationError('Нужны проверенный счёт и приглашение с ролью либо явный доступ.')
             if not self.decided_by_id or not self.decided_at:
                 raise ValidationError('У решения должны быть автор и время.')
         elif self.status == self.STATUS_REJECTED:
             if not self.decided_by_id or not self.decided_at:
                 raise ValidationError('У решения должны быть автор и время.')
-            if self.invite_id:
+            if self.invite_id or self.grant_id:
                 raise ValidationError('У отклонённой заявки не может быть приглашения.')
         else:
-            if any((self.matched_account_id, self.approved_role, self.decision_note, self.decided_by_id, self.decided_at, self.invite_id)):
+            if any((self.matched_account_id, self.approved_role, self.decision_note, self.decided_by_id, self.decided_at, self.invite_id, self.grant_id)):
                 raise ValidationError('Новая заявка не должна содержать решение.')
 
         if self.pk:
             stored = type(self).objects.get(pk=self.pk)
-            immutable = ('full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message', 'submission_key')
+            immutable = ('full_name', 'email', 'phone', 'plot_hint', 'claimed_role', 'message', 'submission_key', 'last_reading', 'consent_record_id')
             if any(getattr(stored, field) != getattr(self, field) for field in immutable) or (
                 stored.requester_user_id != self.requester_user_id
             ):
                 raise ValidationError('Исходную заявку нельзя переписывать. Создайте служебное решение отдельно.')
             if stored.status != self.STATUS_NEW and any(
                 getattr(stored, field) != getattr(self, field)
-                for field in ('status', 'matched_account_id', 'approved_role', 'decision_note', 'decided_by_id', 'decided_at', 'invite_id')
+                for field in ('status', 'matched_account_id', 'approved_role', 'decision_note', 'decided_by_id', 'decided_at', 'invite_id', 'grant_id')
             ):
                 raise ValidationError('Принятое решение по заявке нельзя переписывать.')
             if stored.status == self.STATUS_NEW and self.status not in (

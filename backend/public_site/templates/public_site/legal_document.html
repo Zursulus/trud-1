@@ -1,0 +1,1 @@
+{% extends 'forum/base.html' %}{% block title %}{{ document.get_kind_display }}{% endblock %}{% block content %}<article class="forum-card"><h1>{{ document.get_kind_display }}</h1><p>Версия {{ document.version }} · дата {{ document.effective_on|date:'d.m.Y' }}</p>{{ document.body|linebreaks }}</article>{% endblock %}

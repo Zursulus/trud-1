@@ -10,99 +10,76 @@ from .access_workflow import approve_access_request
 from .resident_models import TsnMembership
 
 
-class PublicAccessRequestTests(TestCase):
+class PrivateAccessRequestTests(TestCase):
     def setUp(self):
+        from forum.test_helpers import consent_payload, record_consents
         self.account = Account.objects.create(number='TEST-ACCESS', plot='Садовая 10')
+        self.resident = User.objects.create_user(username='requester', email='requester@example.test')
+        record_consents(self.resident)
+        self.client.force_login(self.resident)
         self.payload = {
-            'full_name': 'Тестовый Заявитель',
-            'email': 'requester@example.test',
-            'phone': '+7 900 000-00-00',
-            'plot_hint': 'Садовая 10',
-            'claimed_role': ResidentAccessRequest.CLAIM_OWNER,
-            'message': 'Синтетическая заявка ZUR-69',
-            'website': '',
+            'full_name': 'Тестовый Заявитель', 'phone': '', 'plot_hint': 'Садовая 10',
+            'claimed_role': ResidentAccessRequest.CLAIM_OWNER, 'message': '', 'website': '',
+            **consent_payload(binding=True),
         }
 
-    def test_matching_and_unknown_plot_get_same_external_response_without_auto_grant(self):
-        matching = self.client.post(
-            reverse('resident_access_request'), self.payload, REMOTE_ADDR='198.51.100.10',
-        )
-        unknown_payload = {
-            **self.payload,
-            'email': 'unknown@example.test',
-            'plot_hint': 'Несуществующий тестовый участок',
-        }
-        unknown = self.client.post(
-            reverse('resident_access_request'), unknown_payload, REMOTE_ADDR='198.51.100.11',
-        )
-
-        self.assertEqual(matching.status_code, 302)
-        self.assertEqual(unknown.status_code, 302)
-        self.assertEqual(matching.url, reverse('resident_access_request_sent'))
-        self.assertEqual(unknown.url, reverse('resident_access_request_sent'))
-        self.assertEqual(ResidentAccessRequest.objects.count(), 2)
-        self.assertEqual(ResidentAccess.objects.count(), 0)
-        self.assertEqual(Person.objects.count(), 0)
-        self.assertEqual(TsnMembership.objects.count(), 0)
-        self.assertEqual(User.objects.filter(is_staff=False).count(), 0)
-
-    def test_rate_limit_and_honeypot_keep_same_neutral_response(self):
-        responses = [
-            self.client.post(
-                reverse('resident_access_request'), self.payload, REMOTE_ADDR='198.51.100.20',
-            )
-            for _ in range(4)
-        ]
-        self.assertTrue(all(response.status_code == 302 for response in responses))
-        self.assertTrue(all(response.url == reverse('resident_access_request_sent') for response in responses))
-        self.assertEqual(ResidentAccessRequest.objects.count(), 3)
-
-        bot_payload = {**self.payload, 'website': 'https://spam.example.test'}
-        bot = self.client.post(
-            reverse('resident_access_request'), bot_payload, REMOTE_ADDR='198.51.100.21',
-        )
-        self.assertEqual(bot.status_code, 302)
-        self.assertEqual(bot.url, reverse('resident_access_request_sent'))
-        self.assertEqual(ResidentAccessRequest.objects.count(), 3)
-
-    def test_technical_key_does_not_store_raw_email_or_ip(self):
-        self.client.post(
-            reverse('resident_access_request'), self.payload, REMOTE_ADDR='198.51.100.30',
-        )
-        request_obj = ResidentAccessRequest.objects.get()
-        self.assertNotIn(self.payload['email'], request_obj.submission_key)
-        self.assertNotIn('198.51.100.30', request_obj.submission_key)
-
-    def test_original_submission_is_immutable(self):
-        self.client.post(
-            reverse('resident_access_request'), self.payload, REMOTE_ADDR='198.51.100.40',
-        )
-        request_obj = ResidentAccessRequest.objects.get()
-        request_obj.email = 'rewritten@example.test'
-        with self.assertRaises(ValidationError):
-            request_obj.save()
-
-    def test_authenticated_resident_request_is_bound_to_current_cabinet_user(self):
-        resident = User.objects.create_user(username='current-cabinet', password='test-password')
-        ResidentAccess.objects.create(
-            user=resident, account=self.account, role='payer', starts=timezone.localdate(),
-        )
-        self.client.force_login(resident)
-
-        payload = {**self.payload, 'email': 'contact-address@example.test'}
-        response = self.client.post(
-            reverse('resident_access_request'), payload, REMOTE_ADDR='198.51.100.31',
-        )
+    def test_login_required(self):
+        self.client.logout()
+        response = self.client.post(reverse('resident_access_request'), self.payload)
         self.assertEqual(response.status_code, 302)
-        request_obj = ResidentAccessRequest.objects.get()
-        self.assertEqual(request_obj.requester_user, resident)
-        self.assertEqual(request_obj.email, payload['email'])
+        self.assertFalse(ResidentAccessRequest.objects.exists())
 
-    def test_confirmation_page_is_neutral(self):
-        response = self.client.get(reverse('resident_access_request_sent'))
+    def test_matching_and_unknown_plot_never_auto_grant(self):
+        for plot in ('Садовая 10', 'Неизвестный участок'):
+            response = self.client.post(reverse('resident_access_request'), {**self.payload, 'plot_hint': plot})
+            self.assertRedirects(response, reverse('resident_access_request_sent'))
+        self.assertEqual(ResidentAccessRequest.objects.count(), 2)
+        self.assertFalse(ResidentAccess.objects.exists())
+        self.assertFalse(Person.objects.exists())
+        self.assertFalse(TsnMembership.objects.exists())
+        self.assertEqual(User.objects.filter(is_staff=False).count(), 1)
+
+    def test_rate_limit_and_honeypot(self):
+        for _ in range(4):
+            self.client.post(reverse('resident_access_request'), self.payload)
+        self.assertEqual(ResidentAccessRequest.objects.count(), 3)
+        self.client.post(reverse('resident_access_request'), {**self.payload, 'website': 'bot'})
+        self.assertEqual(ResidentAccessRequest.objects.count(), 3)
+
+    def test_submission_is_bound_to_login_and_consent(self):
+        self.client.post(reverse('resident_access_request'), {
+            **self.payload, 'email': 'forged@example.test', 'last_reading': '123.456',
+        }, REMOTE_ADDR='198.51.100.30')
+        obj = ResidentAccessRequest.objects.get()
+        self.assertEqual(obj.requester_user, self.resident)
+        self.assertEqual(obj.email, self.resident.email)
+        self.assertEqual(str(obj.last_reading), '123.456')
+        self.assertEqual(obj.consent_record.user, self.resident)
+        self.assertEqual(obj.consent_record.document_type, 'binding')
+        self.assertNotIn(self.resident.email, obj.submission_key)
+        self.assertNotIn('198.51.100.30', obj.submission_key)
+        obj.email = 'rewritten@example.test'
+        with self.assertRaises(ValidationError):
+            obj.save()
+
+    def test_separate_binding_consent_required(self):
+        self.payload.pop('consent')
+        response = self.client.post(reverse('resident_access_request'), self.payload)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'не подтверждает наличие записи')
-        self.assertNotContains(response, self.account.plot)
+        self.assertFalse(ResidentAccessRequest.objects.exists())
+
+    def test_status_and_rejection_reason_visible_only_to_applicant(self):
+        self.client.post(reverse('resident_access_request'), self.payload)
+        obj = ResidentAccessRequest.objects.get()
+        reviewer = User.objects.create_superuser('reviewer', 'reviewer@example.test', 'test-password')
+        from .access_workflow import reject_access_request
+        reject_access_request(obj.pk, decision_note='Не совпало ФИО', actor=reviewer)
+        response = self.client.get(reverse('resident_access_request_sent'))
+        self.assertContains(response, 'Отклонена')
+        self.assertContains(response, 'Не совпало ФИО')
+        other = User.objects.create_user('other', email='other@example.test')
+        self.client.force_login(other)
+        self.assertNotContains(self.client.get(reverse('resident_access_request_sent')), 'Не совпало ФИО')
 
 
 class InviteDisambiguationTests(TestCase):
