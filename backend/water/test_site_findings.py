@@ -136,3 +136,26 @@ class SiteFindingTests(TestCase):
             self.assertEqual(self.client.get(link).status_code, 403)
             self.client.logout()
             self.assertEqual(self.client.get(link).status_code, 302)
+
+    def test_controller_empty_line_is_authorized_empty_scope(self):
+        from django.core.exceptions import PermissionDenied
+        from .controller_scope import ControllerLineAccess
+        from .models import SupplyNode, WaterGroup
+        from .staff_workspace import scoped_accounts
+        node = SupplyNode.objects.create(name='Пустой узел')
+        group = WaterGroup.objects.create(name='Пустая линия', node=node)
+        self.staff = self.grant(self.staff, 'use_controller_workspace')
+        ControllerLineAccess.objects.create(user=self.staff, group=group, starts=timezone.localdate())
+        self.client.force_login(self.staff)
+        for path in ('/work/', '/work/accounts/', '/work/search/?q=AUDIT'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'Синтетический участок')
+        self.assertFalse(scoped_accounts(self.staff).exists())
+        self.assertEqual(self.client.get(f'/work/accounts/{self.account.pk}/').status_code, 404)
+        outsider = User.objects.create_user(username='no-scope', is_staff=True)
+        with self.assertRaises(PermissionDenied):
+            scoped_accounts(outsider)
+        self.client.force_login(outsider)
+        self.assertEqual(self.client.get('/work/accounts/').status_code, 403)

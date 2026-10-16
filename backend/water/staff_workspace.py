@@ -70,7 +70,7 @@ def scoped_accounts(user):
     ids = set()
     for scope in scopes:
         ids.update(accounts_in_scope(scope).values_list("id", flat=True))
-    if not ids:
+    if not scopes:
         raise PermissionDenied
     return Account.objects.filter(pk__in=ids)
 
