@@ -1,3 +1,15 @@
+const cookieNotice=document.querySelector('#cookie-notice');
+const cookieNoticeName='trud_cookie_notice';
+function cookieNoticeDismissed(){return document.cookie.split(';').some(value=>value.trim()===`${cookieNoticeName}=1`);}
+if(cookieNotice&&!cookieNoticeDismissed())cookieNotice.hidden=false;
+if(cookieNotice){
+  cookieNotice.querySelector('[data-cookie-notice-dismiss]').addEventListener('click',()=>{
+    const secure=window.location.protocol==='https:'?'; Secure':'';
+    document.cookie=`${cookieNoticeName}=1; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+    cookieNotice.hidden=true;
+  });
+}
+
 const dialog=document.querySelector('#news-dialog');
 const articleMeta=document.querySelector('#article-meta');
 const articleTitle=document.querySelector('#article-title');

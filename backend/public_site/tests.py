@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .admin import PublicationAdminForm
+from .legal import LegalDocument
 from .models import PublicDocument, PublicDocumentCategory, PublicNews
 
 
@@ -25,6 +26,22 @@ class PublicContentTests(TestCase):
         self.settings_override.enable()
         self.addCleanup(self.settings_override.disable)
         self.addCleanup(self.media.cleanup)
+
+    def test_cookie_notice_visibility_and_policy_details(self):
+        LegalDocument.objects.create(
+            kind='privacy', version='test-cookie-notice', effective_on=timezone.localdate(), body='Текст политики',
+        )
+        url = reverse('legal_document', args=['privacy'])
+        response = self.client.get(url)
+        self.assertContains(response, 'id="cookie-notice"')
+        self.assertContains(response, 'Сайт использует только технические cookie, без них не работает вход.')
+        for cookie in ('sessionid', 'csrftoken', 'django_language', 'trud_cookie_notice'):
+            self.assertContains(response, cookie)
+        self.assertContains(response, 'действует до закрытия браузера')
+        self.assertContains(response, 'срок — 1 год')
+
+        response = self.client.get(url, HTTP_COOKIE='trud_cookie_notice=1')
+        self.assertNotContains(response, 'id="cookie-notice"')
 
     def test_public_feed_exposes_only_explicitly_checked_published_news(self):
         today = timezone.localdate()
@@ -140,3 +157,7 @@ class PublicContentTests(TestCase):
         self.assertIn('renderArticleBody', script)
         self.assertNotIn('trud1-featured-news:', script)
         self.assertIn('overflow-y:auto', public_css)
+        self.assertIn('id="cookie-notice"', index)
+        self.assertIn('data-cookie-notice-dismiss', index)
+        self.assertIn('31536000', script)
+        self.assertIn('cookie-notice', public_css)

@@ -188,7 +188,8 @@ class ResidentFlowPolishTests(TestCase):
         for section in ('charges', 'payments'):
             self.assertIn(section, page.ids)
             self.assertIn('#' + section, page.links)
-        self.assertFalse(any(button.get('type') == 'button' for button in page.buttons))
+        self.assertFalse(any(button.get('type') == 'button' and 'data-cookie-notice-dismiss' not in button
+                                for button in page.buttons))
         self.assertNotContains(response, 'Перейти к оплате')
         self.assertNotContains(response, 'Скачать справку об оплатах')
         self.assertContains(response, 'Подтверждённых оплат пока нет.')
