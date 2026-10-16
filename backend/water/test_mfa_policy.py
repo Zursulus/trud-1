@@ -4,7 +4,7 @@ from io import StringIO
 
 from django.contrib.auth.models import Group
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django_otp import DEVICE_ID_SESSION_KEY
@@ -15,6 +15,7 @@ from .management.commands.setup_roles import ADMIN, LEGACY_ADMIN, OPERATOR, CONT
 from .models import Account, ResidentAccess, User
 
 
+@override_settings(TRUD_MFA_REQUIRED_USERNAMES=['admin'])
 class AdminMFAPolicyTests(TestCase):
     password = 'synthetic-password-2026'
     protected_paths = ('/admin/', '/admin/water/account/', '/work/', '/work/accounts/')
@@ -22,16 +23,16 @@ class AdminMFAPolicyTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command('setup_roles', stdout=StringIO())
-        cls.admins = [User.objects.create_superuser(username='mfa-root', password=cls.password)]
+        cls.admins = [User.objects.create_superuser(username='AdMiN', password=cls.password)]
+        cls.staff = [User.objects.create_superuser(username='mfa-root', password=cls.password)]
         for name in (ADMIN, LEGACY_ADMIN):
-            user = User.objects.create_user(username=f'mfa-admin-{len(cls.admins)}',
+            user = User.objects.create_user(username=f'mfa-admin-{len(cls.staff)}',
                                             password=cls.password, is_staff=True)
             group, _ = Group.objects.get_or_create(name=name)
             if name == LEGACY_ADMIN:
                 group.permissions.set(Group.objects.get(name=ADMIN).permissions.all())
             user.groups.add(group)
-            cls.admins.append(user)
-        cls.staff = []
+            cls.staff.append(user)
         for name in (OPERATOR, CONTROLLER, PRIVATE_REGISTRY):
             user = User.objects.create_user(username=f'mfa-staff-{len(cls.staff)}',
                                             password=cls.password, is_staff=True)
@@ -98,7 +99,7 @@ class AdminMFAPolicyTests(TestCase):
                     self.assertEqual(self.client.get(target).status_code, 200)
 
     def test_unconfirmed_device_requires_setup_and_setup_verifies_session(self):
-        user = self.admins[1]
+        user = self.admins[0]
         pending = TOTPDevice.objects.create(user=user, confirmed=False)
         self.password_login(user)
         response = self.client.get('/work/', follow=True)
@@ -123,12 +124,12 @@ class AdminMFAPolicyTests(TestCase):
                     self.client.logout()
                     self.assertRedirects(self.wizard_password(user, target), target)
                     self.assertFalse(TOTPDevice.objects.filter(user=user).exists())
-        for user in self.staff[:2]:
+        for user in self.staff[3:5]:
             self.client.force_login(user)
             self.assertEqual(self.client.get('/admin/water/user/').status_code, 403)
 
     def test_non_admin_existing_device_keeps_otp_wizard_login(self):
-        user = self.staff[0]
+        user = self.staff[3]
         device = TOTPDevice.objects.create(user=user, name='default', confirmed=True)
         response = self.wizard_password(user, '/work/')
         self.assertEqual(response.context['wizard']['steps'].current, 'token')
@@ -159,10 +160,21 @@ class AdminMFAPolicyTests(TestCase):
         response = self.client.get(reverse('admin:login'), {'next': 'https://example.invalid/'})
         self.assertRedirects(response, reverse('two_factor:setup') + '?next=/admin/')
 
-    def test_new_admin_role_requires_otp_in_existing_password_session(self):
-        user = self.staff[0]
+    def test_new_admin_role_does_not_require_otp_in_existing_password_session(self):
+        user = self.staff[3]
         self.password_login(user)
-        self.assertEqual(self.client.get('/work/').status_code, 200)
         user.groups.add(Group.objects.get(name=ADMIN))
-        response = self.client.get('/work/', follow=True)
-        self.assertEqual(response.request['PATH_INFO'], reverse('two_factor:setup'))
+        self.assertEqual(self.client.get('/work/').status_code, 200)
+
+    @override_settings(TRUD_MFA_REQUIRED_USERNAMES=['MFA-ROOT', 'mfa-staff-3'])
+    def test_configured_usernames_require_setup_without_superuser_or_admin_group(self):
+        for user in (self.staff[0], self.staff[3]):
+            self.client.force_login(user)
+            response = self.client.get('/work/', follow=True)
+            self.assertEqual(response.request['PATH_INFO'], reverse('two_factor:setup'))
+        self.client.force_login(self.admins[0])
+        self.assertEqual(self.client.get('/work/').status_code, 200)
+
+    @override_settings(TRUD_MFA_REQUIRED_USERNAMES=[])
+    def test_empty_policy_allows_admin_password_access(self):
+        self.assertRedirects(self.password_login(self.admins[0]), '/admin/')

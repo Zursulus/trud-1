@@ -75,6 +75,10 @@ TWO_FACTOR_LOGIN_TIMEOUT = 600
 TWO_FACTOR_REMEMBER_COOKIE_AGE = None
 OTP_TOTP_ISSUER = 'ТСН ТРУД-1'
 OTP_ADMIN_HIDE_SENSITIVE_DATA = True
+TRUD_MFA_REQUIRED_USERNAMES = [
+    username.strip() for username in os.environ.get('TRUD_MFA_REQUIRED_USERNAMES', 'admin').split(',')
+    if username.strip()
+]
 LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True

@@ -316,7 +316,8 @@ class ForumTests(TestCase):
         self.assertNotContains(response, self.author.email)
         self.assertNotContains(response, self.author.first_name)
 
-    def test_moderator_staff_surfaces_require_verified_otp_session(self):
+    @override_settings(TRUD_MFA_REQUIRED_USERNAMES=['MODERATOR'])
+    def test_configured_moderator_staff_surfaces_require_verified_otp_session(self):
         self.client.force_login(self.moderator, backend='django.contrib.auth.backends.ModelBackend')
         for url in (reverse('forum_moderation'), reverse('admin:forum_section_add')):
             response = self.client.get(url, follow=True)

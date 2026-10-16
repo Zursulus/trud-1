@@ -9,6 +9,8 @@ systemd-run --quiet --wait --pipe --collect \
     --setenv=PGOPTIONS=-cdefault_transaction_read_only=on \
     /opt/trud-1-site/.venv/bin/python /opt/trud-1-site/backend/manage.py \
     shell --no-imports -c '
+import os
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Exists, OuterRef, Q
 from django_otp.plugins.otp_static.models import StaticDevice
@@ -28,4 +30,15 @@ for label, scope in (
     selected = users.filter(scope).distinct()
     print(f"{label}={selected.count()}")
     print(f"{label}_without_confirmed_otp={selected.filter(has_totp=False, has_static=False).count()}")
+# Also runs before checkout, when the installed settings may lack this option.
+required_usernames = getattr(settings, "TRUD_MFA_REQUIRED_USERNAMES", [
+    name.strip() for name in os.environ.get("TRUD_MFA_REQUIRED_USERNAMES", "admin").split(",")
+    if name.strip()
+])
+required_usernames = {name.casefold() for name in required_usernames}
+missing = sum(
+    name.casefold() in required_usernames and not has_totp and not has_static
+    for name, has_totp, has_static in users.values_list("username", "has_totp", "has_static")
+)
+print(f"required_usernames_without_confirmed_otp={missing}")
 '

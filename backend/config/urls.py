@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.contrib.auth import REDIRECT_FIELD_NAME, views as auth_views
@@ -22,7 +23,6 @@ from water import (
     password_admin,
     resident_actions,
 )
-from water.management.commands.setup_roles import ADMIN, LEGACY_ADMIN
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
@@ -30,16 +30,16 @@ from water.reading_review_config import export_readings_xlsx, reading_review_vie
 
 
 class MainAdminSite(AdminSite):
-    """Require a verified OTP session only for TSN administrators/superusers."""
+    """Require a verified OTP session only for configured usernames."""
 
     def requires_otp(self, request):
         # Admin wrappers and template context may check access more than once.
-        # Cache only within this request so role changes affect the next request.
+        # Cache only within this request so policy changes affect the next request.
         if not hasattr(request, '_admin_mfa_required'):
             user = request.user
-            request._admin_mfa_required = user.is_superuser or user.groups.filter(
-                name__in=(ADMIN, LEGACY_ADMIN),
-            ).exists()
+            request._admin_mfa_required = user.get_username().casefold() in {
+                username.casefold() for username in settings.TRUD_MFA_REQUIRED_USERNAMES
+            }
         return request._admin_mfa_required
 
     def has_permission(self, request):
