@@ -53,3 +53,32 @@ class SiteFindingTests(TestCase):
                     request.user = viewer
                     self.assertFalse(admin.site._registry[type(obj)].has_change_permission(request, obj))
                 self.assertEqual(self.client.post(f'/admin/water/{model}/{obj.pk}/change/', {}).status_code, 403)
+
+    def test_grant_history_requires_card_privacy_and_history_permissions(self):
+        from .portal_permissions import PortalGrant
+        person = Person.objects.create(full_name='Синтетическое закрытое ФИО')
+        grant = PortalGrant.objects.create(
+            person=person, account=self.account, starts=timezone.localdate(),
+            basis='Закрытое основание', verified_by=self.admin,
+        )
+        history_id = grant.history.first().pk
+        paths = (
+            f'/admin/water/portalgrant/{grant.pk}/history/',
+            f'/admin/water/portalgrant/{grant.pk}/history/{history_id}/',
+        )
+        for history_perm in ('view_historicalportalgrant', 'change_historicalportalgrant'):
+            self.staff.user_permissions.clear()
+            self.staff = self.grant(self.staff, history_perm, 'view_portalgrant')
+            self.client.force_login(self.staff)
+            for path in paths:
+                with self.subTest(permission=history_perm, path=path):
+                    self.assertEqual(self.client.get(path).status_code, 403)
+        self.staff = self.grant(self.staff, 'access_private_registry', 'view_historicalportalgrant')
+        self.client.force_login(self.staff)
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code, 200)
+        self.staff.user_permissions.clear()
+        self.staff = self.grant(self.staff, 'access_private_registry', 'view_portalgrant')
+        self.client.force_login(self.staff)
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code, 403)
