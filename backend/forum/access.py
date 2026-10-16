@@ -39,8 +39,20 @@ def forum_view(view):
 
 
 def navigation(request):
-    return {
+    context = {
         'forum_enabled': settings.FORUM_ENABLED,
         'resident_email_login_enabled': settings.RESIDENT_EMAIL_LOGIN_ENABLED,
         'forum_moderator': settings.FORUM_ENABLED and can_moderate(request.user),
     }
+
+    match = request.resolver_match
+    if settings.FORUM_ENABLED and match and match.app_name == 'forum':
+        # Resolve cabinet links with the same grant rules as the resident views.
+        # A public reader or a user without account access still gets the shell.
+        context.update(forum_shell=True, active_section='forum')
+        if request.user.is_authenticated:
+            from water.portal_permissions import CAP_VIEW_ACCOUNT, resolved_accesses
+            accesses = resolved_accesses(request.user, CAP_VIEW_ACCOUNT)
+            if accesses:
+                context.update(access=accesses[0], account=accesses[0].account)
+    return context

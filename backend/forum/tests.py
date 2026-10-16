@@ -377,10 +377,34 @@ class ForumTests(TestCase):
         self.assertEqual(client.get(mod_url).status_code, 405)
         self.assertEqual(client.post(mod_url, {'action': 'hide', 'reason': 'Причина'}).status_code, 403)
 
+    def test_shared_shell_uses_only_current_resident_access(self):
+        from water.models import Account, ResidentAccess
+        today = timezone.localdate()
+        account = Account.objects.create(number='FORUM-SHELL', plot='Synthetic linked plot')
+        other = Account.objects.create(number='FORUM-OTHER', plot='Synthetic unrelated plot')
+        access = ResidentAccess.objects.create(
+            user=self.author, account=account, role='owner', starts=today - timedelta(days=2),
+        )
+        response = self.client.get(self.url)
+        self.assertTemplateUsed(response, 'water/portal/base.html')
+        self.assertContains(response, reverse('resident_water', args=[account.pk]))
+        self.assertNotContains(response, reverse('resident_water', args=[other.pk]))
+        self.assertNotContains(response, self.author.first_name)
+        access.ends = today
+        access.save()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'bottom-nav forum-guest-nav')
+        self.assertNotContains(response, reverse('resident_water', args=[account.pk]))
+        self.assertContains(response, self.topic.title)
+
     def test_mobile_markup_and_public_navigation(self):
         response = self.client.get(self.url)
-        self.assertContains(response, 'name="viewport" content="width=device-width,initial-scale=1"')
+        self.assertContains(response, 'name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"')
         self.assertContains(response, 'forum/forum.css')
+        self.assertTemplateUsed(response, 'water/portal/base.html')
+        self.assertContains(response, 'class="desktop-sidebar"')
+        self.assertContains(response, 'bottom-nav forum-guest-nav')
         self.assertEqual(self.client.get('/admin/public/content/').json()['forum_url'], reverse('forum:index'))
         self.assertNotContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
 

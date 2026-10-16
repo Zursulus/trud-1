@@ -61,7 +61,7 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertLessEqual(hero_height, 195)
             self.assertTrue(page.locator('.home-plot-card').is_visible())
             self.assertEqual(page.locator('.home-shortcuts .shortcut').count(), 4)
-            self.assertTrue(page.get_by_text('Что требует внимания', exact=True).is_visible())
+            self.assertTrue(page.get_by_text('Нужно сделать', exact=True).is_visible())
             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
 
             nav = page.locator('.bottom-nav')

@@ -1,0 +1,1 @@
+{% load static %}<svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#{% if item.kind == 'money' %}payment{% elif item.kind == 'appeal' %}message{% elif item.kind == 'news' %}news{% elif item.kind == 'document' %}document{% else %}water{% endif %}"></use></svg>

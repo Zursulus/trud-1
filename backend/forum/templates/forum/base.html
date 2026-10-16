@@ -1,5 +1,8 @@
-{% load static %}<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Обсуждения · ТСН «Труд-1»{% endblock %}</title><link rel="stylesheet" href="{% static 'water/portal.css' %}"><link rel="stylesheet" href="{% static 'forum/forum.css' %}"></head>
-<body><main class="forum-shell"><nav class="forum-nav" aria-label="Навигация"><a href="/">ТСН «Труд-1»</a>{% if forum_enabled %}<a href="{% url 'forum:index' %}" aria-current="page">Обсуждения</a>{% endif %}<a href="{% url 'resident_dashboard' %}">Кабинет</a>{% if request.user.is_authenticated %}{% if forum_enabled %}<a href="{% url 'forum:profile' %}">Мой ник</a>{% endif %}{% if forum_moderator and request.user.is_staff %}<a href="{% url 'forum_moderation' %}">Модерация</a>{% endif %}<form method="post" action="{% url 'resident_logout' %}">{% csrf_token %}<button type="submit">Выйти</button></form>{% elif resident_email_login_enabled %}<a href="{% url 'account_login' %}">Войти по почте</a>{% else %}<a href="{% url 'resident_login' %}">Войти</a>{% endif %}</nav>
+{% extends 'water/portal/base.html' %}{% load static %}
+{% block title %}Обсуждения · ТСН «Труд-1»{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'forum/forum.css' %}?v=sea-20261016">{% endblock %}
+{% block body_class %}portal-forum{% endblock %}
+{% block content %}<div class="forum-shell">
+<nav class="forum-nav" aria-label="Навигация"><a href="/">ТСН «Труд-1»</a>{% if forum_enabled %}<a href="{% url 'forum:index' %}" aria-current="page">Обсуждения</a>{% endif %}<a href="{% url 'resident_dashboard' %}">Кабинет</a>{% if request.user.is_authenticated %}{% if forum_enabled %}<a href="{% url 'forum:profile' %}">Мой ник</a>{% endif %}{% if forum_moderator and request.user.is_staff %}<a href="{% url 'forum_moderation' %}">Модерация</a>{% endif %}<form method="post" action="{% url 'resident_logout' %}">{% csrf_token %}<button type="submit">Выйти</button></form>{% elif resident_email_login_enabled %}<a href="{% url 'account_login' %}">Войти по почте</a>{% else %}<a href="{% url 'resident_login' %}">Войти</a>{% endif %}</nav>
 {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
-{% block content %}{% endblock %}</main></body></html>
+{% block forum_content %}{% endblock %}</div>{% endblock %}

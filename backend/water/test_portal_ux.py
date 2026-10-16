@@ -37,7 +37,7 @@ class ResidentPortalUXTests(TestCase):
         self.login()
         response = self.client.get('/admin/cabinet/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Что требует внимания')
+        self.assertContains(response, 'Нужно сделать')
         self.assertContains(response, 'К оплате 3200')
         self.assertContains(response, '184,600')
         self.assertContains(response, 'Садовая, 42')
