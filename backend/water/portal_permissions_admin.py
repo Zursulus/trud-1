@@ -21,6 +21,12 @@ class PortalGrantAdmin(PrivateRegistryPermissionMixin, RecordedAdmin):
     readonly_fields = ('verified_at',)
     list_select_related = ('person', 'account', 'verified_by')
 
+    def has_view_history_permission(self, request, obj=None):
+        return self.has_view_permission(request, obj) and super().has_view_history_permission(request, obj)
+
+    def has_change_history_permission(self, request, obj=None):
+        return self.has_view_permission(request, obj) and super().has_change_history_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         if not obj.verified_by_id:
             obj.verified_by = request.user

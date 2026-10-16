@@ -140,3 +140,43 @@ class PublicContentTests(TestCase):
         self.assertIn('renderArticleBody', script)
         self.assertNotIn('trud1-featured-news:', script)
         self.assertIn('overflow-y:auto', public_css)
+
+    def test_news_deep_link_finds_published_article_beyond_feed(self):
+        today = timezone.localdate()
+        old = PublicNews.objects.create(
+            title='Архивная новость', summary='Анонс', body='Архивный текст',
+            published_on=today - timedelta(days=30), is_published=True, public_checked=True,
+        )
+        for index in range(12):
+            PublicNews.objects.create(
+                title=f'Новая {index}', summary='Анонс', body='Текст',
+                published_on=today, is_published=True, public_checked=True,
+            )
+        feed = self.client.get(reverse('public_content')).json()['news']
+        self.assertEqual(len(feed), 12)
+        self.assertNotIn(old.pk, [item['id'] for item in feed])
+        selected = self.client.get(reverse('public_content'), {'news': old.pk}).json()['news']
+        self.assertEqual([item['id'] for item in selected], [old.pk])
+        for attrs in (
+            {'is_published': False}, {'public_checked': False},
+            {'published_on': today + timedelta(days=1)},
+        ):
+            hidden = PublicNews.objects.create(
+                title='Закрытая новость', summary='Анонс', body='Закрытый текст',
+                **({'published_on': today, 'is_published': True, 'public_checked': True} | attrs),
+            )
+            self.assertEqual(self.client.get(reverse('public_content'), {'news': hidden.pk}).json()['news'], [])
+        for invalid in ('²', 'NaN', '-1', '9' * 5000, '9223372036854775808'):
+            self.assertEqual(self.client.get(reverse('public_content'), {'news': invalid}).json()['news'], [])
+
+    def test_news_deep_link_frontend(self):
+        import shutil
+        import subprocess
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('Node is needed for the DOM regression test')
+        result = subprocess.run(
+            [node, str(Path(__file__).with_name('test_news_deeplink.mjs'))],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

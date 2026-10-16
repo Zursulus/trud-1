@@ -273,8 +273,11 @@ def account_finance(request, account_id):
         _payments_with_remaining(Payment.objects.filter(account=account))
         .order_by("-paid_on", "-id")[:30]
     )
+    account_admin = admin.site._registry[Account]
     context = _base_context(request, section="finance")
     context.update({
+        "can_open_account": can_on_record(request.user, "accounts.view", account_id=account.pk),
+        "can_open_statement": account_admin.has_view_permission(request) and account_admin.can_view_finance(request),
         "account": account,
         "totals": account_totals(account),
         "charges": charges,

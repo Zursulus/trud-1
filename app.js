@@ -6,6 +6,7 @@ const articleBody=document.querySelector('#article-body');
 const newsGrid=document.querySelector('#news-grid');
 const documentsList=document.querySelector('#documents-list');
 let articles=[];
+const articleLoads=new Map();
 let contentStatus='loading';
 let lastArticleTrigger=null;
 let renderedArticleKey='';
@@ -54,22 +55,44 @@ function closeDialog(restoreFocus=false){
   },0);
 }
 
+async function loadSelectedArticle(id){
+  articleLoads.set(id,'loading');
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),15000);
+  try{
+    const response=await fetch(`/admin/public/content/?news=${encodeURIComponent(id)}`,{headers:{Accept:'application/json'},credentials:'same-origin',signal:controller.signal});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const payload=await response.json();
+    if(!Array.isArray(payload.news))throw new Error('Invalid news content');
+    const article=payload.news.find(item=>String(item.id)===id);
+    if(article&&!articles.some(item=>String(item.id)===id))articles.push(article);
+    articleLoads.set(id,'ready');
+  }catch(error){
+    articleLoads.set(id,'error');
+  }finally{
+    clearTimeout(timeout);
+    syncArticleFromUrl();
+  }
+}
+
 function syncArticleFromUrl(){
   const wasClosing=closePending;
   closePending=false;
   const id=articleIdFromUrl();
   if(!id){closeDialog(wasClosing);return;}
   const article=articles.find(item=>String(item.id)===id);
+  if(!article&&contentStatus==='ready'&&!articleLoads.has(id))loadSelectedArticle(id);
+  const status=article?contentStatus:(articleLoads.get(id)||contentStatus);
   lastArticleTrigger=Array.from(newsGrid.querySelectorAll('[data-news-id]')).find(button=>button.dataset.newsId===id)||lastArticleTrigger;
-  const key=`${id}:${contentStatus}`;
+  const key=`${id}:${status}`;
   if(key!==renderedArticleKey){
     articleMeta.textContent=article?[String(article.category||'Новость').toUpperCase(),formatDate(article.date)].filter(Boolean).join(' · '):'';
-    articleTitle.textContent=article?article.title:contentStatus==='loading'?'Загружаем новость…':'Новость недоступна';
+    articleTitle.textContent=article?article.title:status==='loading'?'Загружаем новость…':'Новость недоступна';
     articleSummary.textContent=article?article.summary||'':'';
     articleSummary.hidden=!articleSummary.textContent;
-    const message=contentStatus==='error'?'Не удалось загрузить новость. Закройте окно и повторите загрузку в разделе новостей.':'Возможно, новость снята с публикации или ссылка устарела.';
-    articleBody.replaceChildren(...renderArticleBody(article?article.body:contentStatus==='loading'?'Подождите, пожалуйста.':message));
-    dialog.setAttribute('aria-busy',String(contentStatus==='loading'));
+    const message=status==='error'?'Не удалось загрузить новость. Закройте окно и повторите загрузку в разделе новостей.':'Возможно, новость снята с публикации или ссылка устарела.';
+    articleBody.replaceChildren(...renderArticleBody(article?article.body:status==='loading'?'Подождите, пожалуйста.':message));
+    dialog.setAttribute('aria-busy',String(status==='loading'));
     dialog.scrollTop=0;
     renderedArticleKey=key;
   }
@@ -190,6 +213,7 @@ function contentState(message,retry=false){
 
 async function loadPublicContent(){
   contentStatus='loading';
+  articleLoads.clear();
   newsGrid.setAttribute('aria-busy','true');
   documentsList.setAttribute('aria-busy','true');
   newsGrid.replaceChildren(contentState('Загружаем новости…'));
@@ -202,7 +226,7 @@ async function loadPublicContent(){
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const payload=await response.json();
     if(!Array.isArray(payload.news)||!Array.isArray(payload.documents))throw new Error('Invalid public content');
-    articles=payload.news;
+    articles=[...payload.news];
     contentStatus='ready';
     newsGrid.replaceChildren(...(articles.length?articles.map(newsCard):[contentState('Пока нет опубликованных новостей.')]));
     documentsList.replaceChildren(...(payload.documents.length?payload.documents.map(documentRow):[contentState('Пока нет опубликованных документов.')]));

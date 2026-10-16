@@ -43,6 +43,8 @@ def _parse_threshold(raw_value):
         value = Decimal(str(raw_value).strip().replace(',', '.'))
     except (InvalidOperation, ValueError):
         return DEFAULT_REVIEW_THRESHOLD_M3, 'Введите число, например 20 или 25.5.'
+    if not value.is_finite():
+        return DEFAULT_REVIEW_THRESHOLD_M3, 'Введите конечное число, например 20 или 25.5.'
     if value < MIN_REVIEW_THRESHOLD_M3 or value > MAX_REVIEW_THRESHOLD_M3:
         return DEFAULT_REVIEW_THRESHOLD_M3, 'Порог должен быть больше 0 и не больше 100000 м³.'
     if value.as_tuple().exponent < -3:

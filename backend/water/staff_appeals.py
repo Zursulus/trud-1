@@ -78,7 +78,7 @@ def appeal_list(request):
         state = "open"
     q = " ".join((request.GET.get("q") or "").split())[:160]
     account_id = request.GET.get("account") or ""
-    if not account_id.isdigit():
+    if not account_id.isdecimal():
         account_id = ""
 
     count_base = scoped_appeals(request.user)
@@ -111,7 +111,7 @@ def appeal_list(request):
             | Q(account__number__icontains=q)
             | Q(account__plot__icontains=q)
         )
-        if q.isdigit():
+        if q.isdecimal():
             criteria |= Q(pk=int(q))
         base = base.filter(criteria)
 

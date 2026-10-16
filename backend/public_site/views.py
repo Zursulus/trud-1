@@ -13,7 +13,16 @@ def public_content(request):
         is_published=True,
         public_checked=True,
         published_on__lte=today,
-    ).order_by('-is_featured', '-published_on', '-id')[:12]
+    ).order_by('-is_featured', '-published_on', '-id')
+    selected_id = request.GET.get('news')
+    if selected_id is not None:
+        if (selected_id.isascii() and selected_id.isdecimal() and len(selected_id) <= 19
+                and 0 < int(selected_id) <= 9223372036854775807):
+            news = news.filter(pk=int(selected_id))
+        else:
+            news = news.none()
+    else:
+        news = news[:12]
     documents = PublicDocument.objects.filter(
         is_published=True,
         public_checked=True,

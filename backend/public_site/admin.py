@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib import admin
 
+from water.admin_documents import ProtectedDocumentAdminMixin
+
 from .models import PublicDocument, PublicDocumentCategory, PublicNews
 from .publication_workflow import apply_publication_state
 
@@ -92,7 +94,8 @@ class PublicDocumentCategoryAdmin(NoDeleteAuditedAdmin):
 
 
 @admin.register(PublicDocument)
-class PublicDocumentAdmin(PublicationAdmin):
+class PublicDocumentAdmin(ProtectedDocumentAdminMixin, PublicationAdmin):
+    document_download_url = "staff_workspace:public_document_download"
     list_display = ('title', 'category', 'document_date', 'is_published', 'published_by', 'file_size')
     list_filter = ('is_published', 'category', 'document_date')
     search_fields = ('title', 'description', 'original_name', 'notes')
@@ -100,4 +103,4 @@ class PublicDocumentAdmin(PublicationAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj)) + ('original_name', 'file_size')
-        return fields + (('document',) if obj else ())
+        return fields

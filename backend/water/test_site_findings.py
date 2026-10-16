@@ -1,0 +1,301 @@
+"""Regressions from the offline site audit (synthetic data only)."""
+from datetime import timedelta
+
+from django.contrib import admin
+from django.contrib.auth.models import Permission
+from django.test import RequestFactory, TestCase
+from django.utils import timezone
+
+from .models import Account, Person, User
+from .board_polls import (
+    BoardAuditEvent, BoardDiscussionComment, BoardMembership, BoardPoll, BoardQuestion, BoardVote,
+)
+
+
+class SiteFindingTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(username='audit-staff', is_staff=True)
+        self.admin = User.objects.create_superuser(username='audit-admin', email='audit@example.test')
+        self.account = Account.objects.create(number='AUDIT-1', plot='Синтетический участок')
+
+    def grant(self, user, *codenames):
+        user.user_permissions.add(*Permission.objects.filter(
+            content_type__app_label='water', codename__in=codenames,
+        ))
+        return User.objects.get(pk=user.pk)
+
+    def poll(self):
+        return BoardPoll.objects.create(
+            title='Синтетический опрос', created_by=self.admin,
+            opens_at=timezone.now() - timedelta(days=2),
+            closes_at=timezone.now() + timedelta(days=1),
+        )
+
+    def test_board_admin_read_requires_model_permission(self):
+        poll = self.poll()
+        question = BoardQuestion.objects.create(poll=poll, order=1, text='Синтетический вопрос')
+        BoardMembership.objects.create(user=self.staff, starts=timezone.localdate() - timedelta(days=3))
+        vote = BoardVote.objects.create(question=question, user=self.staff, choice='for')
+        comment = BoardDiscussionComment.objects.create(question=question, author=self.staff, body='Закрыто')
+        audit = BoardAuditEvent.objects.first()
+        for obj in (vote, comment, audit):
+            model = obj._meta.model_name
+            with self.subTest(model=model):
+                self.client.force_login(self.staff)
+                for path in (f'/admin/water/{model}/', f'/admin/water/{model}/{obj.pk}/change/'):
+                    self.assertEqual(self.client.get(path).status_code, 403)
+                viewer = self.grant(self.staff, f'view_{model}')
+                self.client.force_login(viewer)
+                self.assertEqual(self.client.get(f'/admin/water/{model}/').status_code, 200)
+                self.assertEqual(self.client.get(f'/admin/water/{model}/{obj.pk}/change/').status_code, 200)
+                for method in ('get', 'head', 'options', 'post'):
+                    request = getattr(RequestFactory(), method)('/')
+                    request.user = viewer
+                    self.assertFalse(admin.site._registry[type(obj)].has_change_permission(request, obj))
+                self.assertEqual(self.client.post(f'/admin/water/{model}/{obj.pk}/change/', {}).status_code, 403)
+
+    def test_grant_history_requires_card_privacy_and_history_permissions(self):
+        from .portal_permissions import PortalGrant
+        person = Person.objects.create(full_name='Синтетическое закрытое ФИО')
+        grant = PortalGrant.objects.create(
+            person=person, account=self.account, starts=timezone.localdate(),
+            basis='Закрытое основание', verified_by=self.admin,
+        )
+        history_id = grant.history.first().pk
+        paths = (
+            f'/admin/water/portalgrant/{grant.pk}/history/',
+            f'/admin/water/portalgrant/{grant.pk}/history/{history_id}/',
+        )
+        for history_perm in ('view_historicalportalgrant', 'change_historicalportalgrant'):
+            self.staff.user_permissions.clear()
+            self.staff = self.grant(self.staff, history_perm, 'view_portalgrant')
+            self.client.force_login(self.staff)
+            for path in paths:
+                with self.subTest(permission=history_perm, path=path):
+                    self.assertEqual(self.client.get(path).status_code, 403)
+        self.staff = self.grant(self.staff, 'access_private_registry', 'view_historicalportalgrant')
+        self.client.force_login(self.staff)
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code, 200)
+        self.staff.user_permissions.clear()
+        self.staff = self.grant(self.staff, 'access_private_registry', 'view_portalgrant')
+        self.client.force_login(self.staff)
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code, 403)
+
+    def test_appeal_search_accepts_unicode_without_integer_errors(self):
+        self.client.force_login(self.admin)
+        for param in ('q', 'account'):
+            for value in ('²', '１２３', '123', 'текст'):
+                with self.subTest(param=param, value=value):
+                    self.assertEqual(self.client.get('/work/appeals/', {param: value}).status_code, 200)
+
+    def test_account_reading_journal_link_filters_only_this_account(self):
+        import re
+        from .models import Meter, Reading, SupplyNode
+        node = SupplyNode.objects.create(name='Синтетический узел')
+        other = Account.objects.create(number='AUDIT-2')
+        for account in (self.account, other):
+            meter = Meter.objects.create(serial=f'AUDIT-{account.pk}', kind='individual', account=account, node=node)
+            Reading.objects.create(meter=meter, date=timezone.localdate(), value='1')
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/accounts/{self.account.pk}/')
+        link = re.search(r'href="([^"]+)">Журнал показаний', page.content.decode())[1]
+        journal = self.client.get(link)
+        self.assertEqual(journal.status_code, 200)
+        self.assertEqual(list(journal.context['cl'].queryset.values_list('meter__account_id', flat=True)), [self.account.pk])
+        self.assertEqual(self.client.get('/admin/water/reading/', {'meter__account__phone__icontains': '1'}).status_code, 400)
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(link).status_code, 403)
+
+    def test_staff_protocol_link_uses_staff_permissions(self):
+        import re
+        from tempfile import TemporaryDirectory
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .board_polls import BoardProtocol
+        poll = self.poll()
+        poll.closed_at = timezone.now()
+        poll.save()
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            BoardProtocol.objects.create(
+                poll=poll, document=SimpleUploadedFile('protocol.pdf', b'%PDF-1.4\nsynthetic'),
+                uploaded_by=self.admin,
+            )
+            viewer = self.grant(self.staff, 'view_boardpoll')
+            self.client.force_login(viewer)
+            detail = self.client.get(f'/work/governance/{poll.pk}/')
+            link = re.search(r'href="([^"]+)">Скачать протокол', detail.content.decode())[1]
+            response = self.client.get(link)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4\nsynthetic')
+            self.assertIn('private', response['Cache-Control'])
+            self.assertIn('no-store', response['Cache-Control'])
+            self.assertEqual(self.client.get(f'/admin/cabinet/board/poll/{poll.pk}/protocol/').status_code, 403)
+            self.staff.user_permissions.clear()
+            self.client.force_login(User.objects.get(pk=self.staff.pk))
+            self.assertEqual(self.client.get(link).status_code, 403)
+            self.client.logout()
+            self.assertEqual(self.client.get(link).status_code, 302)
+
+    def test_controller_empty_line_is_authorized_empty_scope(self):
+        from django.core.exceptions import PermissionDenied
+        from .controller_scope import ControllerLineAccess
+        from .models import SupplyNode, WaterGroup
+        from .staff_workspace import scoped_accounts
+        node = SupplyNode.objects.create(name='Пустой узел')
+        group = WaterGroup.objects.create(name='Пустая линия', node=node)
+        self.staff = self.grant(self.staff, 'use_controller_workspace')
+        ControllerLineAccess.objects.create(user=self.staff, group=group, starts=timezone.localdate())
+        self.client.force_login(self.staff)
+        for path in ('/work/', '/work/accounts/', '/work/search/?q=AUDIT'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'Синтетический участок')
+        self.assertFalse(scoped_accounts(self.staff).exists())
+        self.assertEqual(self.client.get(f'/work/accounts/{self.account.pk}/').status_code, 404)
+        outsider = User.objects.create_user(username='no-scope', is_staff=True)
+        with self.assertRaises(PermissionDenied):
+            scoped_accounts(outsider)
+        self.client.force_login(outsider)
+        self.assertEqual(self.client.get('/work/accounts/').status_code, 403)
+
+    def test_finance_links_follow_destination_permissions(self):
+        from .access_control import assignment_from_role, link_identity
+        from .access_policy import ScopeType
+        person = Person.objects.create(full_name='Синтетический финансист')
+        link_identity(user=self.staff, person=person, actor=self.admin, basis='Проверено')
+        assignment_from_role(
+            person=person, role_code='finance_viewer', scope_type=ScopeType.ALL,
+            basis='Синтетическая роль', granted_by=self.admin,
+        )
+        account_url = f'/work/accounts/{self.account.pk}/'
+        statement_url = f'/admin/water/account/{self.account.pk}/statement/'
+        self.client.force_login(self.staff)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, f'href="{account_url}"')
+        self.assertNotContains(page, f'href="{statement_url}"')
+        self.assertEqual(self.client.get(account_url).status_code, 403)
+        self.assertEqual(self.client.get(statement_url).status_code, 403)
+        self.staff = self.grant(self.staff, 'view_account')
+        self.client.force_login(self.staff)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        self.assertContains(page, f'href="{account_url}"')
+        self.assertNotContains(page, f'href="{statement_url}"')
+        self.assertEqual(self.client.get(account_url).status_code, 200)
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        for link in (account_url, statement_url):
+            self.assertContains(page, f'href="{link}"')
+            self.assertEqual(self.client.get(link).status_code, 200)
+
+    def test_admin_file_links_use_protected_downloads(self):
+        from tempfile import TemporaryDirectory
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from public_site.models import PublicDocument, PublicDocumentCategory
+        from .board_polls import BoardProtocol
+        from .models import AccountDocument, DocumentCategory
+        poll = self.poll()
+        poll.closed_at = timezone.now()
+        poll.save()
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            payload = b'%PDF-1.4\nsynthetic private file'
+            account_doc = AccountDocument.objects.create(
+                account=self.account, category=DocumentCategory.objects.create(name='Синтетическая'),
+                title='Закрытый файл', document=SimpleUploadedFile('account.pdf', payload),
+            )
+            public_doc = PublicDocument.objects.create(
+                category=PublicDocumentCategory.objects.create(name='Синтетическая'),
+                title='Черновик', document=SimpleUploadedFile('draft.pdf', payload),
+            )
+            protocol = BoardProtocol.objects.create(
+                poll=poll, document=SimpleUploadedFile('protocol.pdf', payload), uploaded_by=self.admin,
+            )
+            cases = (
+                (account_doc, 'staff_workspace:account_document_download', account_doc.pk),
+                (public_doc, 'staff_workspace:public_document_download', public_doc.pk),
+                (protocol, 'staff_workspace:governance_protocol', poll.pk),
+            )
+            for obj, name, key in cases:
+                with self.subTest(model=obj._meta.label):
+                    url = reverse(name, args=[key])
+                    self.client.force_login(self.admin)
+                    page = self.client.get(reverse(f'admin:{obj._meta.app_label}_{obj._meta.model_name}_change', args=[obj.pk]))
+                    self.assertContains(page, f'href="{url}"')
+                    self.assertNotContains(page, f'href="{obj.document.url}"')
+                    download = self.client.get(url)
+                    self.assertEqual(download.status_code, 200)
+                    self.assertEqual(b''.join(download.streaming_content), payload)
+                    self.client.force_login(self.staff)
+                    self.assertEqual(self.client.get(url).status_code, 403)
+                    self.client.logout()
+                    self.assertEqual(self.client.get(url).status_code, 302)
+            self.client.force_login(self.admin)
+            inline = self.client.get(f'/admin/water/boardpoll/{poll.pk}/change/')
+            self.assertContains(inline, f'href="{reverse("staff_workspace:governance_protocol", args=[poll.pk])}"')
+            self.assertNotContains(inline, f'href="{protocol.document.url}"')
+            self.assertNotContains(inline, 'namespace(')
+            self.client.logout()
+            self.assertEqual(self.client.get(reverse('public_document_download', args=[public_doc.pk])).status_code, 404)
+
+    def test_nonfinite_reading_threshold_has_validation_error(self):
+        from decimal import Decimal
+        from .reading_review_config import _parse_threshold
+        self.client.force_login(self.admin)
+        for raw in ('NaN', 'sNaN', '-NaN', 'Infinity', '-Infinity'):
+            with self.subTest(threshold=raw):
+                value, error = _parse_threshold(raw)
+                self.assertEqual(value, Decimal('20'))
+                self.assertTrue(error)
+                response = self.client.get('/admin/water/readings/review/', {'threshold': raw})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context['threshold'], '20')
+                self.assertEqual(self.client.get('/admin/water/readings/export-xlsx/', {'threshold': raw}).status_code, 400)
+        self.assertEqual(_parse_threshold('25.5'), (Decimal('25.5'), None))
+
+    def test_empty_finance_account_title_has_dash_fallback(self):
+        account = Account.objects.create(number=None, plot='')
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/finance/accounts/{account.pk}/')
+        self.assertContains(page, '<title>Финансы · — ·')
+        self.assertNotContains(page, 'None')
+
+    def test_history_missing_reason_is_dash_and_existing_reason_is_preserved(self):
+        import re
+        from .models import SupplyNode
+        node = SupplyNode.objects.create(name='Синтетическая история')
+        node.notes = 'Изменение'
+        node._change_reason = 'Синтетическая причина'
+        node.save()
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/admin/water/supplynode/{node.pk}/history/')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Синтетическая причина')
+        self.assertIsNone(re.search(r'<td>\s*None\s*</td>', page.content.decode()))
+        self.assertRegex(page.content.decode(), r'<td>\s*—\s*</td>')
+        self.assertIsNone(node.history.order_by('history_id').first().history_change_reason)
+
+    def test_account_access_count_includes_only_current_grants_and_legacy(self):
+        from .models import ResidentAccess
+        from .portal_permissions import PortalGrant
+        today = timezone.localdate()
+        self.client.force_login(self.admin)
+        url = f'/work/accounts/{self.account.pk}/'
+        self.assertEqual(self.client.get(url).context['access_count'], 0)
+        for index, (starts, ends, account) in enumerate((
+            (today, None, self.account),
+            (today + timedelta(days=1), None, self.account),
+            (today - timedelta(days=2), today, self.account),
+            (today, None, Account.objects.create(number='OTHER')),
+        )):
+            PortalGrant.objects.create(
+                person=Person.objects.create(full_name=f'Синтетический доступ {index}'),
+                account=account, starts=starts, ends=ends,
+                basis='Синтетическое основание', verified_by=self.admin,
+            )
+        self.assertEqual(self.client.get(url).context['access_count'], 1)
+        resident = User.objects.create_user(username='legacy-resident')
+        ResidentAccess.objects.create(user=resident, account=self.account, role='owner', starts=today)
+        self.assertEqual(self.client.get(url).context['access_count'], 2)

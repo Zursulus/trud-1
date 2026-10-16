@@ -21,6 +21,7 @@ from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from simple_history.admin import SimpleHistoryAdmin
 
+from .admin_documents import ProtectedDocumentAdminMixin
 from .access_policy import ScopeType
 from .access_resolver import can_any, scopes_for
 from .access_scope import scope_covers_meter
@@ -588,6 +589,11 @@ class MeterAdmin(RecordedAdmin):
 
 @admin.register(Reading)
 class ReadingAdmin(RecordedAdmin):
+    def lookup_allowed(self, lookup, value, request):
+        if lookup == 'meter__account__id__exact':
+            return True
+        return super().lookup_allowed(lookup, value, request)
+
     def has_view_permission(self, request, obj=None):
         return super().has_view_permission(request, obj) or _has_all_scope(request.user, 'water.reading.view')
 
@@ -1378,7 +1384,8 @@ class DocumentCategoryAdmin(RecordedAdmin):
 
 
 @admin.register(AccountDocument)
-class AccountDocumentAdmin(RecordedAdmin):
+class AccountDocumentAdmin(ProtectedDocumentAdminMixin, RecordedAdmin):
+    document_download_url = "staff_workspace:account_document_download"
     list_display = ('title', 'account', 'category', 'published_at', 'visible_to_residents', 'file_size')
     list_filter = ('visible_to_residents', 'category', 'published_at')
     search_fields = ('title', 'original_name', 'account__number', 'account__plot', 'notes')
@@ -1386,4 +1393,4 @@ class AccountDocumentAdmin(RecordedAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj)) + ('original_name', 'file_size')
-        return fields + (('document',) if obj else ())
+        return fields
