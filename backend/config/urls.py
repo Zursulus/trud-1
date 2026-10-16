@@ -39,6 +39,7 @@ urlpatterns = [
     path('work/', include('water.staff_workspace_urls')),
     path('admin/deployment-status/', deployment_status, name='deployment_status'),
     path('admin/water/passwords/', admin.site.admin_view(password_admin.password_access_admin), name='water_password_access_admin'),
+    path('admin/public/announcement/<int:announcement_id>/image/', public_views.public_announcement_image, name='public_announcement_image'),
     path('admin/public/content/', public_views.public_content, name='public_content'),
     path('admin/public/document/<int:document_id>/', public_views.public_document_download, name='public_document_download'),
     path('admin/cabinet/login/', auth_views.LoginView.as_view(

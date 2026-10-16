@@ -104,9 +104,17 @@ _CAPS = [
     cap("documents.public.edit", "Редактирование публичного документа", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("documents.public.publish", "Публикация публичного документа", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("news.view", "Просмотр новостей в редакторе", (S.ALL,)),
+    cap("site.announcement.view", "Просмотр главного объявления", (S.ALL,)),
+    cap("site.contacts.view", "Просмотр контактов сайта", (S.ALL,)),
     cap("news.create", "Создание новости", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.announcement.create", "Создание главного объявления", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.contacts.create", "Создание контактов сайта", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("news.edit", "Редактирование новости", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.announcement.edit", "Редактирование главного объявления", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.contacts.edit", "Редактирование контактов сайта", (S.ALL,), require_mfa=True, maker_checker=True),
     cap("news.publish", "Публикация новости", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.announcement.publish", "Публикация главного объявления", (S.ALL,), require_mfa=True, maker_checker=True),
+    cap("site.contacts.publish", "Публикация контактов сайта", (S.ALL,), require_mfa=True, maker_checker=True),
 
     cap("access.view", "Просмотр центра доступов", (S.PERSON, S.ACCOUNT, S.ALL), require_mfa=True),
     cap("access.request.review", "Проверка заявки на доступ", (S.ALL,), require_mfa=True),
@@ -204,12 +212,15 @@ ROLE_TEMPLATES = {
             "documents.account.view", "documents.account.create",
             "documents.account.edit_metadata", "documents.account.download",
         )),
-        role("public_content_editor", 1, "Редактор публичных материалов", (S.ALL,), (
+        role("public_content_editor", 2, "Редактор публичных материалов", (S.ALL,), (
             "documents.public.view", "documents.public.create", "documents.public.edit",
             "news.view", "news.create", "news.edit",
+            "site.announcement.view", "site.announcement.create", "site.announcement.edit",
+            "site.contacts.view", "site.contacts.create", "site.contacts.edit",
         )),
-        role("public_content_publisher", 1, "Публикатор", (S.ALL,), (
+        role("public_content_publisher", 2, "Публикатор", (S.ALL,), (
             "documents.public.view", "documents.public.publish", "news.view", "news.publish",
+            "site.announcement.view", "site.announcement.publish", "site.contacts.view", "site.contacts.publish",
         )),
         role("private_registry", 1, "Закрытый реестр", (S.ALL,), (
             "registry.view", "registry.contacts.view", "registry.edit",
@@ -234,7 +245,7 @@ ROLE_TEMPLATES = {
             "documents.account.download", "documents.public.view",
             "access.audit.view", "governance.board.view", "governance.audit.view",
         )),
-        role("tsn_admin", 1, "Администратор ТСН", (S.ALL,), (
+        role("tsn_admin", 2, "Администратор ТСН", (S.ALL,), (
             "accounts.view", "accounts.edit", "accounts.export", "plots.view", "plots.edit",
             "relations.view", "relations.edit", "water.view", "water.meters.view",
             "water.reading.view", "water.reading.submit_official", "water.observation.submit",
@@ -249,7 +260,10 @@ ROLE_TEMPLATES = {
             "documents.account.view", "documents.account.create",
             "documents.account.edit_metadata", "documents.account.download",
             "documents.public.view", "documents.public.create", "documents.public.edit",
-            "documents.public.publish", "news.view", "news.create", "news.edit", "news.publish",
+            "documents.public.publish", "news.view", "news.create", "news.edit",
+            "site.announcement.view", "site.announcement.create", "site.announcement.edit",
+            "site.contacts.view", "site.contacts.create", "site.contacts.edit",
+            "news.publish", "site.announcement.publish", "site.contacts.publish",
             "access.view", "access.request.review", "access.request.decide",
             "access.identity.verify", "access.person.create", "access.invite.issue",
             "access.invite.revoke", "access.grant.view", "access.grant.issue",

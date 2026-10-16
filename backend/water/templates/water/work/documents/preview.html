@@ -1,0 +1,12 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Предпросмотр · {{ item }}</title>
+<link rel="stylesheet" href="/style.css?v=site-editor"><link rel="stylesheet" href="/public-content.css?v=site-editor"></head><body>
+<header class="wrap"><p>Предпросмотр сохранённой версии · {{ item.site_status }}. Просмотр не публикует материал.</p><a href="{% url 'staff_workspace:documents' %}">Вернуться в раздел «Сайт»</a></header>
+<main>
+{% if kind == 'news' %}<section class="wrap"><h1>Карточка новости</h1><div class="news-grid" id="news-grid"></div><p>Нажмите «Подробнее», чтобы увидеть полную новость.</p></section>{% else %}<div id="news-grid" hidden></div>{% endif %}
+<section class="notice-hero wrap" id="important" aria-labelledby="important-title"{% if kind != 'announcement' %} hidden{% endif %}><h1 id="important-title">Главное объявление</h1></section>
+<section class="documents wrap" id="contacts" aria-labelledby="contacts-title" hidden><h2 id="contacts-title">Контакты и приём</h2><div id="contacts-content"></div></section>
+<div id="documents-list" hidden></div>
+</main>
+<dialog id="news-dialog" aria-labelledby="article-title" aria-describedby="article-summary"><button class="close" aria-label="Закрыть">×</button><div class="eyebrow">НОВОСТИ ТОВАРИЩЕСТВА</div><div class="article-meta" id="article-meta"></div><h2 id="article-title"></h2><p class="article-summary" id="article-summary"></p><div id="article-body"></div></dialog>
+{{ preview_payload|json_script:'public-preview-data' }}
+<script src="/app.js?v=site-editor"></script></body></html>

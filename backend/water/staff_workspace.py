@@ -140,7 +140,9 @@ def _capabilities(user):
         "can_view_public_documents": can_any(user, "documents.public.view"),
         "can_view_news": can_any(user, "news.view"),
         "can_view_documents": (
-            can_any(user, "documents.account.view")
+            can_any(user, "site.announcement.view")
+            or can_any(user, "site.contacts.view")
+            or can_any(user, "documents.account.view")
             or can_any(user, "documents.public.view")
             or can_any(user, "news.view")
         ),

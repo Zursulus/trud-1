@@ -10,7 +10,7 @@ REGISTRY = (
 PRIVATE_RECORDED = ('person', 'plotrelation', 'importbatch', 'importrow')
 PRIVATE_MODELS = (*PRIVATE_RECORDED, 'memberregistryentry')
 FINANCE = ('billingpolicy', 'billingassignment', 'tariff', 'billingperiod', 'charge', 'payment', 'paymentallocation')
-PUBLIC_SITE = ('publicnews', 'publicdocumentcategory', 'publicdocument')
+PUBLIC_SITE = ('publicnews', 'publicdocumentcategory', 'publicdocument', 'homepageannouncement', 'sitecontacts', 'publicimage')
 BOARD_VIEW = (
     'boardmembership', 'boardpoll', 'boardquestion', 'boardvote',
     'boarddiscussioncomment', 'boardprotocol', 'boardauditevent',
@@ -53,6 +53,7 @@ class Command(BaseCommand):
         finance = {f'{action}_{name}' for name in FINANCE for action in ('view', 'add', 'change')}
         finance |= {f'view_historical{name}' for name in FINANCE}
         public_site = {f'{action}_{name}' for name in PUBLIC_SITE for action in ('view', 'add', 'change')}
+        public_site |= {f'view_historical{name}' for name in ('homepageannouncement', 'sitecontacts', 'publicimage')}
 
         private_registry = {
             f'{action}_{name}' for name in PRIVATE_MODELS for action in ('view', 'add', 'change')

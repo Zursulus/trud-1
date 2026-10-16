@@ -55,7 +55,7 @@ class StaffWorkspaceDocumentsBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/documents/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            self.assertTrue(page.get_by_role("heading", name="Документы и контент", exact=True).is_visible())
+            self.assertTrue(page.get_by_role("heading", name="Сайт", exact=True).is_visible())
             for heading in ("Документы жителей", "Публичные документы", "Новости сайта"):
                 self.assertTrue(page.get_by_role("heading", name=heading, exact=True).is_visible())
             self.assertTrue(page.get_by_role("link", name="Добавить документ жителя", exact=True).is_visible())
