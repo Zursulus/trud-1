@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
+from .portal_permissions import PortalGrant
 from .appeal_workflow import OPEN_APPEAL_STATES, scoped_appeals
 from .billing import account_totals
 from .access_policy import ScopeType
@@ -421,6 +422,10 @@ def account_detail(request, account_id):
         context["documents_count"] = AccountDocument.objects.filter(account=account).count()
     if context["can_view_access"]:
         context["access_count"] = ResidentAccess.objects.filter(
+            account=account,
+            starts__lte=today,
+        ).filter(Q(ends__isnull=True) | Q(ends__gt=today)).count()
+        context["access_count"] += PortalGrant.objects.filter(
             account=account,
             starts__lte=today,
         ).filter(Q(ends__isnull=True) | Q(ends__gt=today)).count()

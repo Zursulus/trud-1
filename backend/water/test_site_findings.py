@@ -276,3 +276,26 @@ class SiteFindingTests(TestCase):
         self.assertIsNone(re.search(r'<td>\s*None\s*</td>', page.content.decode()))
         self.assertRegex(page.content.decode(), r'<td>\s*—\s*</td>')
         self.assertIsNone(node.history.order_by('history_id').first().history_change_reason)
+
+    def test_account_access_count_includes_only_current_grants_and_legacy(self):
+        from .models import ResidentAccess
+        from .portal_permissions import PortalGrant
+        today = timezone.localdate()
+        self.client.force_login(self.admin)
+        url = f'/work/accounts/{self.account.pk}/'
+        self.assertEqual(self.client.get(url).context['access_count'], 0)
+        for index, (starts, ends, account) in enumerate((
+            (today, None, self.account),
+            (today + timedelta(days=1), None, self.account),
+            (today - timedelta(days=2), today, self.account),
+            (today, None, Account.objects.create(number='OTHER')),
+        )):
+            PortalGrant.objects.create(
+                person=Person.objects.create(full_name=f'Синтетический доступ {index}'),
+                account=account, starts=starts, ends=ends,
+                basis='Синтетическое основание', verified_by=self.admin,
+            )
+        self.assertEqual(self.client.get(url).context['access_count'], 1)
+        resident = User.objects.create_user(username='legacy-resident')
+        ResidentAccess.objects.create(user=resident, account=self.account, role='owner', starts=today)
+        self.assertEqual(self.client.get(url).context['access_count'], 2)
