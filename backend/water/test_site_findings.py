@@ -159,3 +159,33 @@ class SiteFindingTests(TestCase):
             scoped_accounts(outsider)
         self.client.force_login(outsider)
         self.assertEqual(self.client.get('/work/accounts/').status_code, 403)
+
+    def test_finance_links_follow_destination_permissions(self):
+        from .access_control import assignment_from_role, link_identity
+        from .access_policy import ScopeType
+        person = Person.objects.create(full_name='Синтетический финансист')
+        link_identity(user=self.staff, person=person, actor=self.admin, basis='Проверено')
+        assignment_from_role(
+            person=person, role_code='finance_viewer', scope_type=ScopeType.ALL,
+            basis='Синтетическая роль', granted_by=self.admin,
+        )
+        account_url = f'/work/accounts/{self.account.pk}/'
+        statement_url = f'/admin/water/account/{self.account.pk}/statement/'
+        self.client.force_login(self.staff)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, f'href="{account_url}"')
+        self.assertNotContains(page, f'href="{statement_url}"')
+        self.assertEqual(self.client.get(account_url).status_code, 403)
+        self.assertEqual(self.client.get(statement_url).status_code, 403)
+        self.staff = self.grant(self.staff, 'view_account')
+        self.client.force_login(self.staff)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        self.assertContains(page, f'href="{account_url}"')
+        self.assertNotContains(page, f'href="{statement_url}"')
+        self.assertEqual(self.client.get(account_url).status_code, 200)
+        self.client.force_login(self.admin)
+        page = self.client.get(f'/work/finance/accounts/{self.account.pk}/')
+        for link in (account_url, statement_url):
+            self.assertContains(page, f'href="{link}"')
+            self.assertEqual(self.client.get(link).status_code, 200)
