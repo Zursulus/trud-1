@@ -6,7 +6,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q
-from django.http import Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -313,6 +313,20 @@ def governance_detail(request, poll_id):
     )
 
 
+def governance_protocol_download(request, poll_id):
+    _require_governance_view(request)
+    protocol = get_object_or_404(BoardProtocol, poll_id=poll_id)
+    try:
+        stream = protocol.document.open("rb")
+    except (FileNotFoundError, OSError) as error:
+        raise Http404 from error
+    response = FileResponse(stream, as_attachment=True, filename=protocol.original_name)
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+workspace_governance_protocol = admin.site.admin_view(governance_protocol_download)
 workspace_governance = admin.site.admin_view(governance_dashboard)
 workspace_governance_create = admin.site.admin_view(governance_create)
 workspace_governance_detail = admin.site.admin_view(governance_detail)

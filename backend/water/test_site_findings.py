@@ -107,3 +107,32 @@ class SiteFindingTests(TestCase):
         self.assertEqual(self.client.get('/admin/water/reading/', {'meter__account__phone__icontains': '1'}).status_code, 400)
         self.client.force_login(self.staff)
         self.assertEqual(self.client.get(link).status_code, 403)
+
+    def test_staff_protocol_link_uses_staff_permissions(self):
+        import re
+        from tempfile import TemporaryDirectory
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .board_polls import BoardProtocol
+        poll = self.poll()
+        poll.closed_at = timezone.now()
+        poll.save()
+        with TemporaryDirectory() as media, self.settings(MEDIA_ROOT=media):
+            BoardProtocol.objects.create(
+                poll=poll, document=SimpleUploadedFile('protocol.pdf', b'%PDF-1.4\nsynthetic'),
+                uploaded_by=self.admin,
+            )
+            viewer = self.grant(self.staff, 'view_boardpoll')
+            self.client.force_login(viewer)
+            detail = self.client.get(f'/work/governance/{poll.pk}/')
+            link = re.search(r'href="([^"]+)">Скачать протокол', detail.content.decode())[1]
+            response = self.client.get(link)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4\nsynthetic')
+            self.assertIn('private', response['Cache-Control'])
+            self.assertIn('no-store', response['Cache-Control'])
+            self.assertEqual(self.client.get(f'/admin/cabinet/board/poll/{poll.pk}/protocol/').status_code, 403)
+            self.staff.user_permissions.clear()
+            self.client.force_login(User.objects.get(pk=self.staff.pk))
+            self.assertEqual(self.client.get(link).status_code, 403)
+            self.client.logout()
+            self.assertEqual(self.client.get(link).status_code, 302)
