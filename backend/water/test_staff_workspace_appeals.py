@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, AppealCategory, ResidentAccess, ResidentAppeal, User
 from .resident_models import ResidentAppealBoardMessage
 
@@ -58,7 +59,7 @@ class StaffWorkspaceAppealTests(TestCase):
         )
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def test_manager_queue_and_detail_hide_author_identity(self):
         self.login(self.manager)

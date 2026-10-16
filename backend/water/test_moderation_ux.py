@@ -7,6 +7,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, ControllerReadingSubmission, Meter, Reading, SupplyNode, User
 from .templatetags.water_admin import controller_moderation_context
 
@@ -48,7 +49,7 @@ class ControllerModerationUXTests(TestCase):
         self.assertIn('меньше предыдущего', context['warning'])
 
     def test_manager_sees_clear_actions_and_comparison_at_top(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         url = f'/admin/water/controllerreadingsubmission/{self.submission.pk}/change/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -62,14 +63,14 @@ class ControllerModerationUXTests(TestCase):
         self.assertNotContains(response, 'Причина (необязательно)')
 
     def test_queue_explains_how_to_moderate(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         response = self.client.get('/admin/water/controllerreadingsubmission/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Как проверить показание')
         self.assertContains(response, 'Принять показание')
 
     def test_after_approval_page_links_to_reading_journal(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         approve_url = f'/admin/water/controllerreadingsubmission/{self.submission.pk}/approve/'
         self.assertEqual(self.client.post(approve_url).status_code, 302)
         self.submission.refresh_from_db()

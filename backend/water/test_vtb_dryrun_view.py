@@ -4,6 +4,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from io import StringIO
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, Payment, User
 
 
@@ -24,7 +25,7 @@ class VtbDryRunViewTests(TestCase):
         return SimpleUploadedFile("payments.txt", text.encode("cp1251"), content_type="text/plain")
 
     def test_exact_account_match_is_preview_only(self):
-        self.client.force_login(self.staff)
+        login_with_admin_otp(self.client, self.staff)
         response = self.client.post("/work/finance/vtb/payments/dry-run/", {"encoding": "cp1251", "registry": self._file()})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Совпало:</strong> 1")
@@ -32,7 +33,7 @@ class VtbDryRunViewTests(TestCase):
         self.assertEqual(Payment.objects.count(), 0)
 
     def test_unknown_account_is_not_guessed_from_name_or_address(self):
-        self.client.force_login(self.staff)
+        login_with_admin_otp(self.client, self.staff)
         response = self.client.post("/work/finance/vtb/payments/dry-run/", {"encoding": "cp1251", "registry": self._file("UNKNOWN")})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Не найдено:</strong> 1")

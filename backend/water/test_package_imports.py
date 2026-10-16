@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from openpyxl import Workbook
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, LandPlot, Meter, Person, SupplyNode, WaterGroup
 from .package_imports import SHEETS, inspect_water_package
 from .package_writer import import_verified_water_package
@@ -181,7 +182,7 @@ class WaterPackageImportViewTests(TestCase):
             Group.objects.get(name='Администратор ТСН'),
             Group.objects.get(name='Закрытый реестр членов ТСН'),
         )
-        self.client.force_login(manager)
+        login_with_admin_otp(self.client, manager)
 
         response = self.client.post('/admin/water/package-dry-run/', {
             'file': make_workbook(), 'confirm_import': 'on', 'action': 'import',

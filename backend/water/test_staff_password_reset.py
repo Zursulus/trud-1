@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .management.commands.setup_roles import ADMIN, CONTROLLER, OPERATOR
+from ._test_auth import login_with_admin_otp
 from .models import ResidentPasswordReset, User
 
 
@@ -20,7 +21,7 @@ class StaffPasswordResetTests(TestCase):
         self.controller.groups.add(Group.objects.get(name=CONTROLLER))
 
     def test_administrator_can_issue_one_time_reset_for_controller(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         url = reverse('water_password_access_admin')
         self.assertEqual(self.client.get(url).status_code, 200)
         response = self.client.post(url, {'user_id': self.controller.pk})
@@ -46,7 +47,7 @@ class StaffPasswordResetTests(TestCase):
         self.assertEqual(self.client.get(reverse('resident_password_reset', args=[raw])).status_code, 410)
 
     def test_new_reset_revokes_previous_link(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         url = reverse('water_password_access_admin')
         first = self.client.post(url, {'user_id': self.controller.pk}).context['reset_url'].rstrip('/').split('/')[-1]
         second = self.client.post(url, {'user_id': self.controller.pk}).context['reset_url'].rstrip('/').split('/')[-1]
@@ -70,11 +71,11 @@ class StaffPasswordResetTests(TestCase):
         unrelated = User.objects.create_user(
             username='unrelated-staff', password='unrelated-password-2026!', is_staff=True,
         )
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         url = reverse('water_password_access_admin')
         for target in (superuser, unrelated):
             self.assertEqual(self.client.post(url, {'user_id': target.pk}).status_code, 403)
 
     def test_administrator_still_cannot_open_user_admin(self):
-        self.client.force_login(self.manager)
+        login_with_admin_otp(self.client, self.manager)
         self.assertEqual(self.client.get(reverse('admin:water_user_changelist')).status_code, 403)

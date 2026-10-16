@@ -11,6 +11,7 @@ from .access_scope import ScopeRef
 from .access_policy import ScopeType
 from .access_resolver import can
 from .board_polls import BoardMembership, BoardPoll, BoardQuestion, BoardVote
+from ._test_auth import login_with_admin_otp
 from .models import Account, ControllerReadingSubmission, Membership, Meter, Person, SupplyNode, User, WaterGroup
 from .portal_permissions import PortalGrant, resolved_access_at, CAP_FINANCE, CAP_VIEW_ACCOUNT
 
@@ -42,7 +43,7 @@ class StaffAccessV2Tests(TestCase):
             basis='Личный доступ', verified_by=self.dual, can_view_account=True,
             can_submit_water=True,
         )
-        self.client.force_login(self.dual)
+        login_with_admin_otp(self.client, self.dual)
         response = self.client.post(
             f'/work/access/people/{person.pk}/',
             {
@@ -113,7 +114,7 @@ class StaffAccessV2Tests(TestCase):
             basis='Собственное право', verified_by=self.dual,
             can_view_account=True, can_view_finance=True,
         )
-        self.client.force_login(self.dual)
+        login_with_admin_otp(self.client, self.dual)
         response = self.client.post(
             f'/work/access/people/{delegator.pk}/',
             {
@@ -141,7 +142,7 @@ class StaffAccessV2Tests(TestCase):
             basis='Собственное право', verified_by=self.dual,
             can_view_account=True, can_view_finance=True,
         )
-        self.client.force_login(self.dual)
+        login_with_admin_otp(self.client, self.dual)
         response = self.client.post(
             f'/work/access/people/{delegator.pk}/',
             {
@@ -295,7 +296,7 @@ class StaffAccessV2Tests(TestCase):
             person=person, role_code='line_senior', scope_type=ScopeType.WATER_GROUP,
             scope_object_id=self.group.pk, basis='Старший с настройкой', granted_by=self.dual,
         )
-        self.client.force_login(self.dual)
+        login_with_admin_otp(self.client, self.dual)
         keep = ['accounts.view', 'water.view', 'water.meters.view', 'water.topology.view']
         response = self.client.post(
             f'/work/access/people/{person.pk}/',

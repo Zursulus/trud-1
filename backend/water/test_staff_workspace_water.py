@@ -10,6 +10,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from .controller_scope import ControllerLineAccess
+from ._test_auth import login_with_admin_otp
 from .models import (
     Account,
     ControllerReadingSubmission,
@@ -115,7 +116,7 @@ class StaffWorkspaceWaterTests(TestCase):
         )
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def test_manager_sees_final_review_queue_without_pii(self):
         self.login(self.manager)

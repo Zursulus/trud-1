@@ -11,6 +11,7 @@ from .access_control import assignment_from_role, link_identity
 from .access_policy import ScopeType
 from .access_resolver import can, scopes_for
 from .access_scope import ScopeRef
+from ._test_auth import login_with_admin_otp
 from .models import (
     Account, ControllerReadingSubmission, Membership, Meter, Person, Reading,
     SupplyNode, User, WaterGroup,
@@ -72,7 +73,7 @@ class StaffModerationScopeTests(TestCase):
         return role, label, self.today - timedelta(days=15), self.today + timedelta(days=15)
 
     def _assert_review_queue(self, user, allowed_labels):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
         home = self.client.get("/work/")
         self.assertEqual(home.status_code, 200)
         attention = [item for item in home.context["attention"] if item["url"] == "/work/water/"]
@@ -102,7 +103,7 @@ class StaffModerationScopeTests(TestCase):
         self.assertTrue(can(user, "water.meters.view", scope=scope, on_date=self.today))
         self.assertFalse(can(user, "water.observation.finalize", scope=scope, on_date=self.today))
         client = Client(enforce_csrf_checks=True)
-        client.force_login(user)
+        login_with_admin_otp(client, user)
         card = client.get(f"/work/accounts/{self.accounts[label].pk}/")
         self.assertEqual(card.status_code, 200)
         self.assertContains(card, self.meters[label].serial)
@@ -171,7 +172,7 @@ class StaffModerationScopeTests(TestCase):
         user = User.objects.create_user(username="moderation-scope-bare-staff", is_staff=True)
         self.assertEqual(scopes_for(user, "water.observation.finalize"), [])
         client = Client(enforce_csrf_checks=True)
-        client.force_login(user)
+        login_with_admin_otp(client, user)
         home = client.get("/work/")
         self.assertEqual(home.status_code, 200)
         self.assertEqual(home.context["account_count"], 0)
@@ -194,7 +195,7 @@ class StaffModerationScopeTests(TestCase):
         ])
         self.assertEqual(scopes_for(user, "water.observation.finalize", on_date=self.today), [])
         self._assert_view_preserved_and_finalization_denied(user, "B")
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
         home = self.client.get("/work/")
         self.assertEqual(home.status_code, 200)
         self.assertFalse(any(item["url"] == "/work/water/" for item in home.context["attention"]))

@@ -10,6 +10,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
+from ._test_auth import login_with_admin_otp
 from .models import Account, Person, ResidentAccess, ResidentInvite, ResidentPasswordReset, User
 from .portal import issue_granular_invite
 from .portal_permissions import PortalGrant
@@ -60,7 +61,7 @@ class StaffWorkspaceAccessTests(TestCase):
         )
 
     def login(self, user):
-        self.client.force_login(user)
+        login_with_admin_otp(self.client, user)
 
     def _new_request(self, suffix):
         return ResidentAccessRequest.objects.create(

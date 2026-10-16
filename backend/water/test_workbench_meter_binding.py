@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .access_control import AccessAssignment
+from ._test_auth import login_with_admin_otp
 from .models import Account, Meter, Person, SupplyNode, User
 from .resident_models import ResidentIdentity
 
@@ -36,7 +37,7 @@ class WorkbenchMeterBindingTests(TestCase):
             )
 
     def test_create_and_bind_individual_meter_is_audited(self):
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/meters/bind/",
             {"node": self.node.pk, "serial": "TEST-METER-131", "commissioned_on": "", "seal_number": "S131", "notes": "synthetic"},
@@ -50,7 +51,7 @@ class WorkbenchMeterBindingTests(TestCase):
 
     def test_duplicate_node_serial_fails_without_extra_meter(self):
         Meter.objects.create(serial="DUP-131", kind="individual", node=self.node, account=self.account)
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/meters/bind/",
             {"node": self.node.pk, "serial": "DUP-131", "commissioned_on": "", "seal_number": "", "notes": ""},
@@ -91,7 +92,7 @@ class WorkbenchMeterBindingTests(TestCase):
         self.assertEqual(meter.history.first().history_user_id, self.binder.pk)
 
     def test_binding_from_account_keeps_search_context_even_for_workbench_user(self):
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/meters/bind/?from=account&q=METER-131",
             {"node": self.node.pk, "serial": "ACCOUNT-BIND-131", "commissioned_on": "",
@@ -100,7 +101,7 @@ class WorkbenchMeterBindingTests(TestCase):
         self.assertRedirects(response, f"/work/accounts/{self.account.pk}/?q=METER-131")
 
     def test_workbench_binding_keeps_existing_accessible_return(self):
-        self.client.force_login(self.admin)
+        login_with_admin_otp(self.client, self.admin)
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/meters/bind/",
             {"node": self.node.pk, "serial": "PANEL-BIND-131", "commissioned_on": "",

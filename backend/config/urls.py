@@ -1,8 +1,12 @@
 from django.contrib import admin
 from django.contrib.admin import AdminSite
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import REDIRECT_FIELD_NAME, views as auth_views
+from django.contrib.auth.views import redirect_to_login
+from django.shortcuts import resolve_url
 from django.urls import include, path
-from two_factor.admin import AdminSiteOTPRequiredMixin, original_login
+from django.utils.http import url_has_allowed_host_and_scheme
+from two_factor.admin import original_login
+from two_factor.utils import default_device
 from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
@@ -17,23 +21,45 @@ from water import (
     password_admin,
     resident_actions,
 )
+from water.management.commands.setup_roles import ADMIN, LEGACY_ADMIN
 from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
 from water.reading_review_config import export_readings_xlsx, reading_review_view
 
 
-class MainAdminOTPOnlySite(AdminSiteOTPRequiredMixin, AdminSite):
-    """2FA is optional for every staff account, including superusers."""
+class MainAdminSite(AdminSite):
+    """Require a verified OTP session only for TSN administrators/superusers."""
+
+    def requires_otp(self, request):
+        # Admin wrappers and template context may check access more than once.
+        # Cache only within this request so role changes affect the next request.
+        if not hasattr(request, '_admin_mfa_required'):
+            user = request.user
+            request._admin_mfa_required = user.is_superuser or user.groups.filter(
+                name__in=(ADMIN, LEGACY_ADMIN),
+            ).exists()
+        return request._admin_mfa_required
 
     def has_permission(self, request):
-        return AdminSite.has_permission(self, request)
+        return super().has_permission(request) and (
+            request.user.is_verified() or not self.requires_otp(request)
+        )
 
     def login(self, request, extra_context=None):
+        if (super().has_permission(request) and not request.user.is_verified()
+                and self.requires_otp(request)):
+            redirect_to = request.POST.get(REDIRECT_FIELD_NAME, request.GET.get(REDIRECT_FIELD_NAME))
+            if not redirect_to or not url_has_allowed_host_and_scheme(
+                redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+            ):
+                redirect_to = resolve_url('admin:index')
+            destination = 'two_factor:login' if default_device(request.user) else 'two_factor:setup'
+            return redirect_to_login(redirect_to, resolve_url(destination))
         return original_login(self, request, extra_context)
 
 
-admin.site.__class__ = MainAdminOTPOnlySite
+admin.site.__class__ = MainAdminSite
 
 urlpatterns = [
     path('work/', include('water.staff_workspace_urls')),

@@ -6,6 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
+from ._test_auth import login_with_admin_otp
 from .models import Account, AppealCategory, ResidentAccess, ResidentAppeal, User
 from .resident_models import (
     APPEAL_ATTACHMENT_MAX_BYTES,
@@ -128,7 +129,7 @@ class ResidentConversationTests(TestCase):
         manager = User.objects.create_user(username='board-workspace-manager', password=self.password, is_staff=True)
         manager.groups.add(Group.objects.get(name='Администратор ТСН'))
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
-            self.client.force_login(manager)
+            login_with_admin_otp(self.client, manager)
             response = self.client.post(
                 f'/admin/water/residentappeal/{self.appeal.pk}/attachments/',
                 {
