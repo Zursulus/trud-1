@@ -183,6 +183,7 @@ def dashboard(request):
         if count:
             attention.append({
                 "label": "Показания на финальной проверке",
+                "icon": "water",
                 "count": count,
                 "url": reverse("staff_workspace:water"),
             })
@@ -198,6 +199,7 @@ def dashboard(request):
         if count:
             attention.append({
                 "label": "Наблюдения жителей на сверке",
+                "icon": "water",
                 "count": count,
                 "url": reverse("staff_workspace:water"),
             })
@@ -206,6 +208,7 @@ def dashboard(request):
         if count:
             attention.append({
                 "label": "Открытые обращения",
+                "icon": "message",
                 "count": count,
                 "url": reverse("staff_workspace:appeals") + "?state=open",
             })
@@ -214,6 +217,7 @@ def dashboard(request):
         if draft_count:
             attention.append({
                 "label": "Черновики начислений на проверке",
+                "icon": "payment",
                 "count": draft_count,
                 "url": reverse("staff_workspace:finance"),
             })
@@ -221,6 +225,7 @@ def dashboard(request):
         if pending_count:
             attention.append({
                 "label": "Оплаты на проверке",
+                "icon": "payment",
                 "count": pending_count,
                 "url": reverse("staff_workspace:finance_payments") + "?state=pending",
             })
@@ -229,6 +234,7 @@ def dashboard(request):
         if calculated_periods:
             attention.append({
                 "label": "Рассчитанные периоды ждут завершения",
+                "icon": "payment",
                 "count": calculated_periods,
                 "url": reverse("staff_workspace:finance"),
             })
@@ -239,6 +245,7 @@ def dashboard(request):
         if new_access_requests:
             attention.append({
                 "label": "Новые заявки на доступ",
+                "icon": "user",
                 "count": new_access_requests,
                 "url": reverse("staff_workspace:access") + "?request_state=new",
             })

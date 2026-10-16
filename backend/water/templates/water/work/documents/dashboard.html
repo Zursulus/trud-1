@@ -1,17 +1,25 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Сайт{% endblock %}
 {% block content %}
-<section class="ws-page-head">
+<section class="ws-page-head ws-site-head">
   <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Сайт</h1><p>Закрытые документы жителей, публичные документы и новости разделены по назначению и правам.</p></div>
+  <a class="ws-secondary" href="/" target="_blank" rel="noopener">Открыть сайт ↗</a>
 </section>
+<nav class="ws-site-tabs" aria-label="Разделы сайта">
+  {% if announcements != None %}<a href="#announcements">Главное объявление</a>{% endif %}
+  {% if can_view_public_news %}<a href="#news-content">Новости · {{ news_count }}</a>{% endif %}
+  {% if can_view_public_documents %}<a href="#public-documents">Публичные документы · {{ public_document_count }}</a>{% endif %}
+  {% if can_view_account_documents %}<a href="#account-documents">Документы жителей · {{ account_document_count }}</a>{% endif %}
+  {% if can_view_contacts %}<a href="#site-contacts">Контакты и приём</a>{% endif %}
+</nav>
 
 {% if announcements != None %}
-<section class="ws-section"><div class="ws-section-head"><h2>Главное объявление</h2></div>
+<section class="ws-section ws-site-section" id="announcements"><div class="ws-section-head"><h2>Главное объявление</h2></div>
 <p>На сайте показывается одно объявление: с самой поздней датой начала, при совпадении — созданное последним. Без активных объявлений остаётся исходное письмо.</p>
 {% if can_add_announcement %}<a class="ws-primary" href="{% url 'staff_workspace:site_block_create' 'announcement' %}">Создать объявление</a>{% endif %}
 {% for item in announcements %}<div class="ws-result"><div><strong>{{ item.title }}</strong><p>{{ item.site_status }} · {{ item.starts_on|date:'d.m.Y' }}{% if item.ends_on %} — {{ item.ends_on|date:'d.m.Y' }}{% endif %}</p><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:site_block' 'announcement' item.pk %}">Изменить</a><a class="ws-secondary" href="{% url 'staff_workspace:site_preview' 'announcement' item.pk %}">Предпросмотр</a>{% if can_publish_announcements %}<a class="ws-secondary" href="{% url 'staff_workspace:site_block' 'announcement' item.pk %}#id_is_published">Опубликовать</a>{% endif %}</div></div></div>{% empty %}<p>Используется исходное письмо.</p>{% endfor %}
 </section>{% endif %}
-{% if can_view_contacts %}<section class="ws-section"><div class="ws-section-head"><h2>Контакты и приём</h2></div>
+{% if can_view_contacts %}<section class="ws-section ws-site-section" id="site-contacts"><div class="ws-section-head"><h2>Контакты и приём</h2></div>
 {% if site_contacts %}<p>{{ site_contacts.site_status }}</p><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:site_block' 'contacts' site_contacts.pk %}">Изменить</a><a class="ws-secondary" href="{% url 'staff_workspace:site_preview' 'contacts' site_contacts.pk %}">Предпросмотр</a>{% if can_publish_contacts %}<a class="ws-secondary" href="{% url 'staff_workspace:site_block' 'contacts' site_contacts.pk %}#id_is_published">Опубликовать</a>{% endif %}</div>
 {% elif can_add_contacts %}<a class="ws-primary" href="{% url 'staff_workspace:site_block_create' 'contacts' %}">Заполнить контакты</a>{% endif %}
 </section>{% endif %}
@@ -22,7 +30,7 @@
 </form>
 
 {% if can_view_account_documents %}
-<section class="ws-section" id="account-documents">
+<section class="ws-section ws-site-section" id="account-documents">
   <div class="ws-section-head"><h2>Документы жителей</h2><span>Закрытый контур · {{ account_document_count }}</span></div>
   <p class="ws-finance-note">Файлы привязаны к лицевому счёту. Житель видит только разрешённые документы своего счёта; файл после создания не подменяется.</p>
   {% if can_add_account_documents %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:account_document_create' %}">Добавить документ жителя</a></div>{% endif %}
@@ -36,7 +44,7 @@
 {% endif %}
 
 {% if can_view_public_documents %}
-<section class="ws-section" id="public-documents">
+<section class="ws-section ws-site-section" id="public-documents">
   <div class="ws-section-head"><h2>Публичные документы</h2><span>{{ public_document_count }} · черновиков {{ public_document_draft_count }}</span></div>
   <p class="ws-finance-note">Публикация требует отдельного подтверждения отсутствия персональных, банковских и служебных данных.</p>
   {% if can_add_public_documents %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:public_document_create' %}">Добавить публичный документ</a></div>{% endif %}
@@ -50,7 +58,7 @@
 {% endif %}
 
 {% if can_view_public_news %}
-<section class="ws-section" id="news-content">
+<section class="ws-section ws-site-section" id="news-content">
   <div class="ws-section-head"><h2>Новости сайта</h2><span>{{ news_count }} · черновиков {{ news_draft_count }}</span></div>
   {% if can_add_public_news %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:news_create' %}">Создать новость</a></div>{% endif %}
   {% if news_items %}<div class="ws-result-list">

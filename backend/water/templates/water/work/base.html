@@ -6,24 +6,56 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <title>{% block title %}{{ workspace_title }}{% endblock %} · ТСН «ТРУД-1»</title>
-  <link rel="stylesheet" href="{% static 'water/staff-workspace.css' %}?v=flow-polish-20261005">
+  <link rel="stylesheet" href="{% static 'water/staff-workspace.css' %}?v=sea-20261016">
   <link rel="stylesheet" href="{% static 'water/staff-workspace-appeals.css' %}">
   <link rel="stylesheet" href="{% static 'water/staff-workspace-finance.css' %}">
   <link rel="stylesheet" href="{% static 'water/staff-line-workspace.css' %}">
+  <link rel="stylesheet" href="{% static 'water/sea-sunset.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'water/staff-workspace-2026.css' %}?v=1">
 </head>
 <body>
   <a class="ws-skip-link" href="#main-content">К содержимому</a>
   <div class="ws-shell">
     <aside class="ws-sidebar" aria-label="Рабочая навигация">
       <a class="ws-brand" href="{% url 'staff_workspace:home' %}">
-        <span class="ws-brand-mark" aria-hidden="true">Т1</span>
+        <img class="ws-brand-mark" src="{% static 'water/brand-sea.svg' %}" alt="">
         <span><strong>ТРУД-1</strong><small>Рабочая база</small></span>
       </a>
-      <nav class="ws-nav">
-        {% if forum_moderator %}<a href="{% url 'forum_moderation' %}">Жалобы форума</a>{% endif %}
-        <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}>Главная</a>
-        {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}>Найти</a>{% endif %}
-        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section != 'home' and workspace_section != 'search' and workspace_section != 'accounts' %} aria-current="page"{% endif %}>Ещё</a>
+      <nav class="ws-nav" aria-label="Разделы рабочей базы">
+        <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Главная</span></a>
+        {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<p class="ws-nav-group">Жители</p>{% endif %}
+{% if can_view_accounts %}
+        <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#search"></use></svg><span>Найти</span></a>
+        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Участки и счета</span>{% if account_count %}<b class="ws-nav-count">{{ account_count }}</b>{% endif %}</a>
+{% endif %}
+{% if can_view_appeals %}
+        <a href="{% url 'staff_workspace:appeals' %}"{% if workspace_section == 'appeals' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#message"></use></svg><span>Обращения</span></a>
+{% endif %}
+{% if can_use_access_workspace %}
+        <a href="{% url 'staff_workspace:access' %}"{% if workspace_section == 'access' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg><span>Доступ жителей</span></a>
+{% endif %}
+        {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<p class="ws-nav-group">Хозяйство</p>{% endif %}
+{% if can_use_controller_workspace %}
+        <a href="{% url 'staff_workspace:water_line' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Показания моей линии</span></a>
+{% endif %}
+{% if can_view_water and not can_use_controller_workspace %}
+        <a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Учёт воды</span></a>
+{% endif %}
+{% if can_use_finance_workspace %}
+        <a href="{% url 'staff_workspace:finance' %}"{% if workspace_section == 'finance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Начисления и оплаты</span></a>
+{% endif %}
+        <p class="ws-nav-group">ТСН</p>
+{% if can_view_documents %}
+        <a href="{% url 'staff_workspace:documents' %}"{% if workspace_section == 'documents' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#document"></use></svg><span>Сайт</span></a>
+{% endif %}
+{% if can_view_governance %}
+        <a href="{% url 'staff_workspace:governance' %}"{% if workspace_section == 'governance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#ballot"></use></svg><span>Опросы правления</span></a>
+{% endif %}
+{% if can_view_security_alerts %}
+        <a href="{% url 'staff_workspace:security' %}"{% if workspace_section == 'security' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg><span>Безопасность</span>{% if security_alert_count %}<b class="ws-nav-count">{{ security_alert_count }}</b>{% endif %}</a>
+{% endif %}
+        {% if forum_moderator %}<a href="{% url 'forum_moderation' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Жалобы форума</span></a>{% endif %}
+        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span></a>
       </nav>
       <div class="ws-sidebar-foot">
         <span>{{ request.user.get_full_name|default:request.user.username }}</span>
@@ -61,10 +93,12 @@
     </div>
   </div>
 
-  <nav class="ws-bottom-nav" aria-label="Мобильная навигация" style="grid-template-columns:repeat({% if can_view_accounts %}3{% else %}2{% endif %},minmax(0,1fr))">
+  <nav class="ws-bottom-nav" aria-label="Мобильная навигация">
     <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная</a>
-    {% if can_view_accounts %}<a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' or workspace_section == 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#search"></use></svg>Найти</a>{% endif %}
-    <a href="{% url 'staff_workspace:more' %}"{% if workspace_section != 'home' and workspace_section != 'search' and workspace_section != 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg>Ещё</a>
+    {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<a href="{% url 'staff_workspace:more' %}#residents"{% if workspace_section == 'accounts' or workspace_section == 'search' or workspace_section == 'appeals' or workspace_section == 'access' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg>Жители</a>{% endif %}
+    {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<a href="{% url 'staff_workspace:more' %}#operations"{% if workspace_section == 'water' or workspace_section == 'finance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg>Хозяйство</a>{% endif %}
+    <a href="{% url 'staff_workspace:more' %}#tsn"{% if workspace_section == 'documents' or workspace_section == 'governance' or workspace_section == 'security' or workspace_section == 'more' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg>ТСН</a>
   </nav>
+  <script src="{% static 'water/workspace-nav-2026.js' %}" defer></script>
 </body>
 </html>

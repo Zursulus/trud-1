@@ -67,15 +67,17 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             response = page.goto(f"{self.live_server_url}/work/", wait_until="networkidle")
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
-            self.assertTrue(page.get_by_role("heading", name="Что нужно сделать").is_visible())
+            self.assertTrue(page.get_by_role("heading", name="Что сегодня важно").is_visible())
             self._assert_no_blocking_accessibility(page, f"{label} home")
 
             if viewport["width"] <= 640:
                 bottom_nav = page.locator(".ws-bottom-nav")
-                self.assertEqual(bottom_nav.get_by_role("link").count(), 3)
+                self.assertEqual(bottom_nav.get_by_role("link").count(), 4)
                 self.assertEqual(bottom_nav.get_by_role("link", name="Работа", exact=True).count(), 0)
                 self.assertEqual(bottom_nav.get_by_role("link", name="Участки", exact=True).count(), 0)
-                bottom_nav.get_by_role("link", name="Найти", exact=True).click()
+                bottom_nav.get_by_role("link", name="Жители", exact=True).click()
+                page.wait_for_url("**/work/more/#residents")
+                page.locator(".ws-menu-list").get_by_role("link", name="Найти", exact=False).click()
             else:
                 page.locator(".ws-sidebar").get_by_role("link", name="Найти", exact=True).click()
 
@@ -97,13 +99,13 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             self._assert_no_blocking_accessibility(page, f"{label} account")
 
             if viewport["width"] <= 640:
-                page.locator(".ws-bottom-nav").get_by_role("link", name="Ещё", exact=True).click()
-                page.wait_for_url("**/work/more/")
+                page.locator(".ws-bottom-nav").get_by_role("link", name="ТСН", exact=True).click()
+                page.wait_for_url("**/work/more/#tsn")
                 page.wait_for_load_state("networkidle")
                 self.assertTrue(page.get_by_role("heading", name="Ещё", exact=True).is_visible())
                 self.assertEqual(
                     page.locator('.ws-bottom-nav a[aria-current="page"]').get_attribute("href"),
-                    "/work/more/",
+                    "/work/more/#tsn",
                 )
                 self.assertTrue(page.evaluate(
                     "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
@@ -114,7 +116,7 @@ class StaffWorkspaceBrowserTests(StaticLiveServerTestCase):
             navigation = page.locator(".ws-bottom-nav" if viewport["width"] <= 640 else ".ws-nav")
             self.assertEqual(
                 navigation.locator('a[aria-current="page"]').get_attribute("href"),
-                "/work/more/",
+                "/work/more/#operations" if viewport["width"] <= 640 else "/work/water/",
             )
             self.assertTrue(page.evaluate(
                 "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"

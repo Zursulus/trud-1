@@ -1,11 +1,28 @@
-{% extends 'water/work/base.html' %}
+{% extends 'water/work/base.html' %}{% load static %}
 {% block title %}{{ block_title }}{% endblock %}
 {% block content %}
 <nav class="ws-breadcrumbs"><a href="{% url 'staff_workspace:documents' %}">Сайт</a><span>›</span><span>{{ block_title }}</span></nav>
 <section class="ws-object-head"><div><h1>{{ block_title }}</h1><p>Публикация требует проверки отсутствия закрытых данных. Даты показа включают последний день.</p></div></section>
 {% if item %}<p>Статус: <strong>{{ item.site_status }}</strong></p><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:site_preview' kind item.pk %}">Предпросмотр</a></div>{% endif %}
-<section class="ws-section"><div class="ws-finance-form">
-{% if can_change %}<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="ws-actions"><button class="ws-primary" type="submit">Сохранить</button>{% if can_publish %}<button class="ws-secondary" name="is_published" value="on" type="submit">Опубликовать</button>{% endif %}</div></form>
-{% else %}<p>У вас есть право просмотра, но нет права изменять этот блок.</p>{% endif %}
-</div></section>
+<section class="ws-section ws-site-editor">
+  <div class="ws-finance-form">
+    {% if can_change %}<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="ws-actions"><button class="ws-primary" type="submit">Сохранить</button>{% if can_publish %}<button class="ws-secondary" name="is_published" value="on" type="submit">Опубликовать</button>{% endif %}</div></form>
+    {% else %}<p>У вас есть право просмотра, но нет права изменять этот блок.</p>{% endif %}
+  </div>
+  {% if kind == 'announcement' %}
+  <aside class="ws-site-preview" aria-label="Предварительный вид объявления">
+    <h2>Объявление</h2>
+    <div class="ws-site-preview-card">
+      <span data-preview="label">{{ form.label.value|default_if_none:'' }}</span>
+      <h2 data-preview="title">{{ form.title.value|default_if_none:'' }}</h2>
+      <strong data-preview="subtitle">{{ form.subtitle.value|default_if_none:'' }}</strong>
+      <p data-preview="body">{{ form.body.value|default_if_none:'' }}</p>
+      <span class="ws-site-preview-button" data-preview="button_text">{{ form.button_text.value|default_if_none:'' }}</span>
+    </div>
+    <p class="ws-field-hint">Макет текста. Для проверки картинки и ссылки откройте предпросмотр сохранённой версии.</p>
+    {% if item %}<a class="ws-secondary" href="{% url 'staff_workspace:site_preview' kind item.pk %}">Предпросмотр сохранённой версии</a>{% endif %}
+  </aside>
+  {% endif %}
+</section>
+{% if kind == 'announcement' %}<script src="{% static 'water/site-editor-2026.js' %}" defer></script>{% endif %}
 {% endblock %}

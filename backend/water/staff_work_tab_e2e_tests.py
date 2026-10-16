@@ -39,7 +39,7 @@ class StaffWorkTabBrowserTests(StaticLiveServerTestCase):
             self.assertIsNotNone(response)
             self.assertEqual(response.status, 200)
             self.assertEqual(page.locator('.ws-bottom-nav a[href="/work/tasks/"]').count(), 0)
-            more_tab = page.locator('.ws-bottom-nav a[href="/work/more/"]')
+            more_tab = page.locator('.ws-bottom-nav a[href="/work/more/#tsn"]')
             self.assertTrue(more_tab.is_visible())
 
             response = page.goto(f"{self.live_server_url}/work/tasks/", wait_until="networkidle")

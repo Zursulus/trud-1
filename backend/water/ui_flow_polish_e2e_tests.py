@@ -257,7 +257,12 @@ class StaffFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
             with self.subTest(engine=engine, viewport=viewport), self.browser(engine, viewport, "staff-daily", cookie) as (page, tag):
                 page.goto(self.live_server_url + "/work/")
                 nav = page.locator(".ws-bottom-nav" if viewport["width"] < 640 else ".ws-sidebar")
-                nav.get_by_role("link", name="Найти", exact=True).click()
+                if viewport["width"] < 640:
+                    nav.get_by_role("link", name="Жители", exact=True).click()
+                    page.wait_for_url("**/work/more/#residents")
+                    page.locator(".ws-menu-list").get_by_role("link", name="Найти", exact=False).click()
+                else:
+                    nav.get_by_role("link", name="Найти", exact=True).click()
                 page.wait_for_url("**/work/search/**")
                 page.locator("#workspace-search").fill(q)
                 page.get_by_role("button", name="Найти", exact=True).click()

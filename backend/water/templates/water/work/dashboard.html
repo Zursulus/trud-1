@@ -1,21 +1,34 @@
-{% extends 'water/work/base.html' %}
+{% extends 'water/work/base.html' %}{% load static %}
 {% block title %}Главная{% endblock %}
 {% block content %}
 <section class="ws-page-head ws-page-head-compact">
   <div>
     <p class="ws-eyebrow">Сегодня</p>
-    <h1>Что нужно сделать</h1>
+    <h1>Что сегодня важно</h1>
     <p>Текущие задачи и быстрый переход к работе.</p>
   </div>
 </section>
 
+{% if attention or can_view_accounts or can_view_security_alerts and security_alert_count %}
+<section class="ws-metrics" aria-label="Текущие показатели">
+  {% for item in attention %}
+  <a class="ws-metric ws-metric-{{ item.icon }}" href="{% if can_use_controller_workspace and item.label == 'Наблюдения жителей на сверке' %}{% url 'staff_workspace:water_line' %}{% else %}{{ item.url }}{% endif %}">
+    <svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#{{ item.icon }}"></use></svg>
+    <span>{{ item.label }}</span><strong>{{ item.count }}</strong><small>Открыть →</small>
+  </a>
+  {% endfor %}
+  {% if can_view_accounts %}<a class="ws-metric" href="{% url 'staff_workspace:accounts' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Доступные счета</span><strong>{{ account_count }}</strong><small>Открыть реестр →</small></a>{% endif %}
+  {% if can_view_security_alerts and security_alert_count %}<a class="ws-metric ws-metric-warning" href="{% url 'staff_workspace:security' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg><span>Сигналы безопасности</span><strong>{{ security_alert_count }}</strong><small>Проверить →</small></a>{% endif %}
+</section>
+{% endif %}
+
 {% if attention %}
 <section class="ws-section" aria-labelledby="attention-title">
-  <div class="ws-section-head"><h2 id="attention-title">Ждёт вас</h2></div>
+  <div class="ws-section-head"><h2 id="attention-title">Очередь дел</h2></div>
   <div class="ws-action-list">
     {% for item in attention %}
       <a class="ws-action-row" href="{% if can_use_controller_workspace and item.label == 'Наблюдения жителей на сверке' %}{% url 'staff_workspace:water_line' %}{% else %}{{ item.url }}{% endif %}">
-        <span>{{ item.label }}</span>
+        <span class="ws-queue-copy"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#{{ item.icon }}"></use></svg>{{ item.label }}</span>
         <strong>{{ item.count }}</strong>
       </a>
     {% endfor %}

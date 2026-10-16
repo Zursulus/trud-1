@@ -1,0 +1,72 @@
+/* «Море и закат»: staff workspace. */
+:root {
+  --ws-bg: var(--canvas); --ws-text: var(--ink); --ws-muted: var(--secondary);
+  --ws-line: var(--border); --ws-brand: var(--sea); --ws-brand-soft: var(--sea-soft);
+  --ws-radius: 20px; --ws-shadow: 0 6px 24px #13222e06;
+}
+body { font-size: 16px; line-height: 1.55; }
+.ws-content { padding-top: 28px; }
+.ws-page-head h1, .ws-object-head h1 { font-size: clamp(26px,4vw,34px); line-height: 1.25; }
+.ws-primary, .ws-secondary { border-radius: 14px; min-height: 48px; }
+.ws-eyebrow { color: var(--sea); }
+.ws-bottom-nav { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); }
+.ws-bottom-nav a { min-height: 58px; font-size: 11px; gap: 5px; }
+.ws-menu-list h3 { scroll-margin-top: 90px; margin: 14px 0 0; color: var(--sea); }
+.ws-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,210px),1fr)); gap: 16px; margin-bottom: 28px; }
+.ws-metric { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 22px; border: 1px solid var(--border); border-radius: 20px; background: white; text-decoration: none; }
+.ws-metric svg { width: 24px; height: 24px; margin-bottom: 4px; color: var(--sea); }
+.ws-metric > span { color: var(--secondary); font-size: 14px; }
+.ws-metric > strong { font: 700 34px/1.3 var(--heading-font); color: var(--sea); }
+.ws-metric small { color: var(--sea); font-size: 14px; font-weight: 700; }
+.ws-metric-message strong, .ws-metric-message svg { color: var(--olive); }
+.ws-metric-payment svg, .ws-metric-payment strong { color: var(--sunset-text); }
+.ws-metric-warning { background: #fdeee4; }
+.ws-metric-warning strong, .ws-metric-warning svg { color: var(--sunset-text); }
+.ws-queue-copy { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.ws-queue-copy svg { width: 24px; height: 24px; color: var(--sea); }
+.ws-action-row { min-height: 80px; padding: 18px; }
+.ws-card-primary { background: var(--sea-soft); border-color: #b8d4df; }
+.ws-line-head { background: var(--ink); color: white; padding: 22px; }
+.ws-line-head .ws-eyebrow { color: #f6b48a; }
+.ws-line-head p:not(.ws-eyebrow) { color: #dfe6ea; }
+.ws-reading-field input { font-family: var(--heading-font); font-size: 30px; min-height: 72px; border: 2px solid var(--sea); border-radius: 16px; padding: 12px 16px; }
+.ws-reading-field label { color: var(--ink); font-size: 14px; }
+.ws-line-submit { min-height: 56px; border-radius: 18px; }
+.ws-consumption { display: block; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--sea-soft); color: var(--sea); font-size: 14px; }
+.ws-consumption.is-warning { color: #9f2f2f; background: #fff0f1; }
+.ws-site-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+.ws-site-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 999px; background: white; text-decoration: none; font-weight: 700; }
+.ws-site-tabs a:hover { background: var(--sea-soft); }
+.ws-site-section { scroll-margin-top: 90px; padding: 22px; background: white; border: 1px solid var(--border); border-radius: 22px; }
+.ws-site-editor { display: grid; gap: 22px; align-items: start; }
+.ws-site-editor .ws-finance-form { padding: 22px; border-radius: 22px; background: white; border: 1px solid var(--border); }
+.ws-site-preview { min-width: 0; padding: 22px; border: 1px solid var(--border); border-radius: 22px; background: white; }
+.ws-site-preview-card { padding: 28px; min-height: 260px; display: flex; flex-direction: column; justify-content: flex-end; border-radius: 20px; background: linear-gradient(90deg,#13222ef2,#13222ec4),url('ordzhonikidze-sunset.webp') center/cover; color: white; }
+.ws-site-preview-card h2 { font-family: var(--heading-font); line-height: 1.35; }
+.ws-site-preview-card p { white-space: pre-line; }
+@media(min-width:920px) {
+  .ws-shell { grid-template-columns: 260px minmax(0,1fr); }
+  .ws-sidebar { background: var(--ink); padding: 24px 16px; overflow-y: auto; }
+  .ws-brand { gap: 12px; margin-bottom: 22px; }
+  .ws-brand-mark { width: 44px; height: 44px; border-radius: 12px; background: var(--sunset); }
+  .ws-brand small { color: #c4d0d7; }
+  .ws-nav { gap: 4px; }
+  .ws-nav-group { margin: 20px 12px 6px; color: #c4d0d7; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  .ws-nav a { gap: 12px; min-height: 48px; padding: 12px; border-radius: 14px; color: #e2e9ed; font-size: 14px; }
+  .ws-nav a span { min-width: 0; }
+  .ws-nav a svg { width: 22px; height: 22px; }
+  .ws-nav a[aria-current='page'], .ws-nav a:hover { background: #28404c; color: white; }
+  .ws-nav a:focus-visible { outline-color: var(--sunset); }
+  .ws-nav-count { margin-left: auto; padding: 2px 7px; border-radius: 8px; font-size: 12px; background: var(--sunset); color: var(--ink); }
+  .ws-sidebar-foot { border-color: #40515c; color: #dfe6ea; padding-top: 20px; }
+  .ws-site-editor { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); }
+}
+
+.ws-site-preview-button { align-self: flex-start; padding: 12px 18px; background: var(--sunset); color: var(--ink); border-radius: 14px; font-weight: 700; }
+.ws-site-preview [hidden] { display: none; }
+@media(min-width:640px) { .ws-site-head { flex-direction: row; justify-content: space-between; align-items: start; } }
+
+.ws-finance-filters a, .ws-tabs a, .ws-composer button, .ws-emoji-panel button { min-height: 44px; min-width: 44px; }
+.ws-sidebar-foot { overflow-wrap: anywhere; }
+.ws-card:focus-visible, .ws-result:focus-visible, .ws-action-row:focus-visible, .ws-bottom-nav a:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; }
+.ws-finance-form input:focus-visible, .ws-finance-form select:focus-visible, .ws-finance-form textarea:focus-visible, .ws-reading-field input:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; box-shadow: none; }
