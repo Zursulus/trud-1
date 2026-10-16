@@ -34,7 +34,10 @@ U=get_user_model()
 qs=U.objects.filter(is_active=True).filter(Q(is_superuser=True)|Q(groups__name__in=["Администратор ТСН","Администратор СНТ"])).distinct().annotate(
  t=Exists(TOTPDevice.objects.filter(user_id=OuterRef("pk"),confirmed=True)),s=Exists(StaticDevice.objects.filter(user_id=OuterRef("pk"),confirmed=True)))
 for u in qs.order_by("username"):
-    print(f"{u.username:24} вход: {u.last_login.date() if u.last_login else \"никогда\"}  суперпользователь: {\"да\" if u.is_superuser else \"нет\"}  2FA: {\"есть\" if (u.t or u.s) else \"НЕТ\"}")
+    last = u.last_login.date() if u.last_login else "никогда"
+    su = "да" if u.is_superuser else "нет"
+    fa = "есть" if (u.t or u.s) else "НЕТ"
+    print(u.username.ljust(24), "| вход:", last, "| суперпользователь:", su, "| 2FA:", fa)
 ' ;;
 prepare)
   echo "1/6 проверки"; check_live
