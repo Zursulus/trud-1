@@ -457,7 +457,7 @@ def change_password(request):
         user = form.save()
         update_session_auth_hash(request, user)
         messages.success(request, 'Пароль изменён.', extra_tags='resident-feedback')
-        return HttpResponseRedirect(reverse('resident_dashboard'))
+        return HttpResponseRedirect(reverse('personal_profile'))
     return TemplateResponse(request, 'water/portal/change_password.html', {'form': form})
 
 

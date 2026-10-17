@@ -1,1 +1,1 @@
-{% extends 'forum/base.html' %}{% block forum_content %}<section class="forum-card"><h1>{{ title }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить</button></form></section>{% endblock %}
+{% extends 'forum/base.html' %}{% block forum_content %}<section class="forum-card"><h1>{{ title }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить</button></form>{% if cancel_url %}<p><a href="{{ cancel_url }}">Отмена · вернуться назад</a></p>{% endif %}</section>{% endblock %}

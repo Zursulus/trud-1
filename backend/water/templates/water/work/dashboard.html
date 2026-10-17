@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}{% load static %}
 {% block title %}Главная{% endblock %}
 {% block content %}
+<section class="ws-card"><h1>Управление</h1><p>Рабочие разделы, доступные по вашим полномочиям.</p><nav class="management-links" aria-label="Разделы управления">{% for item in management_links %}<a class="ws-secondary" href="{{ item.url }}">{{ item.label }}</a>{% endfor %}</nav></section>
+
 <section class="ws-page-head ws-page-head-compact">
   <div>
     <p class="ws-eyebrow">Сегодня</p>

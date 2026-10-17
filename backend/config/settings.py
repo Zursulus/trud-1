@@ -41,6 +41,7 @@ TEMPLATES = [{
         'django.contrib.messages.context_processors.messages',
         'water.security_context.security_alerts',
         'forum.access.navigation',
+        'water.navigation.navigation',
     ]},
 }]
 if DEBUG and os.environ.get('DJANGO_TEST_SQLITE') == '1':
@@ -129,6 +130,7 @@ FORUM_ENABLED = os.environ.get('TRUD_FORUM_ENABLED', '1' if DEBUG else '0') == '
 FORUM_PUBLIC_READ = os.environ.get('TRUD_FORUM_PUBLIC_READ', '0') == '1'
 FORUM_MESSAGES_PER_MINUTE = int(os.environ.get('TRUD_FORUM_MESSAGES_PER_MINUTE', '3'))
 AUTHENTICATION_BACKENDS += ['forum.auth.EmailCodeBackend']
+ACCOUNT_RATE_LIMITS = {'profile_email': '5/5m/user'}
 ACCOUNT_ADAPTER = 'forum.auth.ResidentAccountAdapter'
 ACCOUNT_FORMS = {'request_login_code': 'forum.auth.ResidentRequestLoginCodeForm'}
 ACCOUNT_LOGIN_METHODS = {'email'}

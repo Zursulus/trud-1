@@ -1,5 +1,6 @@
 {% extends "admin/base.html" %}
-{% load i18n %}
+{% load i18n static %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">{% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
@@ -31,4 +32,4 @@
     {% include "admin/color_theme_toggle.html" %}
 {% endblock %}
 
-{% block nav-global %}{% endblock %}
+{% block header %}{% include 'includes/internal_header.html' %}{% include 'includes/breadcrumbs.html' %}{{ block.super }}{% endblock %}

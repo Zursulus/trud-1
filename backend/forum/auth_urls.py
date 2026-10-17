@@ -10,7 +10,7 @@ urlpatterns = [
     path('login/code/', email_login_enabled(views.request_login_code), name='account_request_login_code'),
     path('login/code/confirm/', email_login_enabled(views.confirm_login_code), name='account_confirm_login_code'),
     # Stock allauth returns here after an expired/already completed verification.
-    path('email/', email_login_enabled(RedirectView.as_view(pattern_name='account_login')), name='account_email'),
+    path('email/', RedirectView.as_view(pattern_name='profile_email', http_method_names=['get', 'head', 'options']), name='account_email'),
     path('signup/', email_login_enabled(views.signup), name='account_signup'),
     path('confirm-email/', email_login_enabled(views.email_verification_sent), name='account_email_verification_sent'),
     path('logout/', email_login_enabled(views.logout), name='account_logout'),

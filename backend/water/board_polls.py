@@ -291,10 +291,10 @@ def active_board_membership(user, on=None):
         return None
     on = on or timezone.localdate()
     from .resident_models import ResidentIdentity
-    identity = ResidentIdentity.objects.filter(user=user).only('person_id').first()
-    subject = models.Q(user=user)
-    if identity:
-        subject |= models.Q(person_id=identity.person_id)
+    # Keep user/person membership resolution in one query; the shared header
+    # also uses it on every internal page. No cross-request permission cache.
+    person_ids = ResidentIdentity.objects.filter(user=user).values('person_id')
+    subject = models.Q(user=user) | models.Q(person_id__in=models.Subquery(person_ids))
     return BoardMembership.objects.filter(subject, starts__lte=on).filter(
         models.Q(ends__isnull=True) | models.Q(ends__gt=on),
     ).order_by('-starts', '-id').first()

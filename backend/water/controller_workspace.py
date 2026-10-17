@@ -58,8 +58,10 @@ def _active_group_ids(user, on_date):
     return sorted(ids)
 
 
-def _active_accesses(user, on_date):
-    groups = WaterGroup.objects.filter(pk__in=_active_group_ids(user, on_date)).select_related('node').order_by('name', 'id')
+def _active_accesses(user, on_date, *, group_ids=None):
+    if group_ids is None:
+        group_ids = _active_group_ids(user, on_date)
+    groups = WaterGroup.objects.filter(pk__in=group_ids).select_related('node').order_by('name', 'id')
     return [LineScopeAccess(group) for group in groups]
 
 
@@ -194,11 +196,11 @@ def _summary(rows):
     }
 
 
-def _build_groups(user, on_date, posted_values=None, errors=None):
+def _build_groups(user, on_date, posted_values=None, errors=None, *, group_ids=None):
     posted_values = posted_values or {}
     errors = errors or {}
     result = []
-    for access in _active_accesses(user, on_date):
+    for access in _active_accesses(user, on_date, group_ids=group_ids):
         meters = _group_meters(access.group, on_date)
         rows = [
             _meter_state(
@@ -372,11 +374,15 @@ def controller_workspace(request):
         elif not errors:
             messages.warning(request, 'Введите хотя бы одно новое показание.')
 
+    # Reuse one scope snapshot for rendering only. Submission and its locked
+    # recheck above continue resolving fresh access independently.
+    group_ids = _active_group_ids(request.user, selected_date)
     groups = _build_groups(
         request.user,
         selected_date,
         posted_values=posted_values if errors else None,
         errors=errors,
+        group_ids=group_ids,
     )
     context = {
         **admin.site.each_context(request),
@@ -392,7 +398,7 @@ def controller_workspace(request):
             date=selected_date,
             meter__kind='individual',
             meter__account_id__in=Membership.objects.filter(
-                group_id__in=_active_group_ids(request.user, selected_date),
+                group_id__in=group_ids,
                 starts__lte=selected_date,
             ).filter(Q(ends__isnull=True) | Q(ends__gt=selected_date)).values('account_id'),
         ).exclude(submitted_by=request.user).select_related(

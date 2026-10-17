@@ -13,17 +13,14 @@
   <link rel="stylesheet" href="{% static 'water/sea-sunset.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'water/portal-2026.css' %}?v=2">
   {% block extra_head %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <a class="portal-skip-link" href="#portal-content">К содержимому</a>
-{% if request.user.is_authenticated and access or forum_shell %}
-<header class="site-header"><div class="header-inner">
-  <a class="brand" href="{% if account %}{% url 'resident_account' account.pk %}{% else %}{% url 'resident_dashboard' %}{% endif %}"><img class="brand-logo" src="{% static 'water/brand-sea.svg' %}" alt=""><span class="brand-copy"><strong>ТСН «Труд-1»</strong><small>Орджоникидзе, Крым</small></span></a>
-  <div class="header-actions">{% if account %}<a class="header-icon notification-link" href="{% url 'resident_notifications' account.pk %}" aria-label="Уведомления"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#bell"></use></svg></a>{% endif %}</div>
-</div></header>
-{% endif %}
-<div class="{% if request.user.is_authenticated and access or forum_shell %}app-shell{% endif %}">
-{% if request.user.is_authenticated and access or forum_shell %}
+{% include 'includes/internal_header.html' %}
+{% include 'includes/breadcrumbs.html' %}
+<div class="{% if request.user.is_authenticated and access and account %}app-shell{% endif %}">
+{% if request.user.is_authenticated and access and account %}
 <aside class="desktop-sidebar">
   <a class="desktop-brand" href="{% if account %}{% url 'resident_account' account.pk %}{% else %}{% url 'resident_dashboard' %}{% endif %}"><img src="{% static 'water/brand-sea.svg' %}" alt=""><span><strong>ТСН «Труд-1»</strong><small>Орджоникидзе, Крым</small></span></a>
   <nav class="desktop-nav" aria-label="Основная навигация">
@@ -51,7 +48,8 @@
 </aside>
 {% endif %}
 <main class="main-content" id="portal-content" tabindex="-1"><div class="content-wrap">
-{% if active_section != 'water' and active_section != 'forum' %}{% for message in messages %}{% if 'resident-feedback' in message.extra_tags %}<div class="portal-feedback portal-feedback-{{ message.level_tag }} info-callout" role="{% if message.level >= 40 %}alert{% else %}status{% endif %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#info"></use></svg><span>{{ message }}</span></div>{% endif %}{% endfor %}{% endif %}
+{% block feedback %}{% if active_section != 'water' and active_section != 'forum' %}{% for message in messages %}{% if 'resident-feedback' in message.extra_tags %}<div class="portal-feedback portal-feedback-{{ message.level_tag }} info-callout" role="{% if message.level >= 40 %}alert{% else %}status{% endif %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#info"></use></svg><span>{{ message }}</span></div>{% endif %}{% endfor %}{% endif %}
+{% endblock %}
 {% block content %}{% endblock %}
 </div></main>
 </div>
@@ -63,11 +61,6 @@
   {% if access.can_view_finance %}<a class="{% if active_section == 'payments' %}active{% endif %}" href="{% url 'resident_payments' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Платежи</span></a>{% endif %}
   {% if forum_enabled %}<a class="{% if active_section == 'forum' %}active{% endif %}" href="{% url 'forum:index' %}"{% if active_section == 'forum' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Обсуждения</span></a>{% endif %}
   <a class="{% if active_section == 'more' %}active{% endif %}" href="{% url 'resident_more' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span></a>
-</nav>
-{% elif forum_shell %}
-<nav class="bottom-nav forum-guest-nav" aria-label="Основная навигация">
-  <a href="{% url 'resident_dashboard' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Кабинет</span></a>
-  <a class="active" href="{% url 'forum:index' %}" aria-current="page"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Обсуждения</span></a>
 </nav>
 {% endif %}
 </body></html>

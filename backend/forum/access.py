@@ -21,7 +21,7 @@ def can_write(user):
 
 def require_writer(user):
     if not can_write(user):
-        raise PermissionDenied('Для записи подтвердите почту через вход по коду.')
+        raise PermissionDenied('Для записи подтвердите почту в профиле.')
 
 
 def forum_view(view):
@@ -50,9 +50,4 @@ def navigation(request):
         # Resolve cabinet links with the same grant rules as the resident views.
         # A public reader or a user without account access still gets the shell.
         context.update(forum_shell=True, active_section='forum')
-        if request.user.is_authenticated:
-            from water.portal_permissions import CAP_VIEW_ACCOUNT, resolved_accesses
-            accesses = resolved_accesses(request.user, CAP_VIEW_ACCOUNT)
-            if accesses:
-                context.update(access=accesses[0], account=accesses[0].account)
     return context

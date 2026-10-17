@@ -249,6 +249,8 @@ def dashboard(request):
                 "count": new_access_requests,
                 "url": reverse("staff_workspace:access") + "?request_state=new",
             })
+    from .navigation import management_links
+    context["management_links"] = management_links(request.user, request=request)
     context["attention"] = attention
     return TemplateResponse(request, "water/work/dashboard.html", context)
 

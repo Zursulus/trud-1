@@ -88,7 +88,9 @@ class ResidentDocumentFilterTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 expected_kind = "all" if kind == "unknown" else kind
                 self.assertEqual(response.context["document_kind"], expected_kind)
-                self.assertContains(response, 'aria-current="page"', count=1)
+                self.assertContains(response, f'href="?kind={expected_kind}" class="active" aria-current="page"', count=1)
+                for inactive in {'all', 'common', 'mine'} - {expected_kind}:
+                    self.assertNotContains(response, f'href="?kind={inactive}" class="active"')
                 for value in ("all", "common", "mine"):
                     self.assertContains(response, f'href="?kind={value}"')
                 for title in titles:

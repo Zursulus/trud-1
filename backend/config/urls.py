@@ -12,6 +12,7 @@ from two_factor.urls import urlpatterns as two_factor_urls
 from config.status import deployment_status
 from public_site import views as public_views
 from forum import views as forum_views
+from forum import profile as profile_views
 from water import (
     access_request_views,
     appeal_admin_tools,
@@ -63,6 +64,8 @@ class MainAdminSite(AdminSite):
 admin.site.__class__ = MainAdminSite
 
 urlpatterns = [
+    path('admin/cabinet/profile/', profile_views.profile, name='personal_profile'),
+    path('admin/cabinet/profile/email/', profile_views.email, name='profile_email'),
     path('admin/cabinet/accounts/', include('forum.auth_urls')),
     path('admin/cabinet/forum/', include('forum.urls')),
     path('work/forum/', forum_views.workspace_moderation, name='forum_moderation'),

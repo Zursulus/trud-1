@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -33,14 +33,14 @@
     @media (max-width: 640px) { .container { margin-top: 18px; } .mfa-card { padding: 18px; } h1 { font-size: 1.6rem; } }
   </style>
   {% block extra_media %}{% endblock %}
-</head>
+<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}"></head>
 <body>
-  <div class="mfa-header"><a href="{% url 'admin:index' %}">ТСН «ТРУД-1» · рабочая база</a></div>
+{% include 'includes/internal_header.html' %}{% include 'includes/breadcrumbs.html' %}
   {% block content_wrapper %}
     <div class="container">
       <div class="mfa-card">
         {% block content %}{% endblock %}
-        {% if user.is_authenticated %}<div class="mfa-footer"><a href="{% url 'admin:index' %}">← Вернуться в рабочую базу</a></div>{% endif %}
+        {% if user.is_authenticated %}<div class="mfa-footer"><a href="{% url 'personal_profile' %}">← Вернуться в профиль</a></div>{% endif %}
       </div>
     </div>
   {% endblock %}

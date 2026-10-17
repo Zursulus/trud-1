@@ -1,5 +1,5 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Предпросмотр · {{ item }}</title>
-<link rel="stylesheet" href="/style.css?v=site-editor"><link rel="stylesheet" href="/public-content.css?v=site-editor"></head><body>
+{% load static %}<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Предпросмотр · {{ item }}</title>
+<link rel="stylesheet" href="/style.css?v=site-editor"><link rel="stylesheet" href="/public-content.css?v=site-editor"><link rel="stylesheet" href="{% static 'water/internal-nav.css' %}"></head><body>{% include 'includes/internal_header.html' %}{% include 'includes/breadcrumbs.html' %}
 <header class="wrap"><p>Предпросмотр сохранённой версии · {{ item.site_status }}. Просмотр не публикует материал.</p><a href="{% url 'staff_workspace:documents' %}">Вернуться в раздел «Сайт»</a></header>
 <main>
 {% if kind == 'news' %}<section class="wrap"><h1>Карточка новости</h1><div class="news-grid" id="news-grid"></div><p>Нажмите «Подробнее», чтобы увидеть полную новость.</p></section>{% else %}<div id="news-grid" hidden></div>{% endif %}

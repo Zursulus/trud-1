@@ -1,0 +1,4 @@
+<nav class="internal-breadcrumbs" aria-label="Хлебные крошки"><a href="/">Сайт</a>{% if internal_current %}<span aria-hidden="true"> / </span><a href="{{ internal_current.url }}">{{ internal_current.label }}</a>{% endif %}
+{% for crumb in internal_trail %}<span aria-hidden="true"> / </span><a href="{{ crumb.url }}">{{ crumb.label }}</a>{% endfor %}
+{% if section %}<span aria-hidden="true"> / </span><a href="{% url 'forum:section' section.pk %}">{{ section.name }}</a>{% endif %}
+{% if topic %}<span aria-hidden="true"> / </span><a href="{% url 'forum:section' topic.section_id %}">{{ topic.section.name }}</a><span aria-hidden="true"> / </span><span>{{ topic.title }}</span>{% endif %}{% if title and not internal_trail and title != internal_current.label %}<span aria-hidden="true"> / </span><span>{{ title }}</span>{% endif %}</nav>

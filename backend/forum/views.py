@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -70,7 +71,7 @@ def new_topic(request, section_id):
                 return topic_url(item)
             form.add_error(None, 'Слишком часто. Попробуйте через минуту.')
             status = 429
-    return render(request, 'forum/form.html', {'form': form, 'title': 'Новая тема'}, status=status)
+    return render(request, 'forum/form.html', {'form': form, 'title': 'Новая тема', 'section': obj, 'cancel_url': reverse('forum:section', args=[obj.pk])}, status=status)
 
 
 @forum_view
@@ -128,7 +129,7 @@ def _edit(request, *, topic_id=None, post_id=None):
             item.edited_at = timezone.now()
             item.save()
             return topic_url(item)
-    return render(request, 'forum/form.html', {'form': form, 'title': 'Правка сообщения'})
+    return render(request, 'forum/form.html', {'form': form, 'title': 'Правка сообщения', 'topic': item.topic if post_id else item, 'cancel_url': reverse('forum:topic', args=[item.topic_id if post_id else item.pk])})
 
 
 @forum_view
@@ -167,7 +168,7 @@ def _report(request, *, topic_id=None, post_id=None):
                     report.full_clean()
                     report.save()
                 return topic_url(obj)
-    return render(request, 'forum/form.html', {'form': form, 'title': 'Пожаловаться'}, status=status)
+    return render(request, 'forum/form.html', {'form': form, 'title': 'Пожаловаться', 'topic': obj, 'cancel_url': reverse('forum:topic', args=[obj.pk])}, status=status)
 
 
 @forum_view
@@ -224,6 +225,8 @@ def moderate_post(request, post_id):
 @forum_view
 @require_http_methods(['GET', 'POST'])
 def profile(request):
+    if request.method == 'GET' and request.user.is_authenticated:
+        return redirect('personal_profile')
     if not request.user.is_authenticated:
         raise PermissionDenied
     obj = Profile.objects.filter(user=request.user).first() or Profile(user=request.user)

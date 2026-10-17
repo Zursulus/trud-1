@@ -43,6 +43,8 @@ def _resident_number(user):
 
 def _common(request, access=None, section='home'):
     accesses = _accesses(request.user)
+    # Reuse the already resolved summary only for this request's navigation.
+    request._internal_portal_access = bool(accesses)
     account = access.account if access else None
     return {
         'accesses': accesses,

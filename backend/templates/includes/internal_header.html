@@ -1,0 +1,7 @@
+{% load static %}<script src="{% static 'water/internal-nav.js' %}" defer></script>
+<header class="internal-header">
+<a class="internal-brand" href="/">ТСН «Труд-1»</a>
+<details class="internal-menu" open><summary>Меню</summary>
+<nav aria-label="Общая навигация">{% for item in internal_nav %}<a href="{{ item.url }}"{% if item.key == internal_active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
+{% if request.user.is_authenticated %}<form method="post" action="{% url 'resident_logout' %}">{% csrf_token %}<button type="submit">Выйти</button></form>{% endif %}</nav>
+</details></header>

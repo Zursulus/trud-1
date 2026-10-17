@@ -1170,7 +1170,7 @@ class ResidentPortalTests(MFAAccessMixin, TestCase):
         response = self.client.post('/admin/cabinet/password/', {
             'old_password': self.password, 'new_password1': changed_password, 'new_password2': changed_password,
         })
-        self.assertRedirects(response, '/admin/cabinet/')
+        self.assertRedirects(response, '/admin/cabinet/profile/')
         self.assertEqual(self.client.get('/admin/cabinet/').status_code, 200)
         resident.refresh_from_db()
         self.assertTrue(resident.check_password(changed_password))

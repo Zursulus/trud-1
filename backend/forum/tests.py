@@ -94,7 +94,7 @@ class EmailLoginTests(TestCase):
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
         self.assertTrue(EmailAddress.objects.get(user=user).verified)
         self.assertEqual(self.client.get(reverse('account_email_verification_sent'), follow=True).status_code, 200)
-        self.assertEqual(self.client.get(reverse('forum:profile')).status_code, 200)
+        self.assertRedirects(self.client.get(reverse('forum:profile')), reverse('personal_profile'))
         self.assertEqual(self.client.get(reverse('resident_access_request')).status_code, 200)
         self.assertContains(self.client.get(reverse('resident_dashboard')), 'Запросить доступ', status_code=403)
 
@@ -387,14 +387,17 @@ class ForumTests(TestCase):
         )
         response = self.client.get(self.url)
         self.assertTemplateUsed(response, 'water/portal/base.html')
-        self.assertContains(response, reverse('resident_water', args=[account.pk]))
+        self.assertIn('Мой кабинет', [item['label'] for item in response.context['internal_nav']])
+        self.assertContains(response, reverse('resident_plots'))
+        self.assertNotContains(response, reverse('resident_water', args=[account.pk]))
         self.assertNotContains(response, reverse('resident_water', args=[other.pk]))
         self.assertNotContains(response, self.author.first_name)
         access.ends = today
         access.save()
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'bottom-nav forum-guest-nav')
+        self.assertNotIn('Мой кабинет', [item['label'] for item in response.context['internal_nav']])
+        self.assertContains(response, 'class="internal-menu"')
         self.assertNotContains(response, reverse('resident_water', args=[account.pk]))
         self.assertContains(response, self.topic.title)
 
@@ -403,10 +406,10 @@ class ForumTests(TestCase):
         self.assertContains(response, 'name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"')
         self.assertContains(response, 'forum/forum.css')
         self.assertTemplateUsed(response, 'water/portal/base.html')
-        self.assertContains(response, 'class="desktop-sidebar"')
-        self.assertContains(response, 'bottom-nav forum-guest-nav')
+        self.assertContains(response, 'aria-label="Общая навигация"')
+        self.assertContains(response, 'class="internal-menu"')
         self.assertEqual(self.client.get('/admin/public/content/').json()['forum_url'], reverse('forum:index'))
-        self.assertNotContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
+        self.assertContains(self.client.get(reverse('resident_dashboard')), 'Обсуждения', status_code=403)
 
 
 @override_settings(FORUM_ENABLED=True, FORUM_PUBLIC_READ=False, RESIDENT_EMAIL_LOGIN_ENABLED=False,
@@ -417,7 +420,7 @@ class ProductionForumWithoutEmailLoginTests(TestCase):
         for path in ('/accounts/signup/', '/accounts/login/', '/accounts/login/code/'):
             self.assertEqual(self.client.get(path).status_code, 404)
         for name in ('account_login', 'account_request_login_code', 'account_confirm_login_code',
-                     'account_signup', 'account_email', 'account_email_verification_sent',
+                     'account_signup', 'account_email_verification_sent',
                      'account_logout', 'account_inactive'):
             for method in ('get', 'post'):
                 with self.subTest(route=name, method=method):

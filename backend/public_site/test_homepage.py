@@ -216,12 +216,16 @@ class HomepageEditorTests(TestCase):
         self.client.force_login(self.viewer)
         preview = self.client.get(reverse('staff_workspace:site_preview_image', args=[item.pk]))
         self.assertEqual(preview.status_code, 200)
-        preview.close()
+        # Consume the client wrapper so request_finished cannot close the
+        # connection inside TestCase's transaction. Also verify the actual file.
+        self.assertEqual(b''.join(preview.streaming_content), b'\x89PNG\r\n\x1a\nsynthetic')
+        self.assertTrue(preview.closed)
         self.publish(item)
         response = self.client.get(url)
         self.assertEqual(response['Content-Type'], 'image/png')
         self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
-        response.close()
+        self.assertEqual(b''.join(response.streaming_content), b'\x89PNG\r\n\x1a\nsynthetic')
+        self.assertTrue(response.closed)
         self.publish(self.announcement())
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertNotIn('/media/', str(self.feed()))

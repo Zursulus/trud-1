@@ -9,6 +9,7 @@ def _augment(request, response):
     if context is None or not request.user.is_authenticated:
         return response
     membership = active_board_membership(request.user)
+    request._internal_board_membership = membership
     pending = pending_board_poll_count(request.user) if membership else 0
     context['board_member'] = membership
     context['board_pending'] = pending
