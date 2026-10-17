@@ -320,6 +320,7 @@ def register_invite(request, token):
         if request.user.pk != existing.pk:
             return TemplateResponse(request, 'water/portal/invite_existing.html', {
                 'invite': invite, 'wrong_user': True,
+                'internal_logout_next': request.path, 'internal_logout_label': 'Выйти и продолжить',
             }, status=403)
         if request.method == 'POST':
             try:

@@ -135,3 +135,66 @@ class NavigationTests(TestCase):
         user.user_permissions.add(Permission.objects.get(codename='add_importbatch'))
         user.user_permissions.add(Permission.objects.get(codename='view_importbatch'))
         self.assertFalse(any('импорт' in item['label'].lower() for item in management_links(user)))
+
+
+    def test_guest_login_has_one_form_and_no_logout(self):
+        response = self.client.get(reverse('resident_login'))
+        self.assertContains(response, '<form ', count=1)
+        self.assertContains(response, '<button type="submit">Войти</button>', count=1)
+        self.assertContains(response, 'name="csrfmiddlewaretoken"', count=1)
+        self.assertNotContains(response, reverse('resident_logout'))
+
+    def test_authenticated_shells_have_one_csrf_logout(self):
+        from datetime import timedelta
+        from html.parser import HTMLParser
+        from .models import Person
+        from .resident_models import ResidentIdentity
+        from .portal_permissions import PortalGrant
+
+        class Forms(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.forms = []
+                self.current = None
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'form':
+                    self.current = (attrs, [])
+                    self.forms.append(self.current)
+                elif tag == 'input' and self.current is not None:
+                    self.current[1].append(attrs)
+
+            def handle_endtag(self, tag):
+                if tag == 'form':
+                    self.current = None
+
+        user = User.objects.create_user('single-logout', is_staff=True, is_superuser=True)
+        self.client.force_login(user, backend='django.contrib.auth.backends.ModelBackend')
+        account = Account.objects.create(number='SINGLE-LOGOUT')
+        person = Person.objects.create(full_name='Synthetic navigation resident')
+        ResidentIdentity.objects.create(user=user, person=person, verified_by=user, basis='Navigation fixture')
+        access = PortalGrant.objects.create(
+            person=person, account=account, starts=timezone.localdate() - timedelta(days=1),
+            can_view_account=True, verified_by=user, basis='Navigation fixture',
+        )
+        pages = [('/work/', 200), (reverse('admin:index'), 200),
+                 (reverse('resident_account', args=[account.pk]), 200)]
+        for url, status in pages:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, status)
+                parser = Forms()
+                parser.feed(response.content.decode())
+                forms = [(attrs, inputs) for attrs, inputs in parser.forms
+                         if attrs.get('action') in (reverse('resident_logout'), reverse('admin:logout'))]
+                self.assertEqual(len(forms), 1)
+                attrs, inputs = forms[0]
+                self.assertEqual(attrs.get('method'), 'post')
+                self.assertTrue(any(field.get('name') == 'csrfmiddlewaretoken' and field.get('value')
+                                    for field in inputs))
+        access.ends = timezone.localdate()
+        access.save()
+        response = self.client.get(reverse('resident_dashboard'))
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, 'action="' + reverse('resident_logout') + '"', count=1, status_code=403)

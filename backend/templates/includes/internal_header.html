@@ -3,5 +3,7 @@
 <a class="internal-brand" href="/">ТСН «Труд-1»</a>
 <details class="internal-menu" open><summary>Меню</summary>
 <nav aria-label="Общая навигация">{% for item in internal_nav %}<a href="{{ item.url }}"{% if item.key == internal_active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
-{% if request.user.is_authenticated %}<form method="post" action="{% url 'resident_logout' %}">{% csrf_token %}<button type="submit">Выйти</button></form>{% endif %}</nav>
-</details></header>
+</nav>
+</details>
+{% if request.user.is_authenticated %}<form class="internal-logout" method="post" action="{% url 'resident_logout' %}">{% csrf_token %}{% if internal_logout_next %}<input type="hidden" name="next" value="{{ internal_logout_next }}">{% endif %}<button type="submit">{{ internal_logout_label|default:'Выйти' }}</button></form>{% endif %}
+</header>

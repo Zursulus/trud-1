@@ -84,8 +84,8 @@ class MixedRoleModeSwitchTests(TestCase):
         session.save()
 
         page = client.get("/work/more/")
-        self.assertContains(page, 'action="/admin/cabinet/logout/"')
-        self.assertContains(page, 'type="submit" class="ws-secondary">Выйти</button>')
+        self.assertContains(page, 'action="/admin/cabinet/logout/"', count=1)
+        self.assertContains(page, '<button type="submit">Выйти</button>', count=1)
         self.assertNotContains(page, "Кабинет жителя")
         self.assertEqual(client.session[DEVICE_ID_SESSION_KEY], device.persistent_id)
         grants_before = list(PortalGrant.objects.values())

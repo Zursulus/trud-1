@@ -44,7 +44,6 @@
     {% endif %}
     {% if request.user.is_staff %}<div class="desktop-nav-sep"></div><a href="{% url 'staff_workspace:home' %}">↔ Рабочая база</a>{% endif %}
   </nav>
-  {% if request.user.is_authenticated %}<form class="desktop-logout" method="post" action="{% url 'resident_logout' %}">{% csrf_token %}<button type="submit"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#logout"></use></svg>Выйти</button></form>{% endif %}
 </aside>
 {% endif %}
 <main class="main-content" id="portal-content" tabindex="-1"><div class="content-wrap">

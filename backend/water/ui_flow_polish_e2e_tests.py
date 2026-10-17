@@ -160,11 +160,12 @@ class ResidentFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
                 self.assertEqual(response.status, 403)
                 self.assertTrue(page.get_by_role("heading", name="Доступ к участку не найден").is_visible())
                 form = page.locator('form[action="/admin/cabinet/logout/"]')
+                self.assertEqual(form.count(), 1)
                 self.assertEqual(form.get_attribute("method"), "post")
                 self.assertTrue(form.locator('input[name="csrfmiddlewaretoken"]').input_value())
                 self.check_page(page, tag)
                 with page.expect_request(lambda request: urlsplit(request.url).path == "/admin/cabinet/logout/") as logout:
-                    page.get_by_role("button", name="Выйти из кабинета", exact=True).click()
+                    page.get_by_role("button", name="Выйти", exact=True).click()
                 self.assertEqual(logout.value.method, "POST")
                 self.assertIn("csrfmiddlewaretoken=", logout.value.post_data)
                 page.wait_for_url("**/admin/cabinet/login/")
@@ -223,7 +224,7 @@ class ResidentFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
                 page.locator("#id_new_password1").fill(new_password)
                 page.locator("#id_new_password2").fill(new_password)
                 page.get_by_role("button", name="Сохранить новый пароль", exact=True).click()
-                page.wait_for_url("**/admin/cabinet/")
+                page.wait_for_url("**/admin/cabinet/profile/")
                 receipt = page.get_by_role("status").filter(has_text="Пароль изменён.")
                 self.assertEqual(receipt.count(), 1)
                 self.assertTrue(receipt.is_visible())
@@ -235,7 +236,7 @@ class ResidentFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
                 self.check_page(page, tag + "-receipt")
                 page.reload(wait_until="networkidle")
                 self.assertEqual(page.get_by_role("status").filter(has_text="Пароль изменён.").count(), 0)
-                self.assertTrue(page.get_by_role("heading", name="Ваш участок", exact=True).is_visible())
+                self.assertTrue(page.get_by_role("heading", name="Профиль", exact=True).is_visible())
 
 
 class StaffFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
