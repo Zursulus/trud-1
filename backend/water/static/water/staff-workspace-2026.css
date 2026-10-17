@@ -57,7 +57,7 @@ body { font-size: 16px; line-height: 1.55; }
   .ws-nav a svg { width: 22px; height: 22px; }
   .ws-nav a[aria-current='page'], .ws-nav a:hover { background: #28404c; color: white; }
   .ws-nav a:focus-visible { outline-color: var(--sunset); }
-  .ws-nav-count { margin-left: auto; padding: 2px 7px; border-radius: 8px; font-size: 12px; background: var(--sunset); color: var(--ink); }
+  .ws-nav-count { white-space: nowrap; min-width: calc(3ch + 14px); flex: 0 0 auto; text-align: center; margin-left: auto; padding: 2px 7px; border-radius: 8px; font-size: 12px; background: var(--sunset); color: var(--ink); }
   .ws-sidebar-foot { border-color: #40515c; color: #dfe6ea; padding-top: 20px; }
   .ws-site-editor { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); }
 }

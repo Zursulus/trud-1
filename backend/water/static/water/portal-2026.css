@@ -31,7 +31,13 @@ body { background: var(--canvas); font-size: 16px; line-height: 1.55; min-width:
 .section-head { margin-bottom: 14px; }
 .section-head h2 { font-size: 21px; }
 .section-head > a { min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; }
-.count-badge { background: var(--sea); min-width: 24px; height: 24px; }
+/* Numeric badges keep their intrinsic width, including grouped numbers. */
+.count-badge, .tiny-count {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  min-width: 24px;
+}
+.count-badge { background: var(--sea); height: 24px; }
 .attention-list { gap: 12px; }
 .attention-row { padding: 16px; min-height: 96px; border: 1px solid var(--border); border-radius: 20px; background: white; }
 .attention-row strong { font-size: 16px; line-height: 1.4; }
@@ -120,7 +126,7 @@ body { background: var(--canvas); font-size: 16px; line-height: 1.55; min-width:
 .profile-card strong, .plot-list-main strong, .system-state strong { font-size: 16px; }
 .appeal-date { position: static; display: block; margin-top: 6px; color: var(--secondary); font-size: 12px; }
 .appeal-main em, .doc-badge, .status-pill, .tiny-count { font-size: 12px; }
-.tiny-count { background: #ae2932; }
+.tiny-count { display: inline-flex; align-items: center; justify-content: center; background: #ae2932; }
 .appeal-icon, .appeal-icon.blue { color: var(--olive); background: var(--olive-soft); }
 .bubble { padding: 16px; border-radius: 18px; font-size: 15px; }
 .bubble.mine { background: var(--sea-soft); }
