@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
 from playwright.sync_api import sync_playwright
@@ -58,15 +59,23 @@ class ResidentPortalBrowserTests(StaticLiveServerTestCase):
             self.assertTrue(page.locator('.home-hero-image').is_visible())
             hero_height = page.locator('.home-hero-image').evaluate('(el) => el.getBoundingClientRect().height')
             self.assertGreaterEqual(hero_height, 180)
-            self.assertLessEqual(hero_height, 195)
+            # The 2026 hero grows with its text and plot card instead of using
+            # the old fixed-height image with an overlapping card.
+            hero = page.locator('.home-hero').bounding_box()
+            self.assertAlmostEqual(hero_height, hero['height'], delta=1)
             self.assertTrue(page.locator('.home-plot-card').is_visible())
-            self.assertEqual(page.locator('.home-shortcuts .shortcut').count(), 4)
+            plot_card = page.locator('.home-plot-card').bounding_box()
+            self.assertGreaterEqual(plot_card['y'], hero['y'])
+            self.assertLessEqual(plot_card['y'] + plot_card['height'], hero['y'] + hero['height'])
+            self.assertEqual(page.locator('.home-shortcuts .shortcut').count(), 4 + int(settings.FORUM_ENABLED))
+            self.assertEqual(page.locator('.home-shortcuts .shortcut-forum').count(), int(settings.FORUM_ENABLED))
             self.assertTrue(page.get_by_text('Нужно сделать', exact=True).is_visible())
             self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1'))
 
             nav = page.locator('.bottom-nav')
             self.assertTrue(nav.is_visible())
-            self.assertEqual(page.locator('.bottom-nav a').count(), 5)
+            self.assertEqual(page.locator('.bottom-nav a').count(), 5 + int(settings.FORUM_ENABLED))
+            self.assertEqual(page.locator('.bottom-nav a[href$="/forum/"]').count(), int(settings.FORUM_ENABLED))
             self.assertTrue(page.evaluate("getComputedStyle(document.querySelector('.bottom-nav')).borderRadius === '0px'"))
             self.assertTrue(page.evaluate("[...document.querySelectorAll('.bottom-nav a')].every(a => a.getBoundingClientRect().height >= 44)"))
 
