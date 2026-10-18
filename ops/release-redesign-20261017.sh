@@ -139,7 +139,11 @@ runuser -u trudsite -- git init --bare --quiet "$WORK/repository.git"
 # Не меняем FETCH_HEAD/objects работающего checkout даже в --check.
 printf '%s\n' "$APP/.git/objects" > "$WORK/repository.git/objects/info/alternates"
 chown trudsite:trudsite "$WORK/repository.git/objects/info/alternates"
-gitstage fetch --quiet --no-tags git@github.com:Zursulus/trud-1.git refs/heads/claude/redesign-2026 >"$WORK/fetch.log" 2>&1
+# Временный репозиторий не знает deploy-ключ: берём core.sshCommand рабочего checkout.
+SSHCMD=$(gitapp config --get core.sshCommand)
+[[ -n $SSHCMD ]]
+gitstage -c core.sshCommand="$SSHCMD" fetch --quiet --no-tags git@github.com:Zursulus/trud-1.git refs/heads/claude/redesign-2026 >"$WORK/fetch.log" 2>&1 \
+  || { cat "$WORK/fetch.log" >&2; false; }
 [[ $(gitstage rev-parse FETCH_HEAD) == "$TARGET_SHA" ]]
 gitstage merge-base --is-ancestor "$EXPECTED_SHA" "$TARGET_SHA"
 [[ -z $(gitstage diff --name-only "$EXPECTED_SHA" "$TARGET_SHA" -- \
