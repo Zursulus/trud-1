@@ -24,7 +24,8 @@ def navigation(request):
                       else bool(resolved_accesses(user, CAP_VIEW_ACCOUNT)))
         if has_portal:
             items.append({'label': 'Мой кабинет', 'url': reverse('resident_plots'), 'key': 'cabinet'})
-        else:
+        elif not user.is_staff:
+            # Staff enter through the workspace; a personal cabinet still stays visible.
             items.append({'label': 'Запросить доступ', 'url': reverse('resident_access_request'), 'key': 'access'})
         # Kept independent of forum and plot access.
         items.append({'label': 'Профиль', 'url': reverse('personal_profile'), 'key': 'profile'})
@@ -72,7 +73,7 @@ def navigation(request):
             'internal_current': current, 'internal_trail': trail}
 
 
-def management_links(user, *, request=None):
+def management_links(user, *, request=None, workspace=False):
     if not (user.is_authenticated and user.is_active and user.is_staff):
         return []
     from django.contrib import admin
@@ -109,4 +110,8 @@ def management_links(user, *, request=None):
         ('Роли и полномочия', 'staff_workspace:roles_guide', True),
         ('Техническая админка', 'admin:index', True),
     ]
-    return [{'label': label, 'url': reverse(route)} for label, route, allowed in entries if allowed]
+    # All workspace destinations and forum moderation are already in the sidebar
+    # or the mobile section index. Keep the full catalog for other callers.
+    return [{'label': label, 'url': reverse(route)} for label, route, allowed in entries
+            if allowed and (not workspace or (not route.startswith('staff_workspace:')
+                                               and route != 'forum_moderation'))]

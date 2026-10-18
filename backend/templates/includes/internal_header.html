@@ -1,7 +1,7 @@
 {% load static %}<script src="{% static 'water/internal-nav.js' %}" defer></script>
 <header class="internal-header">
 <a class="internal-brand" href="/">ТСН «Труд-1»</a>
-<details class="internal-menu" open><summary>Меню</summary>
+<details class="internal-menu" open><summary aria-label="Меню"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></summary>
 <nav aria-label="Общая навигация">{% for item in internal_nav %}<a href="{{ item.url }}"{% if item.key == internal_active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
 </nav>
 </details>

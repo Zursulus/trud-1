@@ -38,7 +38,7 @@ class NavigationTests(TestCase):
                 self.assertIn('Профиль', menu)
                 self.assertNotIn('Мой кабинет', menu)
                 self.assertEqual('Управление' in menu, staff)
-                self.assertIn('Запросить доступ', menu)
+                self.assertEqual('Запросить доступ' in menu, not staff)
 
     def test_resident(self):
         user = User.objects.create_user('resident')
@@ -97,9 +97,16 @@ class NavigationTests(TestCase):
         response = self.client.get('/work/')
         self.assertEqual(response.status_code, 200)
         links = {item['label']: item['url'] for item in response.context['management_links']}
-        for label in ['Пользователи', 'Техническая админка', 'Модерация форума', 'Создать раздел форума', 'Доступы жителей']:
+        for label in ['Пользователи', 'Техническая админка', 'Создать раздел форума', 'Импорт']:
             self.assertIn(label, links)
-        for label, url in links.items():
+        from .navigation import management_links
+        full_catalog = {item['label']: item['url'] for item in management_links(user, request=response.wsgi_request)}
+        self.assertTrue({'Доступы жителей', 'Модерация форума', 'Роли и полномочия'} <= full_catalog.keys())
+        self.assertTrue(set(links) < full_catalog.keys())
+        # The home card only contains tools absent from the workspace navigation.
+        self.assertFalse(any(item['url'].startswith('/work/') for item in response.context['management_links']))
+        self.assertNotIn('Модерация форума', links)
+        for label, url in full_catalog.items():
             with self.subTest(management=label):
                 self.assertEqual(self.client.get(url).status_code, 200)
         for route in ['forum:index', 'personal_profile', 'profile_email', 'two_factor:profile', 'admin:index']:
@@ -198,3 +205,34 @@ class NavigationTests(TestCase):
         response = self.client.get(reverse('resident_dashboard'))
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, 'action="' + reverse('resident_logout') + '"', count=1, status_code=403)
+
+    def test_staff_personal_cabinet_stays_visible(self):
+        user = User.objects.create_user('staff-resident', is_staff=True)
+        account = Account.objects.create(number='STAFF-NAV')
+        from datetime import timedelta
+        from .models import Person
+        from .resident_models import ResidentIdentity
+        from .portal_permissions import PortalGrant
+        person = Person.objects.create(full_name='Synthetic staff resident')
+        ResidentIdentity.objects.create(user=user, person=person, verified_by=user, basis='Navigation fixture')
+        PortalGrant.objects.create(
+            person=person, account=account, starts=timezone.localdate() - timedelta(days=1),
+            can_view_account=True, verified_by=user, basis='Navigation fixture',
+        )
+        menu = self.menu(user)
+        self.assertTrue({'Мой кабинет', 'Управление'} <= menu)
+        self.assertNotIn('Запросить доступ', menu)
+
+    def test_workspace_keeps_daily_content_before_secondary_tools(self):
+        user = User.objects.create_user('compact-home', is_staff=True, is_superuser=True)
+        self.client.force_login(user, backend='django.contrib.auth.backends.ModelBackend')
+        response = self.client.get('/work/')
+        self.assertContains(response, '<body class="workspace-page">')
+        self.assertContains(response, '<summary aria-label="Меню">', count=1)
+        self.assertContains(response, 'aria-label="Разделы управления"', count=1)
+        content = response.content.decode()
+        self.assertLess(content.index('Что сегодня важно'), content.index('aria-label="Разделы управления"'))
+        self.assertContains(response, '<h2>Управление</h2>')
+        # Links remain present in the sidebar and mobile section index.
+        for route in ['accounts', 'access', 'water_line', 'finance', 'documents', 'governance', 'security']:
+            self.assertContains(response, 'href="' + reverse('staff_workspace:' + route) + '"')
