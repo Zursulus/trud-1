@@ -1,0 +1,11 @@
+<aside class="page-help" data-help-key="{{ help_key }}">
+  <details open>
+    <summary title="Свернуть или развернуть подсказки" data-hint="Сверните или откройте список возможностей">Что здесь можно сделать</summary>
+    <ul>
+      <li>{{ help_one }}</li>
+      <li>{{ help_two }}</li>
+      {% if help_three %}<li>{{ help_three }}</li>{% endif %}
+      {% if help_four %}<li>{{ help_four }}</li>{% endif %}
+    </ul>
+  </details>
+</aside>

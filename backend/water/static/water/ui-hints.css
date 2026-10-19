@@ -1,0 +1,71 @@
+/* Internal help follows the sea and sunset palette; no third-party UI. */
+.page-help {
+  position: relative; margin: 0 0 16px; padding: 12px 44px 12px 16px;
+  border: 1px solid #bed6de; border-left: 4px solid #ef8b50;
+  border-radius: 14px; background: #f0f7f8; color: #203e4a;
+  font: 14px/1.5 system-ui, sans-serif; overflow-wrap: anywhere;
+}
+.page-help[hidden], .page-help-close[hidden], .hint-description[hidden], .hint-bubble[hidden] { display: none !important; }
+.page-help summary { cursor: pointer; font-weight: 700; min-height: 32px; align-content: center; }
+.page-help ul { padding-left: 20px; margin: 8px 0 0; }
+.page-help li { margin: 4px 0; }
+.page-help .page-help-close {
+  position: absolute; right: 6px; top: 8px; width: 32px; height: 32px; min-height: 32px;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: #244c5d;
+  font: 24px/1 system-ui, sans-serif; cursor: pointer;
+}
+.page-help :focus-visible, .hint-toggle:focus-visible { outline: 3px solid #f08a4b; outline-offset: 2px; }
+.nav-hint { display: block; font-size: 11px; line-height: 1.35; font-weight: 400; color: #536d78; white-space: normal; }
+.internal-menu a { padding-block: 6px; }
+.internal-menu .nav-hint { color: #c4dce5; font-size: 11px; }
+.ws-nav a, .desktop-nav a { flex-wrap: wrap; }
+.ws-nav a > .nav-hint, .desktop-nav a > .nav-hint { flex: 1 0 100%; padding-left: 30px; box-sizing: border-box; }
+.ws-nav a[aria-current] .nav-hint, .desktop-nav a.active .nav-hint { color: inherit; }
+.ws-nav-group[title] { cursor: default; }
+.hint-bubble {
+  position: fixed; z-index: 10000; box-sizing: border-box;
+  width: max-content; max-width: min(300px, calc(100vw - 16px));
+  padding: 9px 12px; border-radius: 10px; border: 1px solid #ef8b50;
+  background: #173847; color: #fff; box-shadow: 0 4px 16px #13222e26;
+  font: 14px/1.4 system-ui, sans-serif; overflow-wrap: anywhere; pointer-events: none;
+}
+.hint-toggle { display: none !important; }
+@media (max-width: 760px) {
+  .internal-menu a { min-height: 56px; white-space: normal; padding: 8px 12px; }
+  .internal-menu .nav-hint { font-size: 12px; }
+  .ws-menu-row, .more-list > a { min-height: 56px; box-sizing: border-box; }
+  .ws-menu-copy, .more-list > a > span, .internal-menu a > span { min-width: 0; overflow-wrap: anywhere; }
+  .ws-menu-copy small, .more-list small { font-size: 12px; line-height: 1.4; }
+  .page-help { padding: 10px 42px 10px 12px; font-size: 13px; }
+  body .hint-toggle {
+    display: inline-flex !important; align-items: center; justify-content: center;
+    box-sizing: border-box; width: 32px; height: 32px; min-width: 32px; min-height: 32px;
+    margin: 4px; padding: 0; border: 1px solid #8babb8; border-radius: 50%;
+    background: #f0f7f8; color: #134d62; font: 700 16px/1 system-ui, sans-serif;
+    vertical-align: middle; cursor: pointer; flex: 0 0 32px;
+  }
+  /* Inline mobile explanations move content down and never cover an action. */
+  .hint-inline-note {
+    display: block; flex: 1 0 100%; grid-column: 1 / -1; box-sizing: border-box;
+    max-width: 100%; margin: 6px 0; padding: 8px 12px; border-left: 3px solid #ef8b50;
+    background: #f0f7f8; color: #203e4a; font: 13px/1.4 system-ui, sans-serif;
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  .ws-actions, .ws-search-line, .ws-finance-actions { flex-wrap: wrap; }
+  .management-links > a { white-space: normal; overflow-wrap: anywhere; }
+  .ws-content, .content-wrap, .forum-shell, .forum-card, .ws-section { min-width: 0; }
+  .ws-content button, .content-wrap button, .forum-card button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+  .ws-bottom-nav a, .bottom-nav a { min-width: 0; overflow-wrap: anywhere; }
+  .rg-code, .rg-rule code { overflow-wrap: anywhere; }
+}
+.ws-sidebar .nav-hint { color: #c4dce5; }
+.hint-menu-group { margin: 0 0 12px; }
+.hint-menu-group > summary, .ws-service-details > summary {
+  display: list-item;
+  padding: 12px 16px; min-height: 56px; box-sizing: border-box; cursor: pointer;
+  border: 1px solid #bed6de; border-radius: 12px; color: #134d62; background: #f0f7f8;
+  font-weight: 700;
+}
+.hint-menu-group > summary small, .ws-service-details > summary small {
+  display: block; margin-top: 4px; color: #536d78; font-size: 12px; font-weight: 400;
+}

@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Поиск{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-search' help_one="Введите участок, номер счёта или счётчика." help_two="Откройте найденную карточку для просмотра." %}
+
 <section class="ws-page-head ws-page-head-compact">
   <div>
     <p class="ws-eyebrow">Участки и счета</p>

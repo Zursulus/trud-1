@@ -1,6 +1,8 @@
-{% extends 'water/work/base.html' %}{% load static %}
+{% extends 'water/work/base.html' %}{% load static ui_hints %}
 {% block title %}Главная{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-home' help_one="Посмотрите, какие дела ждут вашего внимания." help_two="Выберите раздел в меню для обычной работы." help_three="На телефоне разделы собраны внизу экрана." %}
+
 <section class="ws-page-head ws-page-head-compact">
   <div>
     <p class="ws-eyebrow">Сегодня</p>
@@ -37,7 +39,7 @@
 {% else %}
 <section class="ws-empty ws-section">
   <strong>Срочных действий нет</strong>
-  <p>Новые задачи появятся здесь автоматически.</p>
+  <p>Новые задачи появятся здесь автоматически. Для обычной работы выберите раздел в меню.</p>
 </section>
 {% endif %}
 
@@ -66,6 +68,6 @@
 </section>
 {% endif %}
 {% if management_links %}
-<section class="ws-card"><h2>Управление</h2><p>Служебные инструменты по вашим полномочиям.</p><nav class="management-links" aria-label="Разделы управления">{% for item in management_links %}<a class="ws-secondary" href="{{ item.url }}">{{ item.label }}</a>{% endfor %}</nav></section>
+<section class="ws-card"><h2>Управление</h2><p>Служебные инструменты по вашим полномочиям.</p><nav class="management-links" aria-label="Разделы управления">{% for item in management_links %}<a class="ws-secondary" href="{{ item.url }}" title="{{ item.label|navigation_hint }}" data-hint="{{ item.label|navigation_hint }}"><span>{{ item.label }}<small class="nav-hint">{{ item.label|navigation_hint }}</small></span></a>{% endfor %}</nav></section>
 {% endif %}
 {% endblock %}

@@ -114,7 +114,7 @@ class ImportMemberRegistryTests(TestCase):
             '',
             '',
             '',
-            'Миндальная 20',
+            'линия А 20',
             '',
             '',
             'Временный legacy-резерв; Account 348; без переноса ФИО/телефона',

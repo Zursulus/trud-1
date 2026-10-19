@@ -2,6 +2,8 @@
 {% load static %}
 {% block title %}Жители и участки{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-residents' help_one="Найдите человека или участок." help_two="Проверьте связи, доступы и счётчики." help_three="Откройте нужную карточку для подробностей." %}
+
 <link rel="stylesheet" href="{% static 'water/workbench.css' %}">
 <div class="wb">
   <div class="wb-notice">Реальные данные. Телефон, e-mail и адрес можно исправлять прямо из карточки; связи, права и назначения меняются только через отдельные проверяемые процессы.</div>

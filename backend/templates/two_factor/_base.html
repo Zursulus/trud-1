@@ -33,7 +33,8 @@
     @media (max-width: 640px) { .container { margin-top: 18px; } .mfa-card { padding: 18px; } h1 { font-size: 1.6rem; } }
   </style>
   {% block extra_media %}{% endblock %}
-<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}"></head>
+<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">
+{% include 'includes/password_visibility.html' %}</head>
 <body>
 {% include 'includes/internal_header.html' %}{% include 'includes/breadcrumbs.html' %}
   {% block content_wrapper %}

@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Безопасность{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-security' help_one="Откройте сигнал, который требует проверки." help_two="Посмотрите причину и доступные действия." help_three="Подозрительные файлы проверяйте перед использованием." %}
+
 <section class="ws-page-head">
   <div>
     <p class="ws-eyebrow">Контроль безопасности</p>
@@ -43,14 +45,14 @@
         {% if alert.resolved_at %}
           <span class="ws-badge ws-badge-ok">Проверено</span>
         {% elif can_resolve_security_alerts %}
-          <form method="post">{% csrf_token %}<input type="hidden" name="alert_id" value="{{ alert.pk }}"><button class="ws-secondary" type="submit">Проверено</button></form>
+          <form method="post">{% csrf_token %}<input type="hidden" name="alert_id" value="{{ alert.pk }}"><button class="ws-secondary" type="submit" data-hint="Отметить сигнал безопасности как проверенный">Проверено</button></form>
         {% endif %}
       </div>
     </article>
     {% endfor %}
   </div>
   {% else %}
-  <div class="ws-empty"><strong>Сигналов нет</strong><p>В выбранном фильтре ничего не требует внимания.</p></div>
+  <div class="ws-empty"><strong>Сигналов нет</strong><p>В выбранном фильтре ничего не требует внимания. Выберите «Все», чтобы посмотреть историю.</p></div>
   {% endif %}
 </section>
 

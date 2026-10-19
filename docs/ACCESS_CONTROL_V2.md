@@ -427,8 +427,8 @@ One Person may hold any number of compatible assignments simultaneously.
 
 Example:
 
-- Portal access to Account “Горная 2” with finance + water + documents;
-- Line senior for “Миндальная”;
+- Portal access to Account “участок 12” with finance + water + documents;
+- Line senior for “линия А”;
 - Controller for “Виноградная”;
 - active BoardMembership;
 - finance view-only organization role.
@@ -545,7 +545,7 @@ From a house/account it must be possible to navigate back to its current line an
 After one login a multi-capacity user can see contexts such as:
 
 - “My account / Мой кабинет”;
-- “Line senior — Миндальная”;
+- “Line senior — линия А”;
 - “Controller — Виноградная”;
 - “Board”;
 - “Work database” sections allowed by service assignments.

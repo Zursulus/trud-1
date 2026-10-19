@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Опросы правления{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-governance' help_one="Откройте нужный опрос правления." help_two="Посмотрите вопросы, ответы и протокол." help_three="Предварительный опрос не заменяет официальное решение." %}
+
 <section class="ws-page-head">
   <div><p class="ws-eyebrow">Правление · предварительный контур</p><h1>Опросы правления</h1><p>Внутренние неофициальные опросы для подготовки решений. Это не общее собрание, не кворум и не юридически значимое электронное голосование.</p></div>
   {% if can_create_poll %}<div class="ws-actions"><a class="ws-primary" href="{% url 'staff_workspace:governance_create' %}">Новый опрос</a></div>{% endif %}

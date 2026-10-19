@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 {% load i18n static %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">{% endblock %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">{% if request.resolver_match.view_name != 'admin:login' %}{% include 'includes/password_visibility.html' %}{% endif %}{% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 

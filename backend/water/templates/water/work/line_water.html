@@ -2,6 +2,8 @@
 {% load static l10n %}
 {% block title %}Показания линии{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-line' help_one="Выберите счётчик своей линии." help_two="Введите показание и дату, затем сохраните." help_three="Проверьте отправленные данные перед выходом." %}
+
 <script src="{% static 'water/reading-preview.js' %}" defer></script>
 <section class="ws-page-head ws-page-head-compact">
   <div>
@@ -109,7 +111,7 @@
         {% endfor %}
         </div>
       {% else %}
-        <div class="ws-empty">На эту дату у линии нет доступных счётчиков.</div>
+        <div class="ws-empty">На эту дату у линии нет доступных счётчиков. Проверьте дату выше. Если это ошибка, обратитесь к администратору.</div>
       {% endif %}
 
       <details class="ws-balance-details">

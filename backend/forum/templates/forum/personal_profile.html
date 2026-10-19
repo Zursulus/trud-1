@@ -1,4 +1,6 @@
 {% extends 'forum/base.html' %}{% block title %}Профиль · ТСН «Труд-1»{% endblock %}{% block forum_content %}
+{% include 'includes/page_help.html' with help_key='personal-profile' help_one="Измените ник, который виден в обсуждениях." help_two="Добавьте или подтвердите свою почту." help_three="Откройте смену пароля или настройку второго фактора." %}
+
 <section class="forum-card"><h1>Профиль</h1><p>Для изменения профиля доступ к участку не требуется.</p><h2>Ник в обсуждениях</h2><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить ник</button></form></section>
 <section class="forum-card"><h2>Почта</h2><p>{{ request.user.email|default:'Почта не добавлена' }} · {% if email_verified %}Подтверждена{% else %}Не подтверждена{% endif %}</p><a href="{% url 'profile_email' %}">Добавить, изменить или подтвердить почту</a></section>
 <section class="forum-card"><h2>Пароль и второй фактор</h2>{% if request.user.has_usable_password %}<p><a href="{% url 'resident_password_change' %}">Сменить пароль</a></p>{% else %}<p>Пароль не установлен. Вы используете вход по почте.</p>{% endif %}<p><a href="{% url 'two_factor:profile' %}">Второй фактор и резервные коды</a></p></section>{% endblock %}

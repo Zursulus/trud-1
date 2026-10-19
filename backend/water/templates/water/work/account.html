@@ -70,7 +70,7 @@
       </table>
     </div>
   {% else %}
-    <div class="ws-empty"><strong>Нет индивидуальных счётчиков</strong><p>Для этого лицевого счёта приборы не найдены или недоступны вашей роли.</p></div>
+    <div class="ws-empty"><strong>Нет индивидуальных счётчиков</strong><p>Для этого лицевого счёта приборы не найдены или недоступны вашей роли. Если это ошибка, обратитесь к администратору.</p></div>
   {% endif %}
   <div class="ws-actions">
     {% if can_use_controller_workspace %}<a class="ws-secondary" href="{% url 'staff_workspace:water_line' %}">Открыть мои линии</a>{% endif %}

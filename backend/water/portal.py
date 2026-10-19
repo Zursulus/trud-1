@@ -52,8 +52,12 @@ class ResidentAuthenticationForm(AuthenticationForm):
 
 
 class InviteRegistrationForm(forms.Form):
-    password1 = forms.CharField(label='Пароль', strip=False, widget=forms.PasswordInput)
-    password2 = forms.CharField(label='Повторите пароль', strip=False, widget=forms.PasswordInput)
+    password1 = forms.CharField(label='Пароль', strip=False, widget=forms.PasswordInput(attrs={
+        'autocomplete': 'new-password',
+    }))
+    password2 = forms.CharField(label='Повторите пароль', strip=False, widget=forms.PasswordInput(attrs={
+        'autocomplete': 'new-password',
+    }))
 
     def clean(self):
         data = super().clean()

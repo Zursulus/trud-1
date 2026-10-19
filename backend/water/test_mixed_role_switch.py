@@ -17,7 +17,7 @@ class MixedRoleModeSwitchTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(username="switch-admin", is_staff=True)
         self.node = SupplyNode.objects.create(name="Switch node")
-        self.line = WaterGroup.objects.create(name="Миндальная", node=self.node)
+        self.line = WaterGroup.objects.create(name="линия А", node=self.node)
         self.account = Account.objects.create(number="SW-1", plot="Морская 34")
         Membership.objects.create(account=self.account, group=self.line, starts=date(2026, 1, 1))
 

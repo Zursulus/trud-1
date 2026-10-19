@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="{% static 'water/sea-sunset.css' %}?v=1">
   <link rel="stylesheet" href="{% static 'water/staff-workspace-2026.css' %}?v=2">
   <link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">
+  {% include 'includes/password_visibility.html' %}
 </head>
 <body class="workspace-page">
   <a class="ws-skip-link" href="#main-content">К содержимому</a>
@@ -25,40 +26,40 @@
         <span><strong>ТРУД-1</strong><small>Рабочая база</small></span>
       </a>
       <nav class="ws-nav" aria-label="Разделы рабочей базы">
-        <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Главная</span></a>
-        {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<p class="ws-nav-group">Жители</p>{% endif %}
+        <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %} title="Главная — Текущие дела и быстрые переходы" data-hint="Текущие дела и быстрые переходы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Главная</span><small class="nav-hint">Текущие дела и быстрые переходы</small></a>
+        {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<p class="ws-nav-group" title="Участки, обращения и доступы жителей">Жители</p>{% endif %}
 {% if can_view_accounts %}
-        <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#search"></use></svg><span>Найти</span></a>
-        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Участки и счета</span>{% if account_count %}<b class="ws-nav-count">{{ account_count }}</b>{% endif %}</a>
+        <a href="{% url 'staff_workspace:search' %}"{% if workspace_section == 'search' %} aria-current="page"{% endif %} title="Найти — Поиск участка, счёта или счётчика" data-hint="Поиск участка, счёта или счётчика"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#search"></use></svg><span>Найти</span><small class="nav-hint">Поиск участка, счёта или счётчика</small></a>
+        <a href="{% url 'staff_workspace:accounts' %}"{% if workspace_section == 'accounts' %} aria-current="page"{% endif %} title="Участки и счета — Карточки участков и лицевых счетов" data-hint="Карточки участков и лицевых счетов"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Участки и счета</span>{% if account_count %}<b class="ws-nav-count">{{ account_count }}</b>{% endif %}<small class="nav-hint">Карточки участков и лицевых счетов</small></a>
 {% endif %}
 {% if can_view_appeals %}
-        <a href="{% url 'staff_workspace:appeals' %}"{% if workspace_section == 'appeals' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#message"></use></svg><span>Обращения</span></a>
+        <a href="{% url 'staff_workspace:appeals' %}"{% if workspace_section == 'appeals' %} aria-current="page"{% endif %} title="Обращения — Вопросы жителей и ответы сотрудника" data-hint="Вопросы жителей и ответы сотрудника"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#message"></use></svg><span>Обращения</span><small class="nav-hint">Вопросы жителей и ответы сотрудника</small></a>
 {% endif %}
 {% if can_use_access_workspace %}
-        <a href="{% url 'staff_workspace:access' %}"{% if workspace_section == 'access' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg><span>Доступ жителей</span></a>
+        <a href="{% url 'staff_workspace:access' %}"{% if workspace_section == 'access' %} aria-current="page"{% endif %} title="Доступ жителей — Заявки, приглашения и восстановление входа" data-hint="Заявки, приглашения и восстановление входа"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg><span>Доступ жителей</span><small class="nav-hint">Заявки, приглашения и восстановление входа</small></a>
 {% endif %}
-        {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<p class="ws-nav-group">Хозяйство</p>{% endif %}
+        {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<p class="ws-nav-group" title="Вода, счётчики и показания">Хозяйство</p>{% endif %}
 {% if can_use_controller_workspace %}
-        <a href="{% url 'staff_workspace:water_line' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Показания моей линии</span></a>
+        <a href="{% url 'staff_workspace:water_line' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %} title="Показания моей линии — Счётчики и показания закреплённой линии" data-hint="Счётчики и показания закреплённой линии"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Показания моей линии</span><small class="nav-hint">Счётчики и показания закреплённой линии</small></a>
 {% endif %}
 {% if can_view_water and not can_use_controller_workspace %}
-        <a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Учёт воды</span></a>
+        <a href="{% url 'staff_workspace:water' %}"{% if workspace_section == 'water' %} aria-current="page"{% endif %} title="Учёт воды — Показания, проверки и расход воды" data-hint="Показания, проверки и расход воды"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Учёт воды</span><small class="nav-hint">Показания, проверки и расход воды</small></a>
 {% endif %}
 {% if can_use_finance_workspace %}
-        <a href="{% url 'staff_workspace:finance' %}"{% if workspace_section == 'finance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Начисления и оплаты</span></a>
+        <a href="{% url 'staff_workspace:finance' %}"{% if workspace_section == 'finance' %} aria-current="page"{% endif %} title="Начисления и оплаты — Расчёты, платежи и долги" data-hint="Расчёты, платежи и долги"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Начисления и оплаты</span><small class="nav-hint">Расчёты, платежи и долги</small></a>
 {% endif %}
-        <p class="ws-nav-group">ТСН</p>
+        <p class="ws-nav-group" title="Сайт, правление и служебные разделы">ТСН</p>
 {% if can_view_documents %}
-        <a href="{% url 'staff_workspace:documents' %}"{% if workspace_section == 'documents' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#document"></use></svg><span>Сайт</span></a>
+        <a href="{% url 'staff_workspace:documents' %}"{% if workspace_section == 'documents' %} aria-current="page"{% endif %} title="Сайт — Публикации сайта и документы жителей" data-hint="Публикации сайта и документы жителей"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#document"></use></svg><span>Сайт</span><small class="nav-hint">Публикации сайта и документы жителей</small></a>
 {% endif %}
 {% if can_view_governance %}
-        <a href="{% url 'staff_workspace:governance' %}"{% if workspace_section == 'governance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#ballot"></use></svg><span>Опросы правления</span></a>
+        <a href="{% url 'staff_workspace:governance' %}"{% if workspace_section == 'governance' %} aria-current="page"{% endif %} title="Опросы правления — Вопросы и предварительные ответы правления" data-hint="Вопросы и предварительные ответы правления"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#ballot"></use></svg><span>Опросы правления</span><small class="nav-hint">Вопросы и предварительные ответы правления</small></a>
 {% endif %}
 {% if can_view_security_alerts %}
-        <a href="{% url 'staff_workspace:security' %}"{% if workspace_section == 'security' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg><span>Безопасность</span>{% if security_alert_count %}<b class="ws-nav-count">{{ security_alert_count }}</b>{% endif %}</a>
+        <a href="{% url 'staff_workspace:security' %}"{% if workspace_section == 'security' %} aria-current="page"{% endif %} title="Безопасность — Подозрительные вложения и сигналы" data-hint="Подозрительные вложения и сигналы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg><span>Безопасность</span>{% if security_alert_count %}<b class="ws-nav-count">{{ security_alert_count }}</b>{% endif %}<small class="nav-hint">Подозрительные вложения и сигналы</small></a>
 {% endif %}
-        {% if forum_moderator %}<a href="{% url 'forum_moderation' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Жалобы форума</span></a>{% endif %}
-        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span></a>
+        {% if forum_moderator %}<a href="{% url 'forum_moderation' %}" title="Жалобы форума — Сообщения, на которые пожаловались участники" data-hint="Сообщения, на которые пожаловались участники"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Жалобы форума</span><small class="nav-hint">Сообщения, на которые пожаловались участники</small></a>{% endif %}
+        <a href="{% url 'staff_workspace:more' %}"{% if workspace_section == 'more' %} aria-current="page"{% endif %} title="Ещё — Остальные разделы и служебные функции" data-hint="Остальные разделы и служебные функции"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span><small class="nav-hint">Остальные разделы и служебные функции</small></a>
       </nav>
       <div class="ws-sidebar-foot">
         <span>{{ request.user.get_full_name|default:request.user.username }}</span>
@@ -93,10 +94,10 @@
   </div>
 
   <nav class="ws-bottom-nav" aria-label="Мобильная навигация">
-    <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная</a>
-    {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<a href="{% url 'staff_workspace:more' %}#residents"{% if workspace_section == 'accounts' or workspace_section == 'search' or workspace_section == 'appeals' or workspace_section == 'access' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg>Жители</a>{% endif %}
-    {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<a href="{% url 'staff_workspace:more' %}#operations"{% if workspace_section == 'water' or workspace_section == 'finance' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg>Хозяйство</a>{% endif %}
-    <a href="{% url 'staff_workspace:more' %}#tsn"{% if workspace_section == 'documents' or workspace_section == 'governance' or workspace_section == 'security' or workspace_section == 'more' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg>ТСН</a>
+    <a href="{% url 'staff_workspace:home' %}"{% if workspace_section == 'home' %} aria-current="page"{% endif %} title="Главная — Текущие дела и быстрые переходы" data-hint="Текущие дела и быстрые переходы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная</a>
+    {% if can_view_accounts or can_view_appeals or can_use_access_workspace %}<a href="{% url 'staff_workspace:more' %}#residents"{% if workspace_section == 'accounts' or workspace_section == 'search' or workspace_section == 'appeals' or workspace_section == 'access' %} aria-current="page"{% endif %} title="Жители — Участки, обращения и доступы жителей" data-hint="Участки, обращения и доступы жителей"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg>Жители</a>{% endif %}
+    {% if can_view_water or can_use_controller_workspace or can_use_finance_workspace %}<a href="{% url 'staff_workspace:more' %}#operations"{% if workspace_section == 'water' or workspace_section == 'finance' %} aria-current="page"{% endif %} title="Хозяйство — Вода, счётчики и показания" data-hint="Вода, счётчики и показания"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg>Хозяйство</a>{% endif %}
+    <a href="{% url 'staff_workspace:more' %}#tsn"{% if workspace_section == 'documents' or workspace_section == 'governance' or workspace_section == 'security' or workspace_section == 'more' %} aria-current="page"{% endif %} title="ТСН — Сайт, правление и служебные разделы" data-hint="Сайт, правление и служебные разделы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg>ТСН</a>
   </nav>
   <script src="{% static 'water/workspace-nav-2026.js' %}" defer></script>
 </body>

@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Доступ жителей{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-access' help_one="Найдите человека, участок или заявку." help_two="Проверьте, кому и на какой срок выдан доступ." help_three="Для назначения роли откройте «Люди и полномочия»." %}
+
 <section class="ws-page-head">
   <div>
     <p class="ws-eyebrow">Рабочий процесс</p>
@@ -87,7 +89,7 @@
     </a>
     {% endfor %}
   </div>
-  {% else %}<div class="ws-empty"><strong>Доступов в этом фильтре нет.</strong><p>История не удаляется; завершённые записи доступны отдельным фильтром.</p></div>{% endif %}
+  {% else %}<div class="ws-empty"><strong>Доступов в этом фильтре нет.</strong><p>Выберите другой фильтр. История не удаляется; завершённые записи доступны отдельным фильтром.</p></div>{% endif %}
 </section>
 
 <section class="ws-section" id="active-invites">
@@ -101,7 +103,7 @@
     </tr>{% endfor %}
     </tbody></table>
   </div>
-  {% else %}<div class="ws-empty"><strong>Активных приглашений нет.</strong><p>Использованные, просроченные и отозванные ссылки не считаются активными.</p></div>{% endif %}
+  {% else %}<div class="ws-empty"><strong>Активных приглашений нет.</strong><p>Для нового приглашения откройте карточку человека. Использованные, просроченные и отозванные ссылки не считаются активными.</p></div>{% endif %}
 </section>
 
 <section class="ws-section" id="active-resets">

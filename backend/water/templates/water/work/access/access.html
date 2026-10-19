@@ -54,6 +54,6 @@
       {% for reset in resets %}<tr><td>до {{ reset.expires_at|date:'d.m.Y H:i' }}</td><td>{{ reset.used_at|date:'d.m.Y H:i'|default:'—' }}</td><td>{% if reset.revoked %}Да{% else %}Нет{% endif %}</td></tr>{% endfor %}
     </tbody></table>
   </div>
-  {% else %}<div class="ws-empty"><strong>Ссылок восстановления ещё не создавали.</strong></div>{% endif %}
+  {% else %}<div class="ws-empty"><strong>Ссылок восстановления ещё не создавали. При необходимости используйте «Создать ссылку восстановления», если кнопка доступна.</strong></div>{% endif %}
 </section>
 {% endblock %}

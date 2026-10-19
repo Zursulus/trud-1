@@ -36,8 +36,13 @@ def available_email(user, email):
 
 
 class BindingForm(forms.Form):
-    email = forms.EmailField(label='Почта', max_length=254)
-    password = forms.CharField(label='Текущий пароль', widget=forms.PasswordInput, required=False)
+    email = forms.EmailField(label='Почта', max_length=254, widget=forms.EmailInput(attrs={
+        'autocomplete': 'email', 'inputmode': 'email',
+        'autocapitalize': 'off', 'spellcheck': 'false',
+    }))
+    password = forms.CharField(label='Текущий пароль', required=False, widget=forms.PasswordInput(attrs={
+        'autocomplete': 'current-password',
+    }))
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)

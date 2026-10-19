@@ -277,21 +277,21 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
                         wait_until="networkidle",
                     )
                     page.get_by_role("link", name="Редактировать карточку", exact=True).click()
-                    page.locator("#id_plot").fill(f"Горная 2 · {engine}")
+                    page.locator("#id_plot").fill(f"участок 12 · {engine}")
                     page.locator("#id_phone").fill("+79990000022")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
                     page.wait_for_url(f"{self.live_server_url}/work/accounts/{self.account.pk}/")
-                    expect(page.get_by_role("heading", name=f"Горная 2 · {engine}", exact=True)).to_be_visible()
+                    expect(page.get_by_role("heading", name=f"участок 12 · {engine}", exact=True)).to_be_visible()
 
                     page.goto(
                         f"{self.live_server_url}/work/panel/?kind=plot&id={self.plot.pk}",
                         wait_until="networkidle",
                     )
                     page.get_by_role("link", name="Изменить адрес", exact=True).click()
-                    page.locator("#id_address").fill(f"Горная 2, ориентир {engine}")
+                    page.locator("#id_address").fill(f"участок 12, ориентир {engine}")
                     page.get_by_role("button", name="Сохранить изменения", exact=True).click()
                     page.wait_for_url(f"{self.live_server_url}/work/accounts/{self.account.pk}/")
-                    expect(page.get_by_text(f"Горная 2, ориентир {engine}", exact=False)).to_be_visible()
+                    expect(page.get_by_text(f"участок 12, ориентир {engine}", exact=False)).to_be_visible()
                     self.assertTrue(page.evaluate(
                         "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                     ))
@@ -311,8 +311,8 @@ class StaffRegistryEditorBrowserTests(StaticLiveServerTestCase):
         self.plot.refresh_from_db()
         self.assertEqual(self.person.phone, "+79990000011")
         self.assertEqual(self.account.phone, "+79990000022")
-        self.assertTrue(self.account.plot.startswith("Горная 2"))
-        self.assertTrue(self.plot.address.startswith("Горная 2, ориентир"))
+        self.assertTrue(self.account.plot.startswith("участок 12"))
+        self.assertTrue(self.plot.address.startswith("участок 12, ориентир"))
         self.assertGreaterEqual(self.person.history.count(), 3)
         self.assertGreaterEqual(self.account.history.count(), 3)
         self.assertGreaterEqual(self.plot.history.count(), 3)

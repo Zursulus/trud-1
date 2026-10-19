@@ -56,7 +56,7 @@ class StaffRegistryEditorTests(TestCase):
         response = self.client.post(
             f"/work/accounts/{self.account.pk}/edit/",
             {
-                "plot": "Горная 2",
+                "plot": "участок 12",
                 "contact_name": "Новый контакт",
                 "phone": "+79990000001",
                 "notes": "",
@@ -66,7 +66,7 @@ class StaffRegistryEditorTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.account.refresh_from_db()
         self.plot.refresh_from_db()
-        self.assertEqual(self.account.plot, "Горная 2")
+        self.assertEqual(self.account.plot, "участок 12")
         self.assertEqual(self.account.phone, "+79990000001")
         self.assertEqual(self.plot.address, "Старый ориентир")
 
@@ -74,7 +74,7 @@ class StaffRegistryEditorTests(TestCase):
             f"/work/plots/{self.plot.pk}/edit/",
             {
                 "label": self.plot.label,
-                "address": "Горная 2, новый ориентир",
+                "address": "участок 12, новый ориентир",
                 "cadastral_number": "",
                 "area_m2": "",
                 "notes": "",
@@ -83,7 +83,7 @@ class StaffRegistryEditorTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.plot.refresh_from_db()
-        self.assertEqual(self.plot.address, "Горная 2, новый ориентир")
+        self.assertEqual(self.plot.address, "участок 12, новый ориентир")
         self.assertGreaterEqual(self.plot.history.count(), 2)
 
     def test_stale_person_form_does_not_overwrite_newer_change(self):

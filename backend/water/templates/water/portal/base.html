@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="{% static 'water/portal-2026.css' %}?v=2">
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'water/internal-nav.css' %}">
+  {% include 'includes/password_visibility.html' %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <a class="portal-skip-link" href="#portal-content">К содержимому</a>
@@ -25,24 +26,24 @@
   <a class="desktop-brand" href="{% if account %}{% url 'resident_account' account.pk %}{% else %}{% url 'resident_dashboard' %}{% endif %}"><img src="{% static 'water/brand-sea.svg' %}" alt=""><span><strong>ТСН «Труд-1»</strong><small>Орджоникидзе, Крым</small></span></a>
   <nav class="desktop-nav" aria-label="Основная навигация">
     {% if account %}
-    <a class="{% if not active_section or active_section == 'home' %}active{% endif %}" href="{% url 'resident_account' account.pk %}"{% if active_section == 'home' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная</a>
-    <a class="{% if active_section == 'plots' %}active{% endif %}" href="{% url 'resident_plots' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg>Мои участки</a>
-    <a class="{% if active_section == 'water' %}active{% endif %}" href="{% url 'resident_water' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg>Вода</a>
-    {% if access.can_view_finance %}<a class="{% if active_section == 'payments' %}active{% endif %}" href="{% url 'resident_payments' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg>Платежи</a>{% endif %}
-    {% if access.can_use_appeals %}<a href="{% url 'resident_appeals' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#message"></use></svg>Обращения</a>{% endif %}
-    {% if access.can_view_documents %}<a href="{% url 'resident_documents' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#document"></use></svg>Документы</a>{% endif %}
-    {% if board_member %}<a href="{% url 'board_poll_home' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#ballot"></use></svg>Опросы правления</a>{% endif %}
-    <a href="{% url 'resident_notifications' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#bell"></use></svg>Уведомления</a>
+    <a class="{% if not active_section or active_section == 'home' %}active{% endif %}" href="{% url 'resident_account' account.pk %}"{% if active_section == 'home' %} aria-current="page"{% endif %} title="Главная — Текущие дела и быстрые переходы" data-hint="Текущие дела и быстрые переходы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Главная<small class="nav-hint">Текущие дела и быстрые переходы</small></a>
+    <a class="{% if active_section == 'plots' %}active{% endif %}" href="{% url 'resident_plots' %}" title="Мои участки — Выбор участка для просмотра данных" data-hint="Выбор участка для просмотра данных"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg>Мои участки<small class="nav-hint">Выбор участка для просмотра данных</small></a>
+    <a class="{% if active_section == 'water' %}active{% endif %}" href="{% url 'resident_water' account.pk %}" title="Вода — Показания счётчиков и их история" data-hint="Показания счётчиков и их история"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg>Вода<small class="nav-hint">Показания счётчиков и их история</small></a>
+    {% if access.can_view_finance %}<a class="{% if active_section == 'payments' %}active{% endif %}" href="{% url 'resident_payments' account.pk %}" title="Платежи — Начисления, оплаты и сумма долга" data-hint="Начисления, оплаты и сумма долга"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg>Платежи<small class="nav-hint">Начисления, оплаты и сумма долга</small></a>{% endif %}
+    {% if access.can_use_appeals %}<a href="{% url 'resident_appeals' account.pk %}" title="Обращения — Переписка с правлением по вопросам участка" data-hint="Переписка с правлением по вопросам участка"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#message"></use></svg>Обращения<small class="nav-hint">Переписка с правлением по вопросам участка</small></a>{% endif %}
+    {% if access.can_view_documents %}<a href="{% url 'resident_documents' account.pk %}" title="Документы — Материалы ТСН и вашего участка" data-hint="Материалы ТСН и вашего участка"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#document"></use></svg>Документы<small class="nav-hint">Материалы ТСН и вашего участка</small></a>{% endif %}
+    {% if board_member %}<a href="{% url 'board_poll_home' %}" title="Опросы правления — Вопросы и предварительные ответы правления" data-hint="Вопросы и предварительные ответы правления"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#ballot"></use></svg>Опросы правления<small class="nav-hint">Вопросы и предварительные ответы правления</small></a>{% endif %}
+    <a href="{% url 'resident_notifications' account.pk %}" title="Уведомления — Новые события по вашему участку" data-hint="Новые события по вашему участку"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#bell"></use></svg>Уведомления<small class="nav-hint">Новые события по вашему участку</small></a>
     {% else %}
-    <a href="{% url 'resident_dashboard' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Кабинет</a>
+    <a href="{% url 'resident_dashboard' %}" title="Кабинет — Ваши участки, вода и платежи" data-hint="Ваши участки, вода и платежи"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg>Кабинет<small class="nav-hint">Ваши участки, вода и платежи</small></a>
     {% endif %}
-    {% if forum_enabled %}<a class="{% if active_section == 'forum' %}active{% endif %}" href="{% url 'forum:index' %}"{% if active_section == 'forum' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg>Обсуждения</a>{% endif %}
+    {% if forum_enabled %}<a class="{% if active_section == 'forum' %}active{% endif %}" href="{% url 'forum:index' %}"{% if active_section == 'forum' %} aria-current="page"{% endif %} title="Обсуждения — Вопросы и разговоры с соседями" data-hint="Вопросы и разговоры с соседями"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg>Обсуждения<small class="nav-hint">Вопросы и разговоры с соседями</small></a>{% endif %}
     {% if account %}
     <div class="desktop-nav-sep"></div>
-    <a href="{% url 'resident_profile' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg>Мои данные</a>
-    <a href="{% url 'resident_security' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg>Безопасность</a>
+    <a href="{% url 'resident_profile' account.pk %}" title="Мои данные — Ваши участки и выданные права" data-hint="Ваши участки и выданные права"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#user"></use></svg>Мои данные<small class="nav-hint">Ваши участки и выданные права</small></a>
+    <a href="{% url 'resident_security' account.pk %}" title="Безопасность — Проверка входа и доступных настроек" data-hint="Проверка входа и доступных настроек"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#shield"></use></svg>Безопасность<small class="nav-hint">Проверка входа и доступных настроек</small></a>
     {% endif %}
-    {% if request.user.is_staff %}<div class="desktop-nav-sep"></div><a href="{% url 'staff_workspace:home' %}">↔ Рабочая база</a>{% endif %}
+    {% if request.user.is_staff %}<div class="desktop-nav-sep"></div><a href="{% url 'staff_workspace:home' %}" title="↔ Рабочая база — Откройте нужный раздел рабочей базы" data-hint="Откройте нужный раздел рабочей базы">↔ Рабочая база<small class="nav-hint">Откройте нужный раздел рабочей базы</small></a>{% endif %}
   </nav>
 </aside>
 {% endif %}
@@ -54,12 +55,12 @@
 </div>
 {% if request.user.is_authenticated and access and account %}
 <nav class="bottom-nav{% if forum_enabled %} forum-enabled{% endif %}" aria-label="Основная навигация">
-  <a class="{% if not active_section or active_section == 'home' %}active{% endif %}" href="{% url 'resident_account' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Главная</span></a>
-  <a class="{% if active_section == 'plots' %}active{% endif %}" href="{% url 'resident_plots' %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Участки</span></a>
-  <a class="{% if active_section == 'water' %}active{% endif %}" href="{% url 'resident_water' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Вода</span></a>
-  {% if access.can_view_finance %}<a class="{% if active_section == 'payments' %}active{% endif %}" href="{% url 'resident_payments' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Платежи</span></a>{% endif %}
-  {% if forum_enabled %}<a class="{% if active_section == 'forum' %}active{% endif %}" href="{% url 'forum:index' %}"{% if active_section == 'forum' %} aria-current="page"{% endif %}><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Обсуждения</span></a>{% endif %}
-  <a class="{% if active_section == 'more' %}active{% endif %}" href="{% url 'resident_more' account.pk %}"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span></a>
+  <a class="{% if not active_section or active_section == 'home' %}active{% endif %}" href="{% url 'resident_account' account.pk %}" title="Главная — Текущие дела и быстрые переходы" data-hint="Текущие дела и быстрые переходы"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#home"></use></svg><span>Главная</span></a>
+  <a class="{% if active_section == 'plots' %}active{% endif %}" href="{% url 'resident_plots' %}" title="Участки — Выбор участка для просмотра данных" data-hint="Выбор участка для просмотра данных"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#plots"></use></svg><span>Участки</span></a>
+  <a class="{% if active_section == 'water' %}active{% endif %}" href="{% url 'resident_water' account.pk %}" title="Вода — Показания счётчиков и их история" data-hint="Показания счётчиков и их история"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#water"></use></svg><span>Вода</span></a>
+  {% if access.can_view_finance %}<a class="{% if active_section == 'payments' %}active{% endif %}" href="{% url 'resident_payments' account.pk %}" title="Платежи — Начисления, оплаты и сумма долга" data-hint="Начисления, оплаты и сумма долга"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#payment"></use></svg><span>Платежи</span></a>{% endif %}
+  {% if forum_enabled %}<a class="{% if active_section == 'forum' %}active{% endif %}" href="{% url 'forum:index' %}"{% if active_section == 'forum' %} aria-current="page"{% endif %} title="Обсуждения — Вопросы и разговоры с соседями" data-hint="Вопросы и разговоры с соседями"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#forum"></use></svg><span>Обсуждения</span></a>{% endif %}
+  <a class="{% if active_section == 'more' %}active{% endif %}" href="{% url 'resident_more' account.pk %}" title="Ещё — Остальные разделы и служебные функции" data-hint="Остальные разделы и служебные функции"><svg aria-hidden="true"><use href="{% static 'water/portal-icons.svg' %}#more"></use></svg><span>Ещё</span></a>
 </nav>
 {% endif %}
 </body></html>

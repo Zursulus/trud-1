@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Люди и полномочия{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-people' help_one="Найдите человека по имени." help_two="Откройте карточку и проверьте его права." %}
+
 <nav class="ws-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'staff_workspace:access' %}">Доступы</a><span>›</span><span>Люди и полномочия</span></nav>
 <section class="ws-page-head">
   <div><p class="ws-eyebrow">Единый контур Person</p><h1>Люди и полномочия</h1><p>Один человек может одновременно быть жителем, старшим линии, контролёром, членом ТСН и правления. Роли не подменяют бизнес-статусы.</p></div>

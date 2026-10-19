@@ -18,8 +18,8 @@ class AccessControlV2Tests(TestCase):
             username='rights-admin', email='admin@example.test', is_staff=True,
         )
         self.node = SupplyNode.objects.create(name='Общий узел')
-        self.line = WaterGroup.objects.create(name='Миндальная', node=self.node)
-        self.account = Account.objects.create(number='A-1', plot='Горная 2')
+        self.line = WaterGroup.objects.create(name='линия А', node=self.node)
+        self.account = Account.objects.create(number='A-1', plot='участок 12')
         Membership.objects.create(
             account=self.account, group=self.line, starts=date(2026, 1, 1),
         )

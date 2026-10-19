@@ -1,6 +1,8 @@
 {% extends 'water/work/base.html' %}
 {% block title %}Финансы{% endblock %}
 {% block content %}
+{% include 'includes/page_help.html' with help_key='work-finance' help_one="Посмотрите начисления и оплаты." help_two="Выберите расчётный период или найдите счёт." help_three="Перед подтверждением проверьте сумму и дату." %}
+
 <section class="ws-page-head">
   <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Финансы</h1><p>Расчёт начислений, проверка оплат, распределение и баланс.</p></div>
   <div class="ws-actions">
@@ -31,7 +33,7 @@
       <span><strong>{{ period.starts|date:'d.m.Y' }}–{{ period.ends|date:'d.m.Y' }}</strong><br><small>{{ period.get_status_display }}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
     </a>
     {% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Расчётных периодов пока нет</strong><p>Создание правил и периодов остаётся в служебном интерфейсе.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Расчётных периодов пока нет</strong><p>Для создания периода обратитесь к сотруднику, у которого есть доступ к технической админке.</p></div>{% endif %}
 </section>
 
 <section class="ws-section">
@@ -42,7 +44,7 @@
       <span><strong>{{ payment.amount }} ₽ · {{ payment.account.plot|default:payment.account.number }}</strong><br><small>{{ payment.paid_on|date:'d.m.Y' }} · {{ payment.get_status_display }}{% if payment.status == 'confirmed' and payment.remaining > 0 %} · остаток {{ payment.remaining }} ₽{% endif %}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
     </a>
     {% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Оплат пока нет</strong><p>Новая оплата сначала попадает на проверку.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Оплат пока нет</strong><p>Если нужно добавить платёж, используйте «Внести оплату» при наличии этой кнопки. Новая оплата сначала попадает на проверку.</p></div>{% endif %}
 </section>
 
 <section class="ws-section ws-muted-panel">

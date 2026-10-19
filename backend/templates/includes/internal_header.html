@@ -1,8 +1,8 @@
-{% load static %}<script src="{% static 'water/internal-nav.js' %}" defer></script>
+{% load static ui_hints %}<link rel="stylesheet" href="{% static 'water/ui-hints.css' %}?v=20261019"><script src="{% static 'water/ui-hints.js' %}?v=20261019" defer></script><script src="{% static 'water/internal-nav.js' %}" defer></script>
 <header class="internal-header">
 <a class="internal-brand" href="/">ТСН «Труд-1»</a>
 <details class="internal-menu" open><summary aria-label="Меню"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></summary>
-<nav aria-label="Общая навигация">{% for item in internal_nav %}<a href="{{ item.url }}"{% if item.key == internal_active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
+<nav aria-label="Общая навигация">{% for item in internal_nav %}<a href="{{ item.url }}"{% if item.key == internal_active %} aria-current="page"{% endif %} title="{{ item.label }} — {{ item.label|navigation_hint }}" data-hint="{{ item.label|navigation_hint }}"><span>{{ item.label }}<small class="nav-hint">{{ item.label|navigation_hint }}</small></span></a>{% endfor %}
 </nav>
 </details>
 {% if request.user.is_authenticated %}<form class="internal-logout" method="post" action="{% url 'resident_logout' %}">{% csrf_token %}{% if internal_logout_next %}<input type="hidden" name="next" value="{{ internal_logout_next }}">{% endif %}<button type="submit">{{ internal_logout_label|default:'Выйти' }}</button></form>{% endif %}
