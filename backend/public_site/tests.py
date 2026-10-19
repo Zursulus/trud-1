@@ -130,7 +130,11 @@ class PublicContentTests(TestCase):
         self.assertIn('Администрация города Феодосии', letter)
         self.assertIn('текстовая копия', letter)
         self.assertNotIn('Вечер в Орджоникидзе', index)
-        self.assertNotIn('ordzhonikidze-sunset.webp', index)
+        self.assertNotIn('ordzhonikidze-sunset.webp', index)  # фон задаётся в style.css, без подписи
+        style = (root / 'style.css').read_text(encoding='utf-8')
+        self.assertIn('ordzhonikidze-sunset.webp', style)
+        self.assertIn('class="sunset-stage"', index)
+        self.assertEqual(index.count('<main'), 1)
         self.assertIn('Загружаем новости…', index)
         self.assertNotIn('Следующий материал', index)
         self.assertNotIn('fallbackArticles', script)

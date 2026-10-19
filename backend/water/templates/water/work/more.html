@@ -42,6 +42,7 @@
   <div class="ws-service-details-body">
     <p>Технический интерфейс для редких административных операций.</p>
     <a class="ws-menu-row" href="{{ admin_url }}" title="Редкие служебные операции с данными" data-hint="Редкие служебные операции с данными"><span class="ws-menu-copy"><strong>Техническая админка</strong><small aria-hidden="true">Редкие служебные операции с данными</small></span></a>
+    {% if can_view_db_map %}<a class="ws-menu-row" href="{% url 'staff_workspace:db_map' %}" data-hint="Как связаны таблицы сайта. Только просмотр"><span class="ws-menu-copy"><strong>Схема базы</strong><small aria-hidden="true">Как связаны таблицы сайта. Только просмотр</small></span></a>{% endif %}
   </div>
 </details>
 {% endif %}

@@ -1,0 +1,17 @@
+#db-map { min-width: 0; }
+.db-map-filters, .db-map-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+.db-map-filters label { border-left: 5px solid var(--section-color); padding: 6px; background: #fff; border-radius: 4px; }
+.db-map-tools button { min-height: 44px; min-width: 44px; cursor: pointer; }
+.db-map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 300px); gap: 12px; }
+.db-map-canvas { display: block; width: 100%; height: 65vh; min-height: 350px; background: #f3f6f8; border: 1px solid #aab8c0; touch-action: none; cursor: grab; }
+.db-map-node { cursor: grab; }
+.db-map-node:focus rect { stroke: #111; stroke-width: 3; }
+.db-map-node text { fill: #172b39; font: 14px sans-serif; user-select: none; pointer-events: none; }
+.db-map-node .db-map-model { font-size: 12px; }
+.db-map-link { fill: none; stroke: #8a98a4; stroke-width: 1.5; }
+.db-map-link-label { font: 11px sans-serif; fill: #344b5b; paint-order: stroke; stroke: #f3f6f8; stroke-width: 4px; pointer-events: none; }
+.db-map-details { background: #fff; padding: 12px; max-height: 65vh; overflow: auto; overflow-wrap: anywhere; border: 1px solid #ccd6dc; }
+.db-map-details h2 { font-size: 18px; }
+.db-map-details ul { padding-left: 18px; }
+.db-map-details li { margin-bottom: 12px; }
+@media (max-width: 700px) { .db-map-layout { grid-template-columns: minmax(0, 1fr); } .db-map-canvas { height: 55vh; } .db-map-details { max-height: 40vh; } }

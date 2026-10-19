@@ -5,6 +5,7 @@ from .access_policy import CAPABILITIES, ROLE_TEMPLATES, ScopeType
 from .portal_permissions import has_any_portal_access
 from .staff_workspace import _base_context
 from .staff_workbench import can_use_workbench
+from .staff_db_map import can_view_db_map
 
 
 ROLES_GUIDE_VERSION = "1.2"
@@ -13,6 +14,7 @@ ROLES_GUIDE_UPDATED = "19.10.2026"
 
 def more(request):
     context = _base_context(request, section="more")
+    context["can_view_db_map"] = can_view_db_map(request.user, context)
     context["roles_guide_version"] = ROLES_GUIDE_VERSION
     context["can_use_workbench"] = can_use_workbench(request.user)
     context["has_resident_access"] = has_any_portal_access(request.user)

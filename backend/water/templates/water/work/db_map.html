@@ -1,0 +1,25 @@
+{% extends 'water/work/base.html' %}
+{% load static %}
+{% block title %}Схема базы{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'water/db-map.css' %}">
+<p><a href="{% url 'staff_workspace:more' %}">← Ещё</a></p>
+<h1>Схема базы</h1>
+<p>Как связаны таблицы сайта. Только просмотр. Перетаскивайте таблицы или фон, выбирайте таблицу, чтобы увидеть поля. Стрелка ведёт от поля к связанной таблице.</p>
+<div id="db-map">
+  <div class="db-map-filters" aria-label="Разделы схемы"></div>
+  <div class="db-map-tools">
+    <button type="button" data-action="in" aria-label="Увеличить">+</button>
+    <button type="button" data-action="out" aria-label="Уменьшить">−</button>
+    <button type="button" data-action="reset">Сбросить расположение</button>
+    <output aria-label="Масштаб"></output>
+  </div>
+  <div class="db-map-layout">
+    <svg class="db-map-canvas" aria-label="Интерактивная схема таблиц" tabindex="0"></svg>
+    <aside class="db-map-details" aria-label="Поля таблицы" aria-live="polite">Выберите таблицу на схеме.</aside>
+  </div>
+</div>
+<noscript>Для интерактивной схемы включите JavaScript.</noscript>
+{{ db_schema|json_script:'db-map-data' }}
+<script src="{% static 'water/db-map.js' %}" defer></script>
+{% endblock %}
