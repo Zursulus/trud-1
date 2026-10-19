@@ -48,6 +48,7 @@ a{color:inherit;text-decoration:none}
 }
 .sunset-stage .brand,.sunset-stage .header nav a,.sunset-stage .header nav .nav-important{color:#fff}
 .sunset-stage .brand-icon{border-color:rgba(255,255,255,.55)}
+.sunset-stage .notice-text,.sunset-stage .notice-caption{color:#e3eaec}
 .brand{
   display:flex;
   align-items:center;
