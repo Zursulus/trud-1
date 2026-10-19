@@ -69,3 +69,5 @@
 .hint-menu-group > summary small, .ws-service-details > summary small {
   display: block; margin-top: 4px; color: #536d78; font-size: 12px; font-weight: 400;
 }
+
+.empty-state-hint { margin: 8px 12px 16px; color: #506270; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }

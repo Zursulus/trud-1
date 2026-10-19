@@ -88,7 +88,7 @@ class InvitationReadinessBrowserTests(StaticLiveServerTestCase):
                     self.assertTrue(page.get_by_text('Пароли не совпадают.').is_visible())
                     self.assertEqual(page.locator('#id_password2').get_attribute('aria-invalid'), 'true')
                     self.assertGreaterEqual(page.locator('#id_password2').bounding_box()['height'], 44)
-                    self.assertGreaterEqual(page.get_by_role('button').bounding_box()['height'], 44)
+                    self.assertGreaterEqual(page.get_by_role('button', name='Создать защищённый доступ', exact=True).bounding_box()['height'], 44)
                     self._check_page(page, label)
                 finally:
                     context.close()

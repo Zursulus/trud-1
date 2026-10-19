@@ -49,7 +49,7 @@
   </a>
   {% endfor %}
   {% if not public_documents and not personal_documents and not news and not appeal_attachments %}
-  <div class="empty-state">{% if document_kind == 'mine' %}Личных документов и вложений пока нет.{% elif document_kind == 'common' %}Общих документов и новостей пока нет.{% else %}Документов пока нет.{% endif %} Выберите другой раздел или загляните сюда позже.</div>
+  <div class="empty-state">{% if document_kind == 'mine' %}Личных документов и вложений пока нет.{% elif document_kind == 'common' %}Общих документов и новостей пока нет.{% else %}Документов пока нет.{% endif %}</div><p class="empty-state-hint">Выберите другой раздел или загляните сюда позже.</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -33,7 +33,7 @@
       <span><strong>{{ period.starts|date:'d.m.Y' }}–{{ period.ends|date:'d.m.Y' }}</strong><br><small>{{ period.get_status_display }}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
     </a>
     {% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Расчётных периодов пока нет</strong><p>Для создания периода обратитесь к сотруднику, у которого есть доступ к технической админке.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Расчётных периодов пока нет</strong><p>Создание правил и периодов остаётся в служебном интерфейсе.</p></div><p class="empty-state-hint">Для создания периода обратитесь к сотруднику, у которого есть доступ к технической админке.</p>{% endif %}
 </section>
 
 <section class="ws-section">
@@ -44,7 +44,7 @@
       <span><strong>{{ payment.amount }} ₽ · {{ payment.account.plot|default:payment.account.number }}</strong><br><small>{{ payment.paid_on|date:'d.m.Y' }} · {{ payment.get_status_display }}{% if payment.status == 'confirmed' and payment.remaining > 0 %} · остаток {{ payment.remaining }} ₽{% endif %}</small></span><span class="ws-chevron" aria-hidden="true">›</span>
     </a>
     {% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Оплат пока нет</strong><p>Если нужно добавить платёж, используйте «Внести оплату» при наличии этой кнопки. Новая оплата сначала попадает на проверку.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Оплат пока нет</strong><p>Новая оплата сначала попадает на проверку.</p></div><p class="empty-state-hint">Если нужно добавить платёж, используйте «Внести оплату» при наличии этой кнопки.</p>{% endif %}
 </section>
 
 <section class="ws-section ws-muted-panel">

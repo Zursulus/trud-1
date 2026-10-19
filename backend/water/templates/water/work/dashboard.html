@@ -39,8 +39,8 @@
 {% else %}
 <section class="ws-empty ws-section">
   <strong>Срочных действий нет</strong>
-  <p>Новые задачи появятся здесь автоматически. Для обычной работы выберите раздел в меню.</p>
-</section>
+  <p>Новые задачи появятся здесь автоматически.</p>
+</section><p class="empty-state-hint">Для обычной работы выберите раздел в меню.</p>
 {% endif %}
 
 {% if can_use_controller_workspace %}
@@ -68,6 +68,6 @@
 </section>
 {% endif %}
 {% if management_links %}
-<section class="ws-card"><h2>Управление</h2><p>Служебные инструменты по вашим полномочиям.</p><nav class="management-links" aria-label="Разделы управления">{% for item in management_links %}<a class="ws-secondary" href="{{ item.url }}" title="{{ item.label|navigation_hint }}" data-hint="{{ item.label|navigation_hint }}"><span>{{ item.label }}<small class="nav-hint">{{ item.label|navigation_hint }}</small></span></a>{% endfor %}</nav></section>
+<section class="ws-card"><h2>Управление</h2><p>Служебные инструменты по вашим полномочиям.</p><nav class="management-links" aria-label="Разделы управления">{% for item in management_links %}<a class="ws-secondary" href="{{ item.url }}" title="{{ item.label|navigation_hint }}" data-hint="{{ item.label|navigation_hint }}"><span>{{ item.label }}<small class="nav-hint" aria-hidden="true">{{ item.label|navigation_hint }}</small></span></a>{% endfor %}</nav></section>
 {% endif %}
 {% endblock %}

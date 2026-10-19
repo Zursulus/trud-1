@@ -89,7 +89,7 @@
     </a>
     {% endfor %}
   </div>
-  {% else %}<div class="ws-empty"><strong>Доступов в этом фильтре нет.</strong><p>Выберите другой фильтр. История не удаляется; завершённые записи доступны отдельным фильтром.</p></div>{% endif %}
+  {% else %}<div class="ws-empty"><strong>Доступов в этом фильтре нет.</strong><p>История не удаляется; завершённые записи доступны отдельным фильтром.</p></div><p class="empty-state-hint">Выберите другой фильтр.</p>{% endif %}
 </section>
 
 <section class="ws-section" id="active-invites">
@@ -103,7 +103,7 @@
     </tr>{% endfor %}
     </tbody></table>
   </div>
-  {% else %}<div class="ws-empty"><strong>Активных приглашений нет.</strong><p>Для нового приглашения откройте карточку человека. Использованные, просроченные и отозванные ссылки не считаются активными.</p></div>{% endif %}
+  {% else %}<div class="ws-empty"><strong>Активных приглашений нет.</strong><p>Использованные, просроченные и отозванные ссылки не считаются активными.</p></div><p class="empty-state-hint">Для нового приглашения откройте карточку человека.</p>{% endif %}
 </section>
 
 <section class="ws-section" id="active-resets">

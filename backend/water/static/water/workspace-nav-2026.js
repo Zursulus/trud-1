@@ -3,7 +3,7 @@
   const mobile = window.matchMedia('(max-width: 760px)');
   const groups = document.querySelectorAll('.hint-menu-group');
   const expandGroup = () => {
-    groups.forEach(group => { group.open = !mobile.matches || `#${group.id}` === location.hash; });
+    groups.forEach(group => { group.open = !mobile.matches || !location.hash || `#${group.id}` === location.hash; });
   };
   mobile.addEventListener('change', expandGroup);
   window.addEventListener('hashchange', expandGroup);

@@ -55,7 +55,7 @@
       <span class="ws-result-type">{{ item.category.name }} · {{ item.site_status }}</span>
       <strong>{{ item.title }}</strong><p>{{ item.document_date|date:'d.m.Y' }} · {{ item.original_name }}</p>
     </div><span class="ws-chevron" aria-hidden="true">›</span></a><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:public_document' item.pk %}">Изменить</a><a class="ws-secondary" href="{% url 'staff_workspace:public_document_download' item.pk %}">Предпросмотр файла</a>{% if can_publish_documents %}<a class="ws-secondary" href="{% url 'staff_workspace:public_document' item.pk %}#id_is_published">Опубликовать</a>{% endif %}</div>{% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Публичных документов не найдено.</strong><p>Измените поиск. Если нужно добавить документ, обратитесь к ответственному за публикации.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Публичных документов не найдено.</strong></div><p class="empty-state-hint">Измените поиск. Если нужно добавить документ, обратитесь к ответственному за публикации.</p>{% endif %}
 </section>
 {% endif %}
 
@@ -68,7 +68,7 @@
       <span class="ws-result-type">{{ item.category }} · {{ item.site_status }}{% if item.is_featured %} · Закреплено{% endif %}</span>
       <strong>{{ item.title }}</strong><p>{{ item.published_on|date:'d.m.Y' }} · {{ item.summary }}</p>
     </div><span class="ws-chevron" aria-hidden="true">›</span></a><div class="ws-actions"><a class="ws-secondary" href="{% url 'staff_workspace:news' item.pk %}">Изменить</a><a class="ws-secondary" href="{% url 'staff_workspace:site_preview' 'news' item.pk %}">Предпросмотр</a>{% if can_publish_news %}<a class="ws-secondary" href="{% url 'staff_workspace:news' item.pk %}#id_is_published">Опубликовать</a>{% endif %}</div>{% endfor %}
-  </div>{% else %}<div class="ws-empty"><strong>Новостей не найдено.</strong><p>Измените поиск. Если нужно добавить новость, обратитесь к ответственному за публикации.</p></div>{% endif %}
+  </div>{% else %}<div class="ws-empty"><strong>Новостей не найдено.</strong></div><p class="empty-state-hint">Измените поиск. Если нужно добавить новость, обратитесь к ответственному за публикации.</p>{% endif %}
 </section>
 {% endif %}
 {% endblock %}
