@@ -300,7 +300,9 @@ class StaffFlowPolishBrowserTests(BrowserChecks, StaticLiveServerTestCase):
                 page.locator("#id_node").select_option(str(node))
                 page.locator("#id_serial").fill("E2E-METER-101")
                 page.get_by_role("button", name="Создать и привязать", exact=True).click()
-                self.assertTrue(page.get_by_text("Счётчик с таким номером уже существует на выбранном узле.", exact=True).is_visible())
+                duplicate = page.get_by_text("Счётчик с таким номером уже существует на выбранном узле.", exact=True)
+                duplicate.wait_for(state="visible", timeout=10000)  # wait for the POST response, not a race
+                self.assertTrue(duplicate.is_visible())
                 serial = f"FLOW-{engine}-{viewport['width']}"
                 page.locator("#id_serial").fill(serial)
                 page.get_by_role("button", name="Создать и привязать", exact=True).click()
