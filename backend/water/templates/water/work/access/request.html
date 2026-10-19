@@ -13,6 +13,31 @@
 </section>
 {% endif %}
 
+{% if request_obj.status == 'approved' and request_obj.invite %}
+<section class="ws-section">
+  {% if request_obj.invite.used_at %}
+  <div class="ws-banner">Приглашение уже использовано жителем. Повторная отправка не требуется.</div>
+  {% elif request_obj.invite.revoked %}
+  <div class="ws-banner ws-banner-warning">Приглашение отозвано или заменено. Отправка по этой заявке недоступна. Проверьте текущий доступ жителя.</div>
+  {% elif can_email_invite %}
+  <p class="ws-invite-recipient">Получатель: <strong>{{ request_obj.invite.email }}</strong></p>
+  <details class="ws-invite-email"{% if email_form.is_bound %} open{% endif %}>
+    <summary class="ws-primary" data-hint="Открыть форму отправки нового одноразового приглашения на проверенную почту">Отправить приглашение на почту</summary>
+    <form class="ws-finance-form" method="post">
+      {% csrf_token %}<input type="hidden" name="action" value="email_invite">
+      <p>Будет создана новая ссылка на 7 дней. Предыдущая ссылка перестанет действовать. Письмо отправляется только после вашего подтверждения.</p>
+      {{ email_form.as_p }}
+      <button class="ws-primary" type="submit" data-hint="Создать новую ссылку и отправить письмо указанному получателю">Отправить письмо</button>
+      <small class="helptext" aria-hidden="true">Основание и автор отправки сохранятся в истории заявки и приглашений.</small>
+    </form>
+  </details>
+  {% endif %}
+  {% if email_form.errors and not can_email_invite %}<div class="ws-finance-form">{{ email_form.non_field_errors }}</div>{% endif %}
+</section>
+{% elif email_form.errors %}
+<section class="ws-section"><div class="ws-finance-form">{{ email_form.non_field_errors }}</div></section>
+{% endif %}
+
 <div class="ws-summary-grid">
   <div class="ws-summary"><span>Email</span><strong style="font-size:16px">{{ request_obj.email }}</strong></div>
   <div class="ws-summary"><span>Телефон</span><strong style="font-size:16px">{{ request_obj.phone|default:'—' }}</strong></div>

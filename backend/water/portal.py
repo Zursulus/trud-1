@@ -123,29 +123,29 @@ def _invite_login_allowed(user, next_path):
     ).exists()
 
 
-def _revoke_previous_invites(account, email, *, actor=None):
+def _revoke_previous_invites(account, email, *, actor=None, change_reason=None):
     for previous in ResidentInvite.objects.select_for_update().filter(
         account=account, email=email, used_at__isnull=True, revoked=False,
     ):
         previous.revoked = True
         previous._history_user = actor
-        previous._change_reason = 'Заменено новым приглашением'
+        previous._change_reason = change_reason or 'Заменено новым приглашением'
         previous.save()
 
 
 @transaction.atomic
-def issue_invite(account, email, role, *, actor=None):
+def issue_invite(account, email, role, *, actor=None, change_reason=None):
     if account.archived:
         raise ValidationError('Для архивного лицевого счёта нельзя создавать приглашение.')
     email = email.strip().lower()
-    _revoke_previous_invites(account, email, actor=actor)
+    _revoke_previous_invites(account, email, actor=actor, change_reason=change_reason)
     raw = secrets.token_urlsafe(32)
     invite = ResidentInvite(
         account=account, email=email, role=role, token_hash=token_digest(raw),
         expires_at=timezone.now() + timedelta(days=7),
     )
     invite._history_user = actor
-    invite._change_reason = 'Создание одноразового приглашения'
+    invite._change_reason = change_reason or 'Создание одноразового приглашения'
     invite.save()
     return invite, raw
 

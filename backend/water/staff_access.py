@@ -17,7 +17,9 @@ from .access_scope import ScopeRef
 
 
 from .access_workflow import (
+    InviteEmailError,
     approve_access_request,
+    email_access_request_invite,
     end_portal_grant,
     end_resident_access,
     issue_access_password_reset,
@@ -104,6 +106,16 @@ class AccessRequestRejectForm(forms.Form):
         label="Причина отклонения",
         max_length=1000,
         widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
+
+class AccessRequestEmailForm(forms.Form):
+    reason = forms.CharField(
+        label="Основание отправки", max_length=500,
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+    confirmed = forms.BooleanField(
+        label="Понимаю, что по этой ссылке человек получит доступ к лицевому счёту/участку, и адрес почты проверен",
     )
 
 
@@ -444,6 +456,10 @@ def request_detail(request, request_id):
         request.POST if request.method == "POST" and request.POST.get("action") == "reject" else None,
         prefix="reject",
     )
+    email_form = AccessRequestEmailForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "email_invite" else None,
+        prefix="email",
+    )
     invite_url = None
 
     if request.method == "POST":
@@ -466,6 +482,21 @@ def request_detail(request, request_id):
                 else:
                     invite_url = request.build_absolute_uri(reverse("resident_invite", args=[raw]))
                     messages.success(request, "Заявка одобрена. Одноразовое приглашение создано; доступ появится только после активации жителем.")
+        elif action == "email_invite":
+            if not can_approve:
+                raise PermissionDenied
+            if email_form.is_valid():
+                try:
+                    emailed = email_access_request_invite(
+                        request_obj.pk, actor=request.user,
+                        build_absolute_uri=request.build_absolute_uri,
+                        **email_form.cleaned_data,
+                    )
+                except (ValidationError, InviteEmailError) as error:
+                    email_form.add_error(None, "; ".join(error.messages) if isinstance(error, ValidationError) else str(error))
+                else:
+                    messages.success(request, f"Письмо с приглашением отправлено на {emailed.invite.email}")
+                    return HttpResponseRedirect(reverse("staff_workspace:access_request", args=[request_obj.pk]))
         elif action == "reject":
             if not can_change:
                 raise PermissionDenied
@@ -490,6 +521,11 @@ def request_detail(request, request_id):
         "request_obj": request_obj,
         "approve_form": approve_form,
         "reject_form": reject_form,
+        "email_form": email_form,
+        "can_email_invite": (
+            can_approve and request_obj.status == ResidentAccessRequest.STATUS_APPROVED
+            and request_obj.invite_id and not request_obj.invite.used_at and not request_obj.invite.revoked
+        ),
         "can_change_access_request": can_change,
         "can_approve_access_request": can_approve,
         "invite_url": invite_url,

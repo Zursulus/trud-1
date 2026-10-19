@@ -1,5 +1,10 @@
+from django.conf import settings
+from django.contrib.admin.models import CHANGE, LogEntry
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.mail import send_mail
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from .access_requests import ResidentAccessRequest
@@ -53,6 +58,73 @@ def approve_access_request(request_id, *, account, email, role, decision_note, a
     locked.invite = invite
     locked.save()
     return locked, invite, raw
+
+
+class InviteEmailError(Exception):
+    """Public mail failure; transport details must not reach the staff page."""
+
+
+@transaction.atomic
+def email_access_request_invite(request_id, *, actor, reason, confirmed, build_absolute_uri):
+    locked = ResidentAccessRequest.objects.select_for_update().get(pk=request_id)
+    _require_global(actor, 'access.request.decide')
+    _require_global(actor, 'access.invite.issue')
+    note = _required_note(reason, 'Основание отправки')
+    if len(note) > 500:
+        raise ValidationError('Основание отправки: не более 500 символов.')
+    if confirmed is not True:
+        raise ValidationError('Подтвердите проверку адреса и предоставление доступа.')
+    if locked.status != ResidentAccessRequest.STATUS_APPROVED or not locked.invite_id:
+        raise ValidationError('Отправка доступна только для одобренной заявки с приглашением.')
+    previous = ResidentInvite.objects.select_for_update().get(pk=locked.invite_id)
+    if previous.used_at:
+        raise ValidationError('Приглашение уже использовано жителем. Повторная отправка не требуется.')
+    if previous.revoked:
+        raise ValidationError('Приглашение отозвано или заменено. Отправка по этой заявке недоступна.')
+    if previous.is_granular or (
+        previous.account_id != locked.matched_account_id or previous.role != locked.approved_role
+    ):
+        raise ValidationError('Приглашение не соответствует решению по заявке. Проверьте доступ вручную.')
+
+    reason_text = f'Отправка приглашения по заявке №{locked.pk}. Основание: {note}'
+    # Existing simple_history columns are varchar(100). Keep the full reason
+    # in the existing admin history of all three objects, without a migration.
+    history_reason = reason_text if len(reason_text) <= 100 else reason_text[:97] + '…'
+    invite, raw = issue_invite(
+        previous.account, previous.email, previous.role, actor=actor,
+        change_reason=history_reason,
+    )
+    locked._replacing_invite_id = previous.pk
+    locked.invite = invite
+    locked._history_user = actor
+    locked._change_reason = reason_text
+    locked.save(update_fields=['invite'])
+    for obj in (locked, previous, invite):
+        LogEntry.objects.create(
+            user=actor, content_type=ContentType.objects.get_for_model(obj),
+            object_id=str(obj.pk), object_repr=str(obj)[:200], action_flag=CHANGE,
+            change_message=f'{locked._change_reason}. Приглашение №{previous.pk} заменено на №{invite.pk}.',
+        )
+
+    url = build_absolute_uri(reverse('resident_invite', args=[raw]))
+    body = (
+        'Здравствуйте!\n\n'
+        'ТСН «Труд-1» приглашает вас в личный кабинет жителя. '
+        'Сотрудник проверил и одобрил вашу заявку доступа.\n\n'
+        f'Для активации доступа перейдите по ссылке:\n{url}\n\n'
+        'Ссылка одноразовая и действует 7 дней. Ранее выданная ссылка больше не действует.\n'
+        'Если вы не запрашивали доступ — проигнорируйте это письмо.\n'
+    )
+    try:
+        sent = send_mail(
+            'Приглашение в личный кабинет ТСН «Труд-1»', body,
+            settings.DEFAULT_FROM_EMAIL, [invite.email], fail_silently=False,
+        )
+        if sent != 1:
+            raise InviteEmailError
+    except Exception:
+        raise InviteEmailError('Письмо не отправлено: почта сайта недоступна') from None
+    return locked
 
 
 @transaction.atomic

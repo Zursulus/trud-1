@@ -103,9 +103,25 @@ class ResidentAccessRequest(models.Model):
                 raise ValidationError('Исходную заявку нельзя переписывать. Создайте служебное решение отдельно.')
             if stored.status != self.STATUS_NEW and any(
                 getattr(stored, field) != getattr(self, field)
-                for field in ('status', 'matched_account_id', 'approved_role', 'decision_note', 'decided_by_id', 'decided_at', 'invite_id')
+                for field in ('status', 'matched_account_id', 'approved_role', 'decision_note', 'decided_by_id', 'decided_at')
             ):
                 raise ValidationError('Принятое решение по заявке нельзя переписывать.')
+            if stored.status != self.STATUS_NEW and stored.invite_id != self.invite_id:
+                # Only the locked mail workflow may rotate a token. The original
+                # decision and the account/email/role authority stay immutable.
+                previous = stored.invite
+                replacement = self.invite
+                if not (
+                    stored.status == self.STATUS_APPROVED
+                    and getattr(self, '_replacing_invite_id', None) == stored.invite_id
+                    and previous and not previous.used_at and previous.revoked
+                    and replacement and not replacement.used_at and not replacement.revoked
+                    and not replacement.is_granular
+                    and replacement.account_id == previous.account_id == self.matched_account_id
+                    and replacement.email == previous.email
+                    and replacement.role == previous.role == self.approved_role
+                ):
+                    raise ValidationError('Принятое решение по заявке нельзя переписывать.')
             if stored.status == self.STATUS_NEW and self.status not in (
                 self.STATUS_NEW, self.STATUS_APPROVED, self.STATUS_REJECTED,
             ):

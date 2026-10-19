@@ -18,6 +18,9 @@
 .ws-money-positive { color: var(--ws-danger); }
 .ws-money-negative { color: var(--ws-success); }
 .ws-finance-note { color: var(--ws-muted); font-size: 13px; line-height: 1.45; }
+.ws-invite-recipient { overflow-wrap: anywhere; }
+.ws-invite-email > summary.ws-primary { display: flex; min-height: 60px; padding: 14px 18px; font-size: 18px; text-align: center; }
+.ws-invite-email[open] > summary { margin-bottom: 14px; }
 .ws-charge-calculation { max-width: 420px; color: var(--ws-muted); font-size: 12px; line-height: 1.4; }
 @media (max-width: 639px) {
   .ws-finance-actions > *, .ws-finance-actions form, .ws-finance-actions form > button { width: 100%; }
