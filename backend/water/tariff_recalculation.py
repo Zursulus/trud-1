@@ -11,10 +11,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from .balance import _active_meters, _meter_total
-from .billing import actual_consumption, group_volume, loss_weights, rounded_amount
-from .models import (Account, BillingPeriod, Charge, GroupConsumption, LandPlot,
-                     Membership, Meter, Reading, SupplyNode, WaterGroup)
+from .balance import _active_meters, _meter_total, calculate_water_balance
+from .billing import actual_consumption, calculate_period, group_volume, loss_weights, rounded_amount
+from .models import (Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge,
+                     GroupConsumption, LandPlot, Membership, Meter, Reading, SupplyNode,
+                     Tariff, WaterGroup)
 from .tariff_models import TariffRecalculation
 
 ZERO = Decimal('0')
@@ -41,7 +42,8 @@ def sources(period, *, lock=False):
     # Parent locks also serialize normal Reading/Membership/Charge.save() paths.
     querysets = [Account.objects.all(), SupplyNode.objects.all(), WaterGroup.objects.all(),
                  Meter.objects.all(), Membership.objects.all(), Reading.objects.all(),
-                 GroupConsumption.objects.all(), LandPlot.objects.all(), Charge.objects.filter(period=period)]
+                 GroupConsumption.objects.all(), LandPlot.objects.all(), Charge.objects.filter(period=period),
+                 BillingPolicy.objects.all(), BillingAssignment.objects.all(), Tariff.objects.all()]
     tokens = [('period', period.pk, period.version)]
     for queryset in querysets:
         if lock:
@@ -82,6 +84,26 @@ def _node_input(node, period):
         return None, [], ['Замена общего счётчика ОСН внутри периода: нужна ручная проверка.']
     return _meter_total(_active_meters(meters, period.starts, period.ends), period.starts, period.ends,
                         empty_message='Нет общего счётчика ОСН на весь период.')
+
+
+def _preview_node_charges(period, nodes, accounts):
+    """Use unsaved group tariffs and the ordinary billing engine, without ledger writes."""
+    rates = {node['node_id']: node['rate'] for node in nodes}
+    tariffs = {
+        group.pk: Tariff(name=f'Пересчёт узла {group.node_id}', group=group,
+                         starts=period.starts, ends=period.ends, rate=rates[group.node_id])
+        for group in WaterGroup.objects.all() if rates[group.node_id] is not None
+    }
+    by_account = {row['account_id']: row for row in accounts}
+    for result in calculate_period(period, preview=True, group_tariffs=tariffs):
+        row = by_account.get(result.account.pk)
+        if row is None or row['reason']:
+            continue
+        if result.charge is None:
+            row['reason'] = result.message
+        else:
+            row['rate'] = result.charge.rate
+            row['new'] = (row['new'] or ZERO) + result.charge.amount
 
 
 def build_comparison(item):
@@ -157,14 +179,17 @@ def build_comparison(item):
                     Decimal('0.001'))  # Same volume rounding as calculate_group_losses().
                 row['new'] += rounded_amount(share * rate, 'kopeck')
 
+    balances = ({balance.node.pk: balance for balance in calculate_water_balance(period.starts, period.ends).nodes}
+                if item.loss_distribution == 'node_excel' else {})
     for node in SupplyNode.objects.order_by('pk'):
         rows = [row for row in accounts if row['node_id'] == node.pk]
         input_volume, input_lines, issues = _node_input(node, period)
-        confirmed = sum((row['volume'] for row in rows if row['volume'] is not None), ZERO)
+        confirmed = (balances[node.pk].confirmed_known if item.loss_distribution == 'node_excel'
+                     else sum((row['volume'] for row in rows if row['volume'] is not None), ZERO))
         node_rate, formula = None, ''
         if item.loss_distribution == 'node_excel':
             if input_volume is None or input_volume < 0 or confirmed <= 0 or input_volume < confirmed:
-                reason = '; '.join(issues) or 'Вход меньше подтверждённого расхода или сумма расхода равна нулю.'
+                reason = '; '.join(issues) or 'Узел требует проверки: вход меньше расхода линий или подтверждённый объём равен нулю.'
                 if not issues:
                     issues.append(reason)
                 for row in rows:
@@ -173,15 +198,14 @@ def build_comparison(item):
             else:
                 node_rate = money(rate * input_volume / confirmed)
                 formula = f'{rate:.2f} × {input_volume.normalize():f} / {confirmed.normalize():f} = {node_rate:.2f}'
-                for row in rows:
-                    if not row['reason']:
-                        row['rate'] = node_rate
-                        row['new'] = money(row['volume'] * node_rate)
         nodes.append(dict(node_id=node.pk, name=node.name, input=input_volume, confirmed=confirmed,
                           loss=input_volume - confirmed if input_volume is not None else None,
                           rate=node_rate, formula=formula.replace('.', ','), issues=issues,
                           input_detail='; '.join(f'{line.label}: {line.detail}' for line in input_lines),
                           excluded=sum(bool(row['reason']) for row in rows)))
+
+    if item.loss_distribution == 'node_excel':
+        _preview_node_charges(period, nodes, accounts)
 
     for row in accounts:
         if row['reason']:
@@ -194,6 +218,8 @@ def build_comparison(item):
             row['percent'] = money(row['delta'] * 100 / row['old']) if row['old'] else None
     for summary, key in [(node, 'node_id') for node in nodes] + [(group, 'group_id') for group in groups]:
         rows = [row for row in accounts if row[key] == summary[key]]
+        if key == 'node_id':
+            summary['excluded'] = sum(bool(row['reason']) for row in rows)
         summary['old'] = sum((row['old'] for row in rows), ZERO)
         summary['new'] = sum((row['new'] if row['new'] is not None else row['old'] for row in rows), ZERO)
         summary['delta'] = summary['new'] - summary['old']

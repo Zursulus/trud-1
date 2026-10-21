@@ -19,7 +19,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from .billing import account_totals, calculate_period
-from .models import (Account, BillingPeriod, BillingPolicy, Charge, GroupConsumption,
+from .models import (Account, BillingAssignment, BillingPeriod, BillingPolicy, Charge, GroupConsumption,
                      Membership, Meter, Reading, SupplyNode, Tariff, User, WaterGroup)
 from .tariff_models import TariffRecalculation
 from .tariff_recalculation import create_recalculation, decide_recalculation, money
@@ -30,6 +30,7 @@ class TariffRecalculationTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.actor = User.objects.create_user(username='synthetic-chair', is_staff=True, is_superuser=True)
+        cls.policy = BillingPolicy.objects.create(name='Синтетические правила', is_default=True)
         cls.period = BillingPeriod.objects.create(starts=date(2026, 1, 1), ends=date(2026, 2, 1))
         cls.node = SupplyNode.objects.create(name='Синтетический узел')
         cls.group = WaterGroup.objects.create(name='Синтетическая линия', node=cls.node, source='reported')
@@ -41,7 +42,7 @@ class TariffRecalculationTests(TestCase):
             Reading.objects.create(meter=meter, date=cls.period.starts, value=Decimal('0'))
             Reading.objects.create(meter=meter, date=cls.period.ends, value=Decimal(volume))
         GroupConsumption.objects.create(group=cls.group, starts=cls.period.starts, ends=cls.period.ends,
-                                        volume=Decimal('450'), reported_by='Синтетический старший')
+                                        volume=Decimal('386'), reported_by='Синтетический старший')
         cls.original = Charge.objects.create(account=cls.account, period=cls.period, kind='water',
                                              volume=Decimal('386'), rate=Decimal('109.34'),
                                              amount=Decimal('42206.24'), status='approved')
@@ -160,15 +161,22 @@ class TariffRecalculationTests(TestCase):
         self.assertIsNone(item.result['totals']['input'])
 
     def test_zero_denominator_requires_review(self):
-        reading = Reading.objects.get(meter=self.individual, date=self.period.ends)
-        reading.value = Decimal('0')
-        reading.save()
+        consumption = GroupConsumption.objects.get(group=self.group)
+        consumption.volume = Decimal('0')
+        consumption.save()
         item = self.create()
+        self.assertEqual(item.result['nodes'][0]['confirmed'], '0.000')
+        self.assertIsNone(item.result['nodes'][0]['rate'])
+        self.assertTrue(item.result['nodes'][0]['issues'])
+        self.assertEqual(item.result['totals']['review'], 1)
         self.assertIsNone(item.result['accounts'][0]['new'])
         with self.assertRaises(ValidationError):
             decide_recalculation(recalc_id=item.pk, actor=self.actor, approve=True)
 
     def test_legacy_line_volume_distribution_is_retained(self):
+        consumption = GroupConsumption.objects.get(group=self.group)
+        consumption.volume = Decimal('450')
+        consumption.save()
         item = self.create(loss_distribution='volume')
         # 386 m³ individual + 64 m³ line losses at 109.34; not OSN's 489.
         self.assertEqual(item.result['accounts'][0]['new'], '49203.00')
@@ -356,7 +364,8 @@ class TariffRecalculationTests(TestCase):
         self.assertFalse(group.permissions.filter(codename__contains='tariffrecalculation').exists())
 
     def test_node_excel_policy_cannot_silently_use_old_calculator(self):
-        BillingPolicy.objects.create(name='Синтетическая Excel-политика', is_default=True, loss_distribution='node_excel')
+        self.policy.loss_distribution = 'node_excel'
+        self.policy.save()
         self.period.status = 'open'
         self.period.save()
         with self.assertRaises(ValidationError):
@@ -365,7 +374,9 @@ class TariffRecalculationTests(TestCase):
 
     def test_multiple_nodes_use_their_own_denominators(self):
         node = SupplyNode.objects.create(name='Второй синтетический узел')
-        group = WaterGroup.objects.create(name='Вторая синтетическая линия', node=node)
+        group = WaterGroup.objects.create(name='Вторая синтетическая линия', node=node, source='reported')
+        GroupConsumption.objects.create(group=group, starts=self.period.starts, ends=self.period.ends,
+                                        volume=Decimal('100'), reported_by='Синтетический старший')
         account = Account.objects.create(number='SYN-SECOND-NODE')
         Membership.objects.create(account=account, group=group, starts=self.period.starts)
         for kind, volume in (('main', '200'), ('individual', '100')):
@@ -394,6 +405,9 @@ class TariffRecalculationTests(TestCase):
             reading = Reading.objects.get(meter__kind=kind, date=self.period.ends)
             reading.value = Decimal(value)
             reading.save()
+        consumption = GroupConsumption.objects.get(group=self.group)
+        consumption.volume = Decimal('8')
+        consumption.save()
         item = self.create(rate=Decimal('1.00'))
         self.assertEqual(item.result['nodes'][0]['rate'], '1.13')
         self.assertEqual(item.result['accounts'][0]['new'], '9.04')
@@ -498,7 +512,6 @@ class TariffRecalculationTests(TestCase):
     def test_approved_recalculation_blocks_legacy_rebilling(self):
         self.period.status = 'open'
         self.period.save()
-        BillingPolicy.objects.create(name='Синтетическая прежняя политика', is_default=True)
         Tariff.objects.create(name='Синтетический прежний тариф', rate=Decimal('109.34'), starts=self.period.starts)
         item = self.create()
         decide_recalculation(recalc_id=item.pk, actor=self.actor, approve=True)
@@ -506,3 +519,159 @@ class TariffRecalculationTests(TestCase):
         with self.assertRaisesMessage(ValidationError, 'новую версию пересчёта'):
             calculate_period(self.period, actor=self.actor)
         self.assertEqual((Charge.objects.count(), Charge.history.count()), before)
+
+
+class NodeExcelBalanceTests(TestCase):
+    """Line volumes deliberately differ from individual readings; all data synthetic."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.actor = User.objects.create_user(username='synthetic-balance-chair', is_staff=True, is_superuser=True)
+        cls.policy = BillingPolicy.objects.create(name='Синтетические правила баланса', is_default=True)
+        cls.period = BillingPeriod.objects.create(starts=date(2026, 8, 31), ends=date(2026, 9, 20))
+        for index, (name, incoming, lines, individuals) in enumerate((
+            ('Узел без гидранта', '489', ('200', '186'), ('40', '52')),
+            ('Узел с гидрантом', '471', ('180', '174'), ('100', '108')),
+        )):
+            node = SupplyNode.objects.create(name=name)
+            main = Meter.objects.create(serial=f'SYN-BAL-MAIN-{index}', kind='main', node=node)
+            Reading.objects.create(meter=main, date=cls.period.starts, value=Decimal('0'))
+            Reading.objects.create(meter=main, date=cls.period.ends, value=Decimal(incoming))
+            for number, (line_volume, individual_volume) in enumerate(zip(lines, individuals)):
+                group = WaterGroup.objects.create(name=f'Синтетическая линия {index}-{number}',
+                                                  node=node, source='reported')
+                GroupConsumption.objects.create(group=group, starts=cls.period.starts, ends=cls.period.ends,
+                                                volume=Decimal(line_volume), reported_by='Синтетический старший')
+                account = Account.objects.create(number=f'SYN-BAL-{index}-{number}')
+                Membership.objects.create(account=account, group=group, starts=cls.period.starts)
+                meter = Meter.objects.create(serial=f'SYN-BAL-IND-{index}-{number}', kind='individual',
+                                             account=account, node=node)
+                Reading.objects.create(meter=meter, date=cls.period.starts, value=Decimal('0'))
+                Reading.objects.create(meter=meter, date=cls.period.ends, value=Decimal(individual_volume))
+
+    def create(self):
+        return create_recalculation(actor=self.actor, period=self.period, rate=Decimal('109.34'),
+                                    starts=self.period.starts, basis='Синтетический эталон баланса')
+
+    def assert_matches_calculate_period(self, item):
+        rates = {row['node_id']: Decimal(row['rate']) for row in item.result['nodes']}
+        for group in WaterGroup.objects.all():
+            Tariff.objects.create(name=f'Синтетический тариф {group.pk}', group=group,
+                                  starts=self.period.starts, ends=self.period.ends, rate=rates[group.node_id])
+        amounts = {}
+        results = calculate_period(self.period, actor=self.actor)
+        for result in results:
+            self.assertIsNotNone(result.charge, result.message)
+            charge = result.charge
+            amounts[charge.account_id] = amounts.get(charge.account_id, Decimal('0')) + charge.amount
+        self.assertEqual({row['account_id']: Decimal(row['new']) for row in item.result['accounts']}, amounts)
+        return results
+
+    def test_reported_line_denominators_and_reference_rates(self):
+        item = self.create()
+        nodes = {row['name']: row for row in item.result['nodes']}
+        self.assertEqual(nodes['Узел без гидранта']['confirmed'], '386.000')
+        self.assertEqual(nodes['Узел с гидрантом']['confirmed'], '354.000')
+        self.assertEqual(nodes['Узел без гидранта']['rate'], '138.52')
+        self.assertEqual(nodes['Узел с гидрантом']['rate'], '145.48')
+        self.assertEqual(nodes['Узел без гидранта']['formula'], '109,34 × 489 / 386 = 138,52')
+        self.assertEqual(nodes['Узел с гидрантом']['formula'], '109,34 × 471 / 354 = 145,48')
+        self.assertEqual(item.result['totals']['confirmed'], '740.000')
+        self.assert_matches_calculate_period(item)
+
+    def test_account_rounding_matches_standard_calculator(self):
+        self.policy.rounding = 'up_ruble'
+        self.policy.save()
+        item = self.create()
+        self.assertEqual(item.result['accounts'][0]['new'], '5541.00')
+        self.assert_matches_calculate_period(item)
+
+    def test_group_policy_and_line_losses_match_standard_calculator(self):
+        policy = BillingPolicy.objects.create(name='Синтетические потери линии', loss_distribution='volume',
+                                              rounding='ruble')
+        BillingAssignment.objects.create(policy=policy, group=WaterGroup.objects.first(), starts=self.period.starts)
+        item = self.create()
+        results = self.assert_matches_calculate_period(item)
+        self.assertEqual(sum(result.charge.kind == 'loss' for result in results), 1)
+
+    def test_individual_tariff_precedence_matches_standard_calculator(self):
+        account = Account.objects.first()
+        Tariff.objects.create(name='Синтетический индивидуальный тариф', account=account,
+                              starts=self.period.starts, rate=Decimal('10.1234'))
+        item = self.create()
+        row = next(row for row in item.result['accounts'] if row['account_id'] == account.pk)
+        self.assertEqual(row['rate'], '10.1234')
+        self.assert_matches_calculate_period(item)
+
+    def test_preview_preserves_tariffs_charges_history_and_period(self):
+        group = WaterGroup.objects.first()
+        tariff = Tariff.objects.create(name='Синтетический старый тариф', group=group,
+                                       starts=self.period.starts, rate=Decimal('1'))
+        account = Membership.objects.get(group=group).account
+        charge = Charge.objects.create(account=account, period=self.period, kind='water',
+                                        amount=Decimal('1'), status='approved',
+                                        source_key=f'water:{self.period.pk}:{account.pk}')
+        before = {model: list(model.objects.values()) for model in (Tariff, Charge, BillingPeriod, BillingPolicy)}
+        history = {model: model.history.count() for model in before}
+        self.period.status = 'approved'
+        self.period.save()
+        before[BillingPeriod] = list(BillingPeriod.objects.values())
+        history[BillingPeriod] = BillingPeriod.history.count()
+        item = self.create()
+        self.assertEqual(item.result['totals']['ready'], 4)
+        for model in before:
+            self.assertEqual(list(model.objects.values()), before[model])
+            self.assertEqual(model.history.count(), history[model])
+        self.assertIsNotNone(tariff.pk)
+        self.assertIsNotNone(charge.pk)
+
+    def test_zero_known_line_volume_reviews_only_affected_node(self):
+        node = SupplyNode.objects.get(name='Узел без гидранта')
+        for consumption in GroupConsumption.objects.filter(group__node=node):
+            consumption.volume = Decimal('0')
+            consumption.save()
+        item = self.create()
+        summary = next(row for row in item.result['nodes'] if row['node_id'] == node.pk)
+        self.assertIsNone(summary['rate'])
+        self.assertTrue(summary['issues'])
+        self.assertEqual(summary['excluded'], 2)
+        self.assertEqual(item.result['totals']['review'], 2)
+        self.assertEqual(item.result['totals']['ready'], 2)
+        for row in item.result['accounts']:
+            if row['node_id'] == node.pk:
+                self.assertIsNone(row['new'])
+                self.assertIn('требует проверки', row['reason'])
+        decide_recalculation(recalc_id=item.pk, actor=self.actor, approve=True)
+        self.assertEqual(Charge.objects.count(), 2)
+
+    def test_missing_individual_readings_do_not_change_line_denominator(self):
+        account = Account.objects.create(number='SYN-BAL-MISSING')
+        Membership.objects.create(account=account, group=WaterGroup.objects.first(), starts=self.period.starts)
+        item = self.create()
+        self.assertEqual([row['rate'] for row in item.result['nodes']], ['138.52', '145.48'])
+        self.assertEqual(item.result['totals']['review'], 1)
+
+    def test_node_excel_policy_does_not_add_line_losses_twice(self):
+        self.policy.loss_distribution = 'node_excel'
+        self.policy.save()
+        item = self.create()
+        self.assertEqual(item.result['totals']['ready'], 4)
+        self.assertEqual(item.result['accounts'][0]['new'], '5540.80')
+        self.assertFalse(Charge.objects.exists())
+
+    def test_changed_policy_assignment_or_tariff_rejects_approval(self):
+        for source in ('policy', 'assignment', 'tariff'):
+            with self.subTest(source=source):
+                item = self.create()
+                if source == 'policy':
+                    self.policy.rounding = 'ruble'
+                    self.policy.save()
+                elif source == 'assignment':
+                    BillingAssignment.objects.create(policy=self.policy, group=WaterGroup.objects.first(),
+                                                     starts=self.period.starts)
+                else:
+                    Tariff.objects.create(name='Синтетический изменённый тариф', account=Account.objects.first(),
+                                          starts=self.period.starts, rate=Decimal('1'))
+                with self.assertRaisesMessage(ValidationError, 'Данные изменились'):
+                    decide_recalculation(recalc_id=item.pk, actor=self.actor, approve=True)
+                self.assertFalse(Charge.objects.exists())

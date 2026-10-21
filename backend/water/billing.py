@@ -41,13 +41,16 @@ def resolve_policy(account, period):
     return (policy, f'общие правила «{policy.name}»') if policy else (None, 'нет правил по умолчанию')
 
 
-def resolve_tariff(account, period):
+def resolve_tariff(account, period, *, group_tariffs=None):
     covers = Q(starts__lte=period.starts) & (Q(ends__isnull=True) | Q(ends__gte=period.ends))
     tariff = Tariff.objects.filter(covers, account=account).order_by('-starts', '-id').first()
     if tariff:
         return tariff, f'индивидуальный тариф «{tariff.name}»'
     group = active_group(account, period.starts)
     if group:
+        if group_tariffs is not None:
+            tariff = group_tariffs.get(group.pk)
+            return (tariff, f'тариф группы «{tariff.name}»') if tariff else (None, 'ставка узла требует проверки')
         tariff = Tariff.objects.filter(covers, group=group, account__isnull=True).order_by('-starts', '-id').first()
         if tariff:
             return tariff, f'тариф группы «{tariff.name}»'
@@ -167,7 +170,9 @@ def loss_weights(method, accounts, water_charges):
     return {}
 
 
-def calculate_group_losses(period, *, actor=None):
+def calculate_group_losses(period, *, actor=None, preview=False, group_tariffs=None, preview_charges=()):
+    if group_tariffs is not None and not preview:
+        raise ValueError('Подмена тарифов разрешена только для предпросмотра.')
     results = []
     active = Q(starts__lte=period.starts) & (Q(ends__isnull=True) | Q(ends__gte=period.ends))
     for group in WaterGroup.objects.select_related('node').order_by('id'):
@@ -181,17 +186,19 @@ def calculate_group_losses(period, *, actor=None):
             results.append(BillingResult(accounts[0], 'review', f'{group}: нет правил распределения потерь'))
             continue
         method = policy.loss_distribution
-        if method == 'none':
+        if method == 'none' or (method == 'node_excel' and preview and group_tariffs is not None):
+            # The supplied node rate already includes this distribution.
             continue
         if method == 'manual':
             results.append(BillingResult(accounts[0], 'review', f'{group}: потери распределяются только вручную'))
             continue
-        water_charges = {
-            charge.account_id: charge for charge in Charge.objects.filter(
+        candidates = preview_charges if preview else Charge.objects.filter(
                 period=period, account__in=accounts, source_key__startswith=f'water:{period.pk}:',
                 status='draft', volume__isnull=False,
             )
-        }
+        account_ids = {account.pk for account in accounts}
+        water_charges = {charge.account_id: charge for charge in candidates
+                         if charge.account_id in account_ids and charge.volume is not None}
         individual_total = sum((charge.volume for charge in water_charges.values()), Decimal('0'))
         total, source_note = group_volume(group, period, individual_total)
         if total is None:
@@ -212,13 +219,13 @@ def calculate_group_losses(period, *, actor=None):
         for account in accounts:
             weight = weights.get(account.pk, Decimal('0'))
             share = (loss * weight / weight_total).quantize(Decimal('0.001'))
-            tariff, tariff_note = resolve_tariff(account, period)
+            tariff, tariff_note = resolve_tariff(account, period, group_tariffs=group_tariffs)
             if tariff is None:
                 results.append(BillingResult(account, 'review', f'{group}: {tariff_note}'))
                 continue
             amount = rounded_amount(share * tariff.rate, policy.rounding)
             source_key = f'loss:{period.pk}:{group.pk}:{account.pk}'
-            existing = Charge.objects.filter(source_key=source_key).first()
+            existing = None if preview else Charge.objects.filter(source_key=source_key).first()
             if existing and existing.status != 'draft':
                 results.append(BillingResult(account, 'review', f'{group}: начисление потерь уже утверждено или отменено'))
                 continue
@@ -230,7 +237,9 @@ def calculate_group_losses(period, *, actor=None):
                     f'потери {loss} м³; способ: {policy.get_loss_distribution_display()}; {tariff_note}'
                 ),
             }
-            if existing:
+            if preview:
+                charge, outcome = Charge(source_key=source_key, **values), 'preview'
+            elif existing:
                 for field, value in values.items():
                     setattr(existing, field, value)
                 existing._history_user = actor
@@ -248,17 +257,25 @@ def calculate_group_losses(period, *, actor=None):
 
 
 @transaction.atomic
-def calculate_period(period, *, actor=None):
-    if period.status in ('approved', 'closed'):
+def calculate_period(period, *, actor=None, preview=False, group_tariffs=None):
+    """Calculate using the same rules in both modes; previews return unsaved charges.
+
+    A preview replaces the calculated water/loss layer regardless of the existing
+    ledger or period status. Optional unsaved group tariffs follow normal tariff
+    precedence. No model, history or period status is written in this mode.
+    """
+    if group_tariffs is not None and not preview:
+        raise ValueError('Подмена тарифов разрешена только для предпросмотра.')
+    if not preview and period.status in ('approved', 'closed'):
         raise ValidationError('Утверждённый или закрытый период нельзя пересчитывать.')
-    if period.tariffrecalculation_set.filter(status='approved').exists():
+    if not preview and period.tariffrecalculation_set.filter(status='approved').exists():
         raise ValidationError('В периоде утверждён пересчёт тарифа. Для изменений создайте новую версию пересчёта.')
     results = []
     accounts = Account.objects.filter(archived=False).order_by('id')
     for account in accounts:
         policy, policy_note = resolve_policy(account, period)
-        tariff, tariff_note = resolve_tariff(account, period)
-        if policy and policy.loss_distribution == 'node_excel':
+        tariff, tariff_note = resolve_tariff(account, period, group_tariffs=group_tariffs)
+        if policy and policy.loss_distribution == 'node_excel' and not (preview and group_tariffs is not None):
             raise ValidationError('Для методики Excel используйте экран «Тариф водоканала → пересчёт периода».')
         if policy is None or tariff is None:
             results.append(BillingResult(account, 'skipped', f'{policy_note}; {tariff_note}'))
@@ -273,7 +290,7 @@ def calculate_period(period, *, actor=None):
             continue
         amount = rounded_amount(volume * tariff.rate, policy.rounding)
         source_key = f'water:{period.pk}:{account.pk}'
-        existing = Charge.objects.filter(source_key=source_key).first()
+        existing = None if preview else Charge.objects.filter(source_key=source_key).first()
         if existing and existing.status != 'draft':
             results.append(BillingResult(account, 'review', 'Автоматическое начисление уже утверждено или отменено.'))
             continue
@@ -283,7 +300,9 @@ def calculate_period(period, *, actor=None):
             'origin': 'calculation',
             'calculation': f'{volume_note}; {tariff_note}; {policy_note}; округление: {policy.get_rounding_display()}',
         }
-        if existing:
+        if preview:
+            charge, outcome = Charge(source_key=source_key, **values), 'preview'
+        elif existing:
             for field, value in values.items():
                 setattr(existing, field, value)
             existing._history_user = actor
@@ -298,7 +317,12 @@ def calculate_period(period, *, actor=None):
             charge.save()
             outcome = 'created'
         results.append(BillingResult(account, outcome, charge.calculation, charge))
-    results.extend(calculate_group_losses(period, actor=actor))
+    results.extend(calculate_group_losses(
+        period, actor=actor, preview=preview, group_tariffs=group_tariffs,
+        preview_charges=[result.charge for result in results if result.charge is not None],
+    ))
+    if preview:
+        return results
     period.status = 'calculated'
     period._history_user = actor
     period._change_reason = 'Расчёт черновиков начислений'
