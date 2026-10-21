@@ -1,0 +1,54 @@
+{% extends 'admin/base_site.html' %}
+{% block extrastyle %}{{ block.super }}{% include 'admin/water/tariff_recalculation_style.html' %}{% endblock %}
+{% block content %}
+<div class="recalc">
+<p><a href="{% url 'water_tariff_recalculation' %}">← Тариф и версии пересчёта</a> · <a href="{% url 'admin:index' %}">Рабочая панель</a></p>
+<h1>Пересчёт №{{ item.pk }} · {{ item.period }}</h1>
+<p><strong>{{ item.get_status_display }}</strong> · {{ item.get_loss_distribution_display }} · ставка ВК {{ item.rate }} ₽/м³.<br>
+Действует с {{ item.starts|date:'d.m.Y' }}{% if item.ends %} до {{ item.ends|date:'d.m.Y' }} (не включая){% endif %}. Основание: {{ item.basis }}.
+{% if item.document %}<a href="{% url 'water_tariff_recalculation_document' item.pk %}">Скачать основание</a>{% endif %}<br>
+Создал {{ item.created_by.get_username }} · {{ item.created_at|date:'d.m.Y H:i' }}.
+{% if item.decided_by %}Решение: {{ item.decided_by.get_username }} · {{ item.decided_at|date:'d.m.Y H:i' }}.{% endif %}</p>
+<div class="recalc-summary">
+<h2>Итог по ТСН</h2>
+<p>Вход ОСН: <strong>{{ result.totals.input|default_if_none:'неизвестен' }}</strong> м³ · подтверждено абонентами: <strong>{{ result.totals.confirmed }}</strong> м³ · потери: <strong>{{ result.totals.loss|default_if_none:'неизвестны' }}</strong> м³.</p>
+<p>К оплате за воду: <strong>{{ result.totals.old }} → {{ result.totals.new }} ₽</strong> · разница {{ result.totals.delta }} ₽.<br>
+Готовы: {{ result.totals.ready }} · ручная проверка: {{ result.totals.review }}.</p>
+</div>
+<p>В «было» входят действующие утверждённые и черновые начисления воды, норматива, потерь и прошлые корректировки пересчёта. При утверждении прежние черновики готовых счетов отменяются с историей; корректировка нового итога рассчитывается относительно уже утверждённых сумм. Для счетов на проверке в общем итоге сохранено «было»; новой суммы им не назначено. Другие услуги и платежи в сравнение не входят.</p>
+{% if result.totals.review %}<p class="recalc-warning">Неподтверждённый расход не входит в знаменатель формулы. Перед утверждением проверьте причины ниже: пропуски могут влиять на ставку всего узла. Подтверждённый расход счетов с финансовыми замечаниями учитывается в знаменателе, но новая сумма таким счетам не назначается.</p>{% endif %}
+{% if item.loss_distribution == 'node_excel' %}<p>Ставка узла = ставка ВК × вход ОСН / сумма подтверждённого расхода абонентов. Ставка округляется до копеек (ROUND_HALF_UP), затем расход × ставка округляется до копеек. Из-за округления итог может отличаться от стоимости входа ОСН.</p>{% else %}<p>Ставка ВК применяется к индивидуальному расходу; потери распределяются внутри линии выбранным способом, как в штатном расчёте сайта.</p>{% endif %}
+<h2>Узлы и формулы</h2>
+<div class="recalc-scroll"><table><thead><tr><th>Узел</th><th>Вход ОСН, м³</th><th>Абоненты, м³</th><th>Потери, м³</th><th>Ставка / формула</th><th>Было → стало, ₽</th></tr></thead><tbody>
+{% for node in result.nodes %}<tr><td>{{ node.name }}<br><small>{{ node.input_detail }}</small>{% for issue in node.issues %}<p class="errornote">{{ issue }}</p>{% endfor %}</td><td>{{ node.input|default_if_none:'—' }}</td><td>{{ node.confirmed }}</td><td>{{ node.loss|default_if_none:'—' }}</td><td>{% if node.formula %}<code>{{ node.formula }}</code> ₽/м³{% else %}По методике линии / требуется проверка{% endif %}</td><td>{{ node.old }} → {{ node.new }}<br>Δ {{ node.delta }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Линии</h2>
+<div class="recalc-scroll"><table><thead><tr><th>Линия / узел</th><th>Объём линии, м³</th><th>Абоненты, м³</th><th>Потери линии, м³</th><th>Было → стало, ₽</th><th>Источник</th></tr></thead><tbody>
+{% for group in result.groups %}<tr><td>{{ group.name }} · {{ group.node }}</td><td>{{ group.input|default_if_none:'—' }}</td><td>{{ group.confirmed }}</td><td>{{ group.loss|default_if_none:'—' }}</td><td>{{ group.old }} → {{ group.new }}<br>Δ {{ group.delta }}</td><td>{{ group.detail }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Участки и лицевые счета</h2>
+<form method="get" class="recalc-filter">
+<div><label for="recalc-search">Счёт, участок или линия</label><input id="recalc-search" name="q" value="{{ request.GET.q }}" type="search"></div>
+<div><label for="recalc-node">Узел</label><select id="recalc-node" name="node"><option value="">Все узлы</option>{% for node in result.nodes %}<option value="{{ node.node_id }}"{% if request.GET.node == node.node_id|stringformat:'s' %} selected{% endif %}>{{ node.name }}</option>{% endfor %}</select></div>
+<div><label for="recalc-state">Состояние</label><select id="recalc-state" name="state"><option value="">Все счета</option><option value="ready"{% if request.GET.state == 'ready' %} selected{% endif %}>Готовы</option><option value="review"{% if request.GET.state == 'review' %} selected{% endif %}>Ручная проверка</option></select></div><button>Найти</button>
+<a href="{% url 'water_tariff_recalculation_detail' item.pk %}">Сбросить</a>
+</form>
+<p><a class="recalc-button" href="{{ csv_url }}">Скачать сравнение CSV для Excel</a> (с учётом фильтра счетов; узлы и линии — целиком)</p>
+<div class="recalc-scroll"><table><thead><tr><th>Счёт / участок</th><th>Узел / линия</th><th>Расход м³ / ставка</th><th>Было, ₽</th><th>Стало, ₽</th><th>Разница, ₽</th><th>Разница, %</th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.number }} · {{ row.plot }}</td><td>{{ row.node }} · {{ row.group }}</td><td>{{ row.volume }} × {{ row.rate }}<br><small>{{ row.detail }}</small></td><td>{{ row.old }}</td><td>{{ row.new }}</td><td>{{ row.delta }}</td><td>{{ row.percent|default_if_none:'—' }}</td></tr>{% empty %}<tr><td colspan="7">Готовых счетов по фильтру нет.</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Ручная проверка</h2>
+<div class="recalc-scroll"><table><thead><tr><th>Счёт / участок</th><th>Узел / линия</th><th>Было, ₽</th><th>Новая сумма</th><th>Причина</th></tr></thead><tbody>
+{% for row in review_rows %}<tr><td>{{ row.number }} · {{ row.plot }}</td><td>{{ row.node }} · {{ row.group }}</td><td>{{ row.old }}</td><td>Не назначена</td><td>{{ row.reason }}</td></tr>{% empty %}<tr><td colspan="5">Нет счетов на проверке по фильтру.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if item.status == 'draft' %}
+<h2>Решение по всему пересчёту</h2>
+<p>Фильтры не ограничивают утверждение. Для всех готовых счетов прежние черновые начисления воды будут отменены с историей, а разница с утверждёнными суммами записана корректировкой. Предыдущие утверждённые начисления и оплаты сохраняются. Счета на проверке останутся без изменений. Если исходные данные изменились, потребуется новый черновик.</p>
+{{ decision.non_field_errors }}
+{% if can_approve %}<form method="post">{% csrf_token %}{{ decision.version }}<p>{{ decision.confirm }} {{ decision.confirm.label_tag }} {{ decision.confirm.errors }}</p><button name="action" value="approve" type="submit">Утвердить пересчёт</button></form>{% endif %}
+{% if can_cancel %}<form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ item.version }}"><button name="action" value="cancel" type="submit">Отменить черновик</button></form>{% endif %}
+{% elif item.status == 'approved' %}
+<p><a href="{% url 'admin:water_charge_changelist' %}?tariff_recalculation__id__exact={{ item.pk }}">Открыть записанные корректировки и их историю</a></p>
+{% endif %}
+</div>
+{% endblock %}

@@ -251,11 +251,15 @@ def calculate_group_losses(period, *, actor=None):
 def calculate_period(period, *, actor=None):
     if period.status in ('approved', 'closed'):
         raise ValidationError('Утверждённый или закрытый период нельзя пересчитывать.')
+    if period.tariffrecalculation_set.filter(status='approved').exists():
+        raise ValidationError('В периоде утверждён пересчёт тарифа. Для изменений создайте новую версию пересчёта.')
     results = []
     accounts = Account.objects.filter(archived=False).order_by('id')
     for account in accounts:
         policy, policy_note = resolve_policy(account, period)
         tariff, tariff_note = resolve_tariff(account, period)
+        if policy and policy.loss_distribution == 'node_excel':
+            raise ValidationError('Для методики Excel используйте экран «Тариф водоканала → пересчёт периода».')
         if policy is None or tariff is None:
             results.append(BillingResult(account, 'skipped', f'{policy_note}; {tariff_note}'))
             continue

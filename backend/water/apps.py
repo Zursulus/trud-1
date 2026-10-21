@@ -13,6 +13,7 @@ class WaterConfig(AppConfig):
         from . import private_registry  # noqa: F401
         from . import access_requests  # noqa: F401
         from . import finance_models  # noqa: F401
+        from . import tariff_models  # noqa: F401
         from . import controller_scope  # noqa: F401
         from . import board_polls  # noqa: F401
         from . import security_models  # noqa: F401

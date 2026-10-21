@@ -1,0 +1,20 @@
+{% extends 'admin/base_site.html' %}
+{% block extrastyle %}{{ block.super }}{% include 'admin/water/tariff_recalculation_style.html' %}{% endblock %}
+{% block content %}
+<div class="recalc">
+<p><a href="{% url 'admin:index' %}">← Рабочая панель</a> · <a href="{% url 'staff_workspace:finance' %}">Финансы</a></p>
+<h1>Тариф водоканала → пересчёт периода</h1>
+<p>Введите ставку из счёта водоканала. Сначала появится сравнение; действующие начисления изменятся только после отдельного утверждения.</p>
+{% if can_create %}
+<form method="post" enctype="multipart/form-data" class="recalc-form">{% csrf_token %}
+{{ form.as_p }}
+<button type="submit">Рассчитать черновик</button>
+</form>
+{% endif %}
+<h2>Версии пересчёта</h2>
+<div class="recalc-scroll"><table><thead><tr><th>Версия / период</th><th>Ставка ВК</th><th>Состояние</th><th>Основание</th><th>Создан</th></tr></thead><tbody>
+{% for item in recalculations %}<tr><td><a href="{% url 'water_tariff_recalculation_detail' item.pk %}">№{{ item.pk }} · {{ item.period }}</a></td><td>{{ item.rate }} ₽/м³</td><td>{{ item.get_status_display }}</td><td>{{ item.basis }}</td><td>{{ item.created_at|date:'d.m.Y H:i' }} · {{ item.created_by.get_username }}</td></tr>
+{% empty %}<tr><td colspan="5">Пересчётов пока нет.</td></tr>{% endfor %}
+</tbody></table></div>
+</div>
+{% endblock %}

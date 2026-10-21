@@ -1092,7 +1092,7 @@ class ChargeAdmin(RecordedAdmin):
     list_filter = ('status', 'origin', 'kind', 'period')
     search_fields = ('account__number', 'account__plot', 'notes', 'calculation')
     autocomplete_fields = ('account', 'period')
-    readonly_fields = ('source_key',)
+    readonly_fields = ('source_key', 'tariff_recalculation')
     actions = ('approve_drafts', 'cancel_drafts')
 
     @admin.action(description='Утвердить выбранные черновики')

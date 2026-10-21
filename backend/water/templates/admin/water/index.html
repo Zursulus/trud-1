@@ -87,6 +87,12 @@
   <a class="trud-back" href="{% url 'staff_workspace:home' %}">← Вернуться в Рабочую базу</a>
 
   <div class="trud-grid" aria-label="Основные рабочие разделы">
+    {% if perms.water.view_tariffrecalculation %}
+      <a class="trud-card trud-primary" href="{% url 'water_tariff_recalculation' %}">
+        <strong>Тариф водоканала → пересчёт периода</strong>
+        <span>Ввести ставку, сравнить «было → стало», проверить и утвердить.</span>
+      </a>
+    {% endif %}
     {% if perms.water.add_residentpasswordreset %}
       <a class="trud-card" href="{% url 'water_password_access_admin' %}">
         <strong>Доступ и пароли</strong>

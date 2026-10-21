@@ -28,6 +28,7 @@ from water.balance import water_balance_view
 from water.package_views import package_dry_run
 from water.reading_admin_tools import reassign_reading_view
 from water.reading_review_config import export_readings_xlsx, reading_review_view
+from water import tariff_views
 
 
 class MainAdminSite(AdminSite):
@@ -64,6 +65,9 @@ class MainAdminSite(AdminSite):
 admin.site.__class__ = MainAdminSite
 
 urlpatterns = [
+    path('admin/water/tariff-recalculation/', admin.site.admin_view(tariff_views.home), name='water_tariff_recalculation'),
+    path('admin/water/tariff-recalculation/<int:recalc_id>/', admin.site.admin_view(tariff_views.detail), name='water_tariff_recalculation_detail'),
+    path('admin/water/tariff-recalculation/<int:recalc_id>/document/', admin.site.admin_view(tariff_views.document), name='water_tariff_recalculation_document'),
     path('admin/cabinet/profile/', profile_views.profile, name='personal_profile'),
     path('admin/cabinet/profile/email/', profile_views.email, name='profile_email'),
     path('admin/cabinet/accounts/', include('forum.auth_urls')),

@@ -457,6 +457,7 @@ class BillingPolicy(RecordedModel):
         ('manual', 'Только ручной ввод'),
     ], default='draft')
     loss_distribution = models.CharField('Распределение общих потерь', max_length=30, choices=[
+        ('node_excel', 'Как в Excel председателя — по входу узла'),
         ('none', 'Не распределять'),
         ('volume', 'Пропорционально расходу'),
         ('equal_account', 'Поровну по лицевым счетам'),
@@ -626,6 +627,11 @@ class Charge(RecordedModel):
     source_key = models.CharField('Ключ автоматического расчёта', max_length=200, blank=True, null=True, unique=True, editable=False)
     calculation = models.TextField('Расшифровка расчёта', blank=True)
     notes = models.TextField('Основание / примечание', blank=True)
+    tariff_recalculation = models.ForeignKey(
+        'water.TariffRecalculation', verbose_name='Пересчёт тарифа',
+        on_delete=models.PROTECT, null=True, blank=True, editable=False,
+        related_name='adjustments',
+    )
 
     class Meta:
         verbose_name = 'Начисление'
@@ -633,11 +639,15 @@ class Charge(RecordedModel):
         ordering = ['-period__starts', 'account', 'id']
 
     def clean(self):
-        if self.period_id and self.period.status in ('approved', 'closed') and not self.pk:
+        if self.tariff_recalculation_id:
+            from .tariff_models import validate_adjustment
+            validate_adjustment(self)
+        if (self.period_id and self.period.status in ('approved', 'closed') and not self.pk
+                and not self.tariff_recalculation_id):
             raise ValidationError('В утверждённый или закрытый период нельзя добавлять начисления.')
         if self.pk:
             original = Charge.objects.get(pk=self.pk)
-            protected = ('account_id', 'period_id', 'kind', 'volume', 'rate', 'amount', 'origin', 'source_key')
+            protected = ('account_id', 'period_id', 'kind', 'volume', 'rate', 'amount', 'origin', 'source_key', 'tariff_recalculation_id')
             if original.status == 'approved' and any(getattr(original, field) != getattr(self, field) for field in protected):
                 raise ValidationError('Утверждённое начисление нельзя переписывать. Создайте корректировку.')
             if original.status == 'approved' and self.status not in ('approved', 'cancelled'):
@@ -648,6 +658,12 @@ class Charge(RecordedModel):
             raise ValidationError('Объём и тариф указываются вместе либо оба не указываются.')
         if self.kind not in ('adjustment', 'opening') and self.amount < 0:
             raise ValidationError({'amount': 'Обычное начисление не может быть отрицательным.'})
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            # Serialize ledger writes with period approval and tariff corrections.
+            self.period = BillingPeriod.objects.select_for_update().get(pk=self.period_id)
+            return super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.account} · {self.get_kind_display()} · {self.amount} ₽'

@@ -1,9 +1,12 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .admin import RecordedAdmin
 from .finance_models import ChargeObligation
 from .finance_reporting import obligation_report_queryset, outstanding_amount
 from .privacy_admin import has_private_registry_access
+from .tariff_models import TariffRecalculation
 
 
 @admin.register(ChargeObligation)
@@ -103,3 +106,23 @@ class ChargeObligationAdmin(RecordedAdmin):
     @admin.display(description='Остаток, ₽')
     def outstanding(self, obj):
         return outstanding_amount(obj)
+
+@admin.register(TariffRecalculation)
+class TariffRecalculationAdmin(RecordedAdmin):
+    list_display = ('preview', 'period', 'rate', 'status', 'basis', 'created_at')
+    list_filter = ('status', 'period')
+    actions = None
+
+    @admin.display(description='Сравнение и решение')
+    def preview(self, obj):
+        return format_html('<a href="{}">Пересчёт №{}</a>',
+                           reverse('water_tariff_recalculation_detail', args=[obj.pk]), obj.pk)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in self.model._meta.fields)

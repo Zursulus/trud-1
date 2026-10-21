@@ -23,6 +23,8 @@ def calculate_billing_period(*, period_id, actor):
 @transaction.atomic
 def approve_charge(*, charge_id, actor):
     _require(actor, "finance.charge.approve")
+    period_id = Charge.objects.values_list('period_id', flat=True).get(pk=charge_id)
+    BillingPeriod.objects.select_for_update().get(pk=period_id)
     charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
     _require(actor, "finance.charge.approve", account_id=charge.account_id)
     if charge.status != "draft":
@@ -37,6 +39,8 @@ def approve_charge(*, charge_id, actor):
 @transaction.atomic
 def cancel_charge(*, charge_id, actor):
     _require(actor, "finance.charge.cancel")
+    period_id = Charge.objects.values_list('period_id', flat=True).get(pk=charge_id)
+    BillingPeriod.objects.select_for_update().get(pk=period_id)
     charge = Charge.objects.select_for_update(of=("self",)).select_related("period", "account").get(pk=charge_id)
     _require(actor, "finance.charge.cancel", account_id=charge.account_id)
     if charge.status != "draft":

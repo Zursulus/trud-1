@@ -6,6 +6,7 @@
 <section class="ws-page-head">
   <div><p class="ws-eyebrow">Рабочий процесс</p><h1>Финансы</h1><p>Расчёт начислений, проверка оплат, распределение и баланс.</p></div>
   <div class="ws-actions">
+    {% if perms.water.view_tariffrecalculation %}<a class="ws-primary" href="{% url 'water_tariff_recalculation' %}">Тариф водоканала → пересчёт периода</a>{% endif %}
     <a class="ws-secondary" href="{% url 'staff_workspace:finance_payments' %}">Оплаты</a>
     {% if can_export_vtb %}<a class="ws-secondary" href="{% url 'staff_workspace:finance_vtb_debt' %}">VTB · задолженность</a>{% endif %}
     <a class="ws-secondary" href="{% url 'staff_workspace:finance_vtb_payment_dryrun' %}">Проверить реестр ВТБ</a>
